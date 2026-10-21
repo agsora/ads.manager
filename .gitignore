@@ -46,3 +46,6 @@ db.txt
 .env.*
 !.env.example
 .claude/
+
+.vercel
+.env*
