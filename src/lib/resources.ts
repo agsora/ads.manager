@@ -410,6 +410,7 @@ export const RESOURCES: Resource[] = [
       if ((r.recommended === null || r.recommended === undefined) && n(r.loan)) r.recommended = Math.floor(n(r.loan) / 500000) * 500000;
       if ((r.official_rec === null || r.official_rec === undefined) && n(r.recommended)) r.official_rec = r.recommended;
       if (!r.blast) r.blast = "yes";
+      if (!r.status) r.status = "Belum dikirim";
       return r;
     },
     computed: [

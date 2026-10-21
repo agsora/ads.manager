@@ -12,7 +12,7 @@ export default function InfluencersPage() {
     <div className="space-y-5">
       <PageHeader eyebrow="Reputasi" title="Influencer & Endorsement" desc="Catat kerjasama KOL/influencer: fee, views, engagement, leads & omzet. Biaya per engagement dan ROI dihitung otomatis untuk menentukan siapa yang layak dilanjutkan." />
       {k && (
-        <div className="stat-grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+        <div className="stat-grid">
           <Kpi label="Kerjasama" value={k.collabs} format="number" />
           <Kpi label="Total Fee" value={k.fee} format="money" />
           <Kpi label="Views" value={k.views} format="number" />

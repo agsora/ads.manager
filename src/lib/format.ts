@@ -2,7 +2,7 @@ export const fmtNum = (v: number | null | undefined, digits = 0) =>
   v === null || v === undefined || !Number.isFinite(v) ? "–" : v.toLocaleString("id-ID", { maximumFractionDigits: digits, minimumFractionDigits: 0 });
 
 export const fmtMoney = (v: number | null | undefined) =>
-  v === null || v === undefined || !Number.isFinite(v) ? "–" : "Rp " + Math.round(v).toLocaleString("id-ID");
+  v === null || v === undefined || !Number.isFinite(v) ? "–" : (v < 0 && Math.round(v) !== 0 ? "-" : "") + "Rp " + Math.abs(Math.round(v)).toLocaleString("id-ID");
 
 export const fmtMoneyShort = (v: number | null | undefined) => {
   if (v === null || v === undefined || !Number.isFinite(v)) return "–";

@@ -35,7 +35,7 @@ export function Kpi({ label, value, prev, format, invert, hint }: { label: strin
   return (
     <div className="px-4 py-4">
       <div className="text-[12.5px] text-[var(--ink-2)]">{label}</div>
-      <div className="serif mt-1 text-[28px] leading-tight tracking-[-0.01em]">{value === null || value === undefined ? "–" : format === "money" ? fmtMoneyCompact(value) : formatValue(value, format)}</div>
+      <div className="serif mt-1 whitespace-nowrap text-[26px] leading-tight tracking-[-0.01em]">{value === null || value === undefined ? "–" : format === "money" ? fmtMoneyCompact(value) : formatValue(value, format)}</div>
       <div className="mt-1.5 flex items-center gap-1.5 text-[12px]">
         {delta !== null ? (
           <span className={`inline-flex items-center gap-0.5 font-semibold ${Math.abs(delta) < 0.005 ? "text-[var(--muted)]" : good ? "text-[var(--good-ink)]" : "text-[var(--critical-ink)]"}`}>
@@ -51,7 +51,7 @@ export function Kpi({ label, value, prev, format, invert, hint }: { label: strin
 
 function fmtMoneyCompact(v: number | null | undefined) {
   if (v === null || v === undefined) return "–";
-  if (Math.abs(v) >= 1e6) return "Rp " + (v / 1e6).toLocaleString("id-ID", { maximumFractionDigits: 2 }) + " jt";
+  if (Math.abs(v) >= 1e6) return (v < 0 ? "-" : "") + "Rp " + Math.abs(v / 1e6).toLocaleString("id-ID", { maximumFractionDigits: 2 }) + " jt";
   return fmtMoney(v);
 }
 
@@ -73,7 +73,8 @@ function TipBox({ active, payload, label, fmt }: { active?: boolean; payload?: {
 
 const shortDate = (d: string) => (/^\d{4}-\d{2}-\d{2}$/.test(d) ? `${+d.slice(8)}/${+d.slice(5, 7)}` : d);
 
-export function TrendLines({ data, series, format = "number", height = 240, area }: { data: Record<string, unknown>[]; series: { key: string; label: string }[]; format?: string; height?: number; area?: boolean }) {
+export function TrendLines({ data, series, format = "number", height = 240, area, decimals }: { data: Record<string, unknown>[]; series: { key: string; label: string }[]; format?: string; height?: number; area?: boolean; /** tight y-axis with decimals (ratings) */ decimals?: boolean }) {
+  const dots = data.length <= 14;
   const fmt = (_k: string, v: number) => (format === "money" ? fmtMoney(v) : fmtNum(v, 1));
   const Chart = area ? AreaChart : LineChart;
   return (
@@ -81,14 +82,14 @@ export function TrendLines({ data, series, format = "number", height = 240, area
       <Chart data={data} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
         <CartesianGrid stroke={GRID} vertical={false} />
         <XAxis dataKey="date" tickFormatter={shortDate} tick={AXIS} tickLine={false} axisLine={{ stroke: "#d6d2c4" }} minTickGap={18} />
-        <YAxis tick={AXIS} tickLine={false} axisLine={false} width={format === "money" ? 56 : 36} tickFormatter={(v) => (format === "money" ? fmtCompact(v) : fmtCompact(v))} allowDecimals={false} />
+        <YAxis tick={AXIS} tickLine={false} axisLine={false} width={format === "money" ? 56 : 36} tickFormatter={(v) => (format === "money" ? fmtCompact(v) : fmtCompact(v))} allowDecimals={!!decimals} domain={decimals ? [(m: number) => Math.floor(m * 10 - 2) / 10, (m: number) => Math.ceil(m * 10 + 2) / 10] : undefined} />
         <Tooltip content={<TipBox fmt={fmt} />} cursor={{ stroke: "#c3c2b7", strokeWidth: 1 }} />
         {series.length > 1 && <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 12 }} />}
         {series.map((s, i) =>
           area ? (
-            <Area key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={SERIES[i]} fill={SERIES[i]} fillOpacity={0.12} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+            <Area key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={SERIES[i]} fill={SERIES[i]} fillOpacity={0.12} strokeWidth={2} dot={dots ? { r: 3, strokeWidth: 0, fill: SERIES[i] } : false} activeDot={{ r: 4 }} />
           ) : (
-            <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={SERIES[i]} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+            <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={SERIES[i]} strokeWidth={2} dot={dots ? { r: 3, strokeWidth: 0, fill: SERIES[i] } : false} activeDot={{ r: 4 }} />
           ),
         )}
       </Chart>
@@ -254,7 +255,7 @@ export function MiniTable({ cols, rows, empty }: { cols: { key: string; label: s
         <thead>
           <tr>
             {cols.map((c) => (
-              <th key={c.key} className={c.align === "right" || (c.format && c.format !== "text" && c.format !== "date") ? "text-right" : ""}>
+              <th key={c.key} className={c.align === "right" || (c.format && c.format !== "text" && c.format !== "date") ? "num" : ""}>
                 {c.label}
               </th>
             ))}
@@ -264,7 +265,7 @@ export function MiniTable({ cols, rows, empty }: { cols: { key: string; label: s
           {rows.map((r, i) => (
             <tr key={i}>
               {cols.map((c) => (
-                <td key={c.key} className={c.align === "right" || (c.format && c.format !== "text" && c.format !== "date") ? "text-right tnum" : ""}>
+                <td key={c.key} className={c.align === "right" || (c.format && c.format !== "text" && c.format !== "date") ? "num" : c.format === "date" ? "whitespace-nowrap" : ""}>
                   {c.format ? formatValue(r[c.key], c.format) : String(r[c.key] ?? "–")}
                 </td>
               ))}

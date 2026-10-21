@@ -19,7 +19,7 @@ export default function LeadsPage() {
         </Link>
       </PageHeader>
       {k && (
-        <div className="stat-grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-8">
+        <div className="stat-grid">
           <Kpi label="Total Chat Masuk" value={k.leads} prev={p?.leads} format="number" />
           <Kpi label="HOT" value={k.hot} prev={p?.hot} format="number" />
           <Kpi label="WARM" value={k.warm} prev={p?.warm} format="number" />

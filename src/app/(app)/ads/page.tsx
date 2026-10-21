@@ -48,11 +48,10 @@ export default function AdsPage() {
       </PageHeader>
 
       {k && (
-        <div className="stat-grid grid-cols-2 md:grid-cols-5 2xl:grid-cols-9">
+        <div className="stat-grid">
           <Kpi label="Campaign aktif" value={k.campaigns} prev={p?.campaigns} format="number" hint={`${k.running} running`} />
           <Kpi label="Dibelanjakan" value={k.spend} prev={p?.spend} format="money" invert />
           <Kpi label="Impresi" value={k.impressions} prev={p?.impressions} format="number" />
-          <Kpi label="Klik tautan" value={k.clicks} prev={p?.clicks} format="number" />
           <Kpi label="CTR" value={k.ctr} prev={p?.ctr} format="percent" />
           <Kpi label="CPC" value={k.cpc} prev={p?.cpc} format="money" invert />
           <Kpi label="Percakapan" value={k.conversations} prev={p?.conversations} format="number" />

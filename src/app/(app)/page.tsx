@@ -72,7 +72,7 @@ export default function Dashboard() {
         </div>
       </Card>
 
-      <div className="stat-grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+      <div className="stat-grid">
         <Kpi label="Budget Iklan Terpakai" value={k.ads.spend} prev={p.ads.spend} format="money" invert />
         <Kpi label="Impresi" value={k.ads.impressions} prev={p.ads.impressions} format="number" />
         <Kpi label="CTR" value={k.ads.ctr} prev={p.ads.ctr} format="percent" />

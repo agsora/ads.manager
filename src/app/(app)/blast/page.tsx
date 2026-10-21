@@ -75,7 +75,7 @@ function Contacts() {
       </div>
 
       {k && (
-        <div className="stat-grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+        <div className="stat-grid">
           <Kpi label="Kontak di periode" value={k.contacts} format="number" />
           <Kpi label="Siap blast (yes)" value={k.ready} format="number" hint={`${k.pending} belum dikirim`} />
           <Kpi label="Terkirim" value={k.sent} format="number" />
@@ -239,8 +239,7 @@ function Campaigns() {
   return (
     <div className="space-y-6">
       {k && (
-        <div className="stat-grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-7">
-          <Kpi label="Kampanye blast" value={k.blasts} prev={p?.blasts} format="number" />
+        <div className="stat-grid">
           <Kpi label="Terkirim" value={k.sent} prev={p?.sent} format="number" />
           <Kpi label="Delivery rate" value={k.deliveryRate} prev={p?.deliveryRate} format="percent" />
           <Kpi label="Read rate" value={k.readRate} prev={p?.readRate} format="percent" />

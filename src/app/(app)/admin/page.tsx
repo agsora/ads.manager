@@ -58,7 +58,7 @@ export default function AdminPage() {
     <div className="space-y-6">
       <PageHeader eyebrow="Platform" title="Superadmin" desc="Kelola semua workspace dan pengguna, reset password, ubah role, buka workspace mana pun, dan atur apakah orang lain boleh mendaftar sendiri." />
 
-      <div className="stat-grid grid-cols-2 md:grid-cols-4">
+      <div className="stat-grid">
         <Stat label="Workspace" value={data.orgs.length} />
         <Stat label="Pengguna" value={data.users.length} />
         <Stat label="Leads (semua)" value={data.orgs.reduce((s, o) => s + o.leads, 0)} />

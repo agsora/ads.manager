@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Copy, ExternalLink } from "lucide-react";
+import { Check, ChevronDown, Copy, ExternalLink, Link2 } from "lucide-react";
 import { useMeta, useToast } from "./providers";
-import { Card } from "./charts";
 
 /** Builds a wa.me link whose first message carries a campaign code, so leads can be traced back to the ad. */
 export function WaLinkBuilder() {
@@ -13,6 +12,7 @@ export function WaLinkBuilder() {
   const [code, setCode] = useState("");
   const [msg, setMsg] = useState("Halo, saya tertarik dengan penawaran ini");
   const [copied, setCopied] = useState(false);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -36,7 +36,19 @@ export function WaLinkBuilder() {
   };
 
   return (
-    <Card title="Pembuat link WhatsApp bertanda campaign" subtitle="Pasang link ini sebagai tujuan tombol WhatsApp di iklan. Pesan pertama konsumen otomatis membawa kode campaign.">
+    <section className="card">
+      <button className="flex w-full items-center gap-3 px-5 py-3.5 text-left" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[var(--accent-soft)] text-[var(--accent-ink)]">
+          <Link2 size={16} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="serif block text-[18px] leading-snug">Pembuat link WhatsApp bertanda campaign</span>
+          <span className="block text-[12.5px] text-[var(--muted)]">Pasang di tombol WhatsApp iklan agar leads bisa dilacak ke campaign asalnya</span>
+        </span>
+        <ChevronDown size={18} className={`shrink-0 text-[var(--muted)] transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+      <div className="border-t border-[var(--line)] p-5">
       <div className="grid gap-3 md:grid-cols-3">
         <div>
           <label className="label" htmlFor="wa-phone">Nomor WhatsApp tujuan</label>
@@ -81,6 +93,8 @@ export function WaLinkBuilder() {
       <p className="mt-3 text-[12px] leading-relaxed text-[var(--muted)]">
         Setelah chat masuk, CS menyalin kode dari pesan ke kolom <b>Kode Campaign</b> di WA Leads — atau menulis <code>[ref: kode]</code> di kolom Kebutuhan dan kode terisi otomatis. Dari situ laporan menghitung leads, deal, biaya per lead, dan ROAS per campaign.
       </p>
-    </Card>
+      </div>
+      )}
+    </section>
   );
 }

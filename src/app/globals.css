@@ -72,6 +72,7 @@ body {
   /* hairline grid of stats: each cell draws its right + bottom rule, the frame clips the outer ones */
   .stat-grid {
     display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: 12px;
@@ -122,9 +123,12 @@ body {
   table.data th {
     position: sticky; top: 0; z-index: 1; background: var(--surface-2); text-align: left;
     font-weight: 600; color: var(--muted); font-size: 11px; letter-spacing: .05em; text-transform: uppercase;
-    padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap;
+    padding: 9px 10px; border-bottom: 1px solid var(--line); white-space: nowrap;
   }
-  table.data td { padding: 10px 12px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+  table.data td { padding: 9px 10px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+  table.data td.num, table.data th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  table.data th:first-child, table.data td:first-child { padding-left: 16px; }
+  table.data th:last-child, table.data td:last-child { padding-right: 16px; }
   table.data tbody tr:hover td { background: #fcfbf8; }
 }
 

@@ -68,7 +68,7 @@ function Planning() {
   };
   return (
     <div className="space-y-5">
-      <div className="stat-grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+      <div className="stat-grid">
         <Kpi label="Rencana di periode" value={rows.length} format="number" />
         <Kpi label="7 hari ke depan" value={count((r) => String(r.post_date) >= today && String(r.post_date) <= addDays(today, 6))} format="number" />
         <Kpi label="Menunggu review" value={count((r) => r.approval_status === "Menunggu review")} format="number" />
@@ -113,7 +113,7 @@ function Results() {
   const ers = filled.filter((r) => Number(r.followers)).map((r) => (Number(r.likes ?? 0) + Number(r.comments ?? 0) + Number(r.saves ?? 0)) / Number(r.followers));
   return (
     <div className="space-y-5">
-      <div className="stat-grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+      <div className="stat-grid">
         <Kpi label="Sudah jatuh tempo" value={due.length} format="number" />
         <Kpi label="Sudah tayang" value={posted.length} format="number" hint={due.length ? `${Math.round((posted.length / due.length) * 100)}% dari jadwal` : ""} />
         <Kpi label="Hasil lengkap" value={filled.length} format="number" />
@@ -260,7 +260,7 @@ function ContentAnalytics() {
   const p = a.prevKpis.content;
   return (
     <div className="space-y-5">
-      <div className="stat-grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+      <div className="stat-grid">
         <Kpi label="Direncanakan" value={k.planned} prev={p.planned} format="number" />
         <Kpi label="Tayang" value={k.posted} prev={p.posted} format="number" />
         <Kpi label="Completion Rate" value={k.completionRate} prev={p.completionRate} format="percent" />

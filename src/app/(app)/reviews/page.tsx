@@ -35,7 +35,7 @@ export default function ReviewsPage() {
 
       {tab === "progress" && (
         <div className="space-y-6">
-          <div className="stat-grid grid-cols-2 md:grid-cols-4">
+          <div className="stat-grid">
             <Kpi label="Total ulasan sekarang" value={totalNow || null} format="number" />
             <Kpi label="Jumlah awal" value={totalInitial || null} format="number" hint="snapshot pertama" />
             <Kpi label="Tumbuh di periode" value={growth.length ? totalNow - totalStart : null} format="number" hint="vs awal periode" />
@@ -52,6 +52,7 @@ export default function ReviewsPage() {
               <TrendLines
                 data={a.reviewTrend.map((t) => Object.fromEntries(Object.entries(t).map(([key, v]) => [key.endsWith("__rating") ? key.replace("__rating", "") : key === "date" ? key : `x_${key}`, v])))}
                 series={a.reviewTrendSeries.map((name) => ({ key: name, label: name }))}
+                decimals
               />
             </Card>
           )}
@@ -94,7 +95,7 @@ export default function ReviewsPage() {
       {tab === "list" && (
         <div className="space-y-6">
           {k && (
-            <div className="stat-grid grid-cols-2 md:grid-cols-5">
+            <div className="stat-grid">
               <Kpi label="Ulasan dicatat" value={k.reviews} prev={p?.reviews} format="number" />
               <Kpi label="Rata-rata rating" value={k.avgRating} prev={p?.avgRating} format="decimal" />
               <Kpi label="Positif" value={k.positive} prev={p?.positive} format="number" />

@@ -132,7 +132,7 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
 
   const exportUrl = (format: string) => `/api/export?resource=${resourceKey}&format=${format}&${qs}`;
   const th = (key: string, label: string, right?: boolean) => (
-    <th className={right ? "text-right" : ""}>
+    <th className={right ? "num" : ""}>
       <button
         className="inline-flex items-center gap-1 hover:text-[var(--ink)]"
         onClick={() => setSort((s) => (s?.key === key ? (s.dir === -1 ? { key, dir: 1 } : null) : { key, dir: -1 }))}
@@ -254,7 +254,7 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
                   />
                 </td>
                 {fields.map((fd) => (
-                  <td key={fd.key} className={["money", "number", "percent"].includes(fd.type) ? "text-right" : ""}>
+                  <td key={fd.key} className={["money", "number", "percent"].includes(fd.type) ? "num" : ""}>
                     {fd.type === "select" ? (
                       <InlineSelect value={String(row[fd.key] ?? "")} opts={options[fd.options ?? ""] ?? []} onChange={(v) => inlineUpdate(row, fd, v)} />
                     ) : (
@@ -263,7 +263,7 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
                   </td>
                 ))}
                 {comps.map((c) => (
-                  <td key={c.key} className={c.format !== "text" ? "text-right" : ""}>
+                  <td key={c.key} className={c.format !== "text" ? "num" : ""}>
                     {renderComputed(c.format, c.fn(row))}
                   </td>
                 ))}
