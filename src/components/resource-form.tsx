@@ -30,7 +30,7 @@ function toFormValue(f: Field, v: unknown) {
 }
 
 export function FieldInput({ f, value, onChange }: { f: Field; value: string; onChange: (v: string) => void }) {
-  const { brands, options, users } = useMeta();
+  const { brands, options, users, campaigns } = useMeta();
   const common = { id: `f-${f.key}`, className: "input", value, onChange: (e: { target: { value: string } }) => onChange(e.target.value) };
   if (f.type === "brand" || f.type === "select") {
     const list = f.type === "brand" ? brands.map((b) => b.name) : options[f.options ?? ""] ?? [];
@@ -53,13 +53,13 @@ export function FieldInput({ f, value, onChange }: { f: Field; value: string; on
   if (["number", "money", "percent"].includes(f.type))
     return <input {...common} type="number" step="any" inputMode="decimal" placeholder={f.type === "money" ? "Rp" : f.type === "percent" ? "%" : ""} />;
   if (f.type === "url") return <input {...common} type="url" placeholder="https://" />;
-  if (f.suggest === "users")
+  if (f.suggest === "users" || f.suggest === "campaigns")
     return (
       <>
         <input {...common} type="text" list={`dl-${f.key}`} autoComplete="off" />
         <datalist id={`dl-${f.key}`}>
-          {users.map((u) => (
-            <option key={u.id} value={u.name} />
+          {(f.suggest === "users" ? users.map((u) => u.name) : campaigns).map((name) => (
+            <option key={name} value={name} />
           ))}
         </datalist>
       </>

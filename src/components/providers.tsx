@@ -17,6 +17,7 @@ interface Meta {
   brands: Brand[];
   options: Record<string, string[]>;
   users: { id: number; name: string }[];
+  campaigns: string[];
   reloadMeta: () => Promise<void>;
   ready: boolean;
 }
@@ -68,7 +69,7 @@ export const PRESETS: { key: Preset; label: string }[] = [
 ];
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [meta, setMeta] = useState<Omit<Meta, "reloadMeta">>({ session: null, brands: [], options: {}, users: [], ready: false });
+  const [meta, setMeta] = useState<Omit<Meta, "reloadMeta">>({ session: null, brands: [], options: {}, users: [], campaigns: [], ready: false });
   const [toasts, setToasts] = useState<{ id: number; msg: string; kind: "ok" | "err" }[]>([]);
 
   const reloadMeta = useCallback(async () => {
@@ -78,7 +79,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       return;
     }
     const j = await r.json();
-    setMeta({ session: j.session, brands: j.brands, options: j.options, users: j.users ?? [], ready: true });
+    setMeta({ session: j.session, brands: j.brands, options: j.options, users: j.users ?? [], campaigns: j.campaigns ?? [], ready: true });
   }, []);
   useEffect(() => {
     reloadMeta();

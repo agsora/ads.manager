@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/shell";
 import { ResourceTable } from "@/components/resource-table";
 import { useAnalytics } from "@/components/use-analytics";
 import { BarList, Card, Kpi, MiniTable, SEGMENT_COLORS, SplitBar } from "@/components/charts";
+import { WaLinkBuilder } from "@/components/wa-link-builder";
 
 export default function LeadsPage() {
   const { data: a, reload } = useAnalytics();
@@ -29,6 +30,7 @@ export default function LeadsPage() {
           <Kpi label="Repeat Order" value={k.repeat} prev={p?.repeat} format="number" />
         </div>
       )}
+      <WaLinkBuilder />
       <ResourceTable resourceKey="leads" quickFilters={["source", "segment", "final_status"]} computedCols={["age_days", "next_action"]} onChanged={reload} />
       {a && a.kpis.leads.leads > 0 && (
         <div className="grid gap-5 lg:grid-cols-3">
@@ -44,6 +46,14 @@ export default function LeadsPage() {
               <b>Cold</b> = baru tanya / belum serius · <b>Warm</b> = mulai pertimbangkan, minta penawaran · <b>Hot</b> = siap deal, minta rekening/DP.
             </div>
           </Card>
+          {a.attribution.length > 0 && (
+            <Card title="Atribusi per kode campaign" subtitle="Dari kolom Kode Campaign" className="lg:col-span-3">
+              <MiniTable
+                cols={[{ key: "ref", label: "Kode" }, { key: "leads", label: "Leads", format: "number" }, { key: "hot", label: "HOT", format: "number" }, { key: "deals", label: "Deal", format: "number" }, { key: "dealValue", label: "Nilai deal", format: "money" }, { key: "spend", label: "Belanja iklan", format: "money" }, { key: "cpl", label: "Biaya/lead", format: "money" }, { key: "cpa", label: "Biaya/deal", format: "money" }, { key: "roas", label: "ROAS", format: "decimal" }]}
+                rows={a.attribution}
+              />
+            </Card>
+          )}
           <Card title="Per Brand">
             <MiniTable cols={[{ key: "name", label: "Brand" }, { key: "leads", label: "Leads", format: "number" }, { key: "hot", label: "HOT", format: "number" }, { key: "deals", label: "Deal", format: "number" }, { key: "dealRate", label: "Conv.", format: "percent" }]} rows={a.leadsByBrand} />
           </Card>

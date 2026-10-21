@@ -294,11 +294,35 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
       return {
         id: latest.id, name: String(latest.campaign_name), brand: latest.brand, platform: latest.platform,
         status: rs.some((r) => r.status === "Running") || String(latest.end_date ?? latest.start_date ?? "") >= addDays(today, -1) ? "Running" : latest.status === "Running" ? "Done" : latest.status, objective: latest.objective,
-        rawRevenue: rs.reduce((t, r) => t + n(adsAll.find((x) => x.id === r.id)?.revenue), 0), rawLatestRevenue: n(adsAll.find((x) => x.id === latest.id)?.revenue), latestRowId: latest.id,
+        rawRevenue: rs.reduce((t, r) => t + n(adsAll.find((x) => x.id === r.id)?.revenue), 0), rawLatestRevenue: n(adsAll.find((x) => x.id === latest.id)?.revenue), latestRowId: latest.id, attrLeads: 0, attrDeals: 0, attrValue: 0,
         ...k, days: rs.length, start_date: starts[0], end_date: ends[ends.length - 1],
       };
     })
     .sort((a, b) => b.spend - a.spend);
+
+  // ---- atribusi: leads yang punya kode campaign → leads / deal / omzet per campaign iklan
+  const normRef = (v: unknown) => String(v ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const attribution = [...groupBy(leads.filter((r) => r.campaign_ref), (r) => normRef(r.campaign_ref)).entries()]
+    .map(([nr, rs]) => {
+      const ref = String(rs[0].campaign_ref).trim();
+      const matched = campaigns.filter((c) => {
+        const nc = normRef(c.name);
+        return nc === nr || (nr.length >= 4 && nc.length >= 4 && (nc.includes(nr) || nr.includes(nc)));
+      });
+      const spend = matched.reduce((t, c) => t + c.spend, 0);
+      const k = leadKpis(rs);
+      for (const c of matched) {
+        c.attrLeads += k.leads / matched.length;
+        c.attrDeals += k.deals / matched.length;
+        c.attrValue += k.dealValue / matched.length;
+      }
+      return {
+        ref, leads: k.leads, hot: k.hot, deals: k.deals, dealRate: k.dealRate, dealValue: k.dealValue,
+        spend: matched.length ? spend : null, matched: matched.map((m) => m.name),
+        cpl: spend && k.leads ? spend / k.leads : null, cpa: spend && k.deals ? spend / k.deals : null, roas: spend && k.dealValue ? k.dealValue / spend : null,
+      };
+    })
+    .sort((a, b) => b.leads - a.leads);
 
   // ---- leads breakdowns
   const sourceCost = (source: string) => {
@@ -488,7 +512,8 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     .map((w) => {
       const elapsed = Math.max(1, diffDays(walletMonth, to < today ? to : today) + 1);
       const burn = w.spent / elapsed;
-      return { ...w, burnPerDay: burn, daysLeft: burn > 0 && w.closing > 0 ? w.closing / burn : w.closing <= 0 ? 0 : null };
+      const dl = burn > 0 && w.closing > 0 ? w.closing / burn : null;
+      return { ...w, emptyOn: dl !== null && dl < 400 ? addDays(today, Math.floor(dl)) : null, burnPerDay: burn, daysLeft: burn > 0 && w.closing > 0 ? w.closing / burn : w.closing <= 0 ? 0 : null };
     });
 
   // ---- google business: snapshots (jumlah ulasan + rating per cabang) → perkembangan
@@ -723,6 +748,20 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
   const unansweredNeg = unanswered.filter((u) => u.rating > 0 && u.rating <= 3);
   if (unansweredNeg.length) push({ level: "critical", area: "Reputasi", title: `${unansweredNeg.length} ulasan negatif belum dibalas`, detail: unansweredNeg.slice(0, 3).map((u) => `${u.reviewer ?? "Anonim"} (${u.rating}★)`).join(", "), action: "Balas hari ini dengan permintaan maaf + solusi + ajakan menghubungi CS." });
 
+  // ATRIBUSI
+  const tagged = leads.filter((r) => r.campaign_ref).length;
+  if (kpis.ads.spend > 0 && L.leads >= 10 && tagged / L.leads < 0.3)
+    push({ level: "info", area: "Leads", title: `Hanya ${fmtPct(tagged / L.leads, 0)} leads punya kode campaign`, detail: "Tanpa kode, biaya per lead & ROAS per campaign tidak bisa dihitung akurat.", action: "Pakai Pembuat Link WA di halaman WA Leads: link iklan membawa kode campaign, lalu CS menyalinnya ke kolom Kode Campaign." });
+  const attrOk = attribution.filter((a) => a.spend && a.leads >= 3);
+  if (attrOk.length >= 2) {
+    const byCpl = [...attrOk].filter((a) => a.cpl).sort((a, b) => (a.cpl ?? 0) - (b.cpl ?? 0));
+    if (byCpl.length >= 2)
+      push({ level: "info", area: "Ads", title: `Campaign dengan biaya per lead terbaik: ${byCpl[0].ref}`, detail: `${fmtMoney(byCpl[0].cpl)}/lead (${byCpl[0].leads} leads) vs ${byCpl[byCpl.length - 1].ref} ${fmtMoney(byCpl[byCpl.length - 1].cpl)}/lead.`, action: `Pindahkan sebagian budget dari "${byCpl[byCpl.length - 1].ref}" ke "${byCpl[0].ref}".` });
+  }
+  const silent = campaigns.filter((c) => c.spend > 300000 && c.attrLeads === 0 && attribution.length > 0);
+  if (silent.length)
+    push({ level: "warning", area: "Ads", title: `${silent.length} campaign berbelanja tapi tanpa lead bertanda kode`, detail: silent.slice(0, 3).map((c) => `${c.name} (${fmtMoney(c.spend)})`).join(", "), action: "Cek apakah link WA iklan membawa kode campaign dan CS mengisinya; jika tetap nol, campaign ini kemungkinan tidak efektif." });
+
   // BLAST CONTACTS
   const K = contactKpis(contacts);
   if (K.contacts) {
@@ -789,6 +828,7 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     byObjective,
     campaigns,
     leadsBySource,
+    attribution,
     leadSegments,
     leadFinal,
     leadsByBrand,

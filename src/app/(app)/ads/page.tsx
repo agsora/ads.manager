@@ -113,11 +113,11 @@ export default function AdsPage() {
                       <td className="text-right tnum">{formatValue(c.costPerConv, "money")}</td>
                       <td className="text-right tnum">
                         <button className="inline-flex items-center gap-1 hover:text-[var(--accent-ink)]" onClick={() => setRevenue(c)} title="Isi / ubah omzet campaign">
-                          {c.revenue ? formatValue(c.revenue, "money") : <span className="text-[var(--muted)]">isi</span>}
+                          {c.revenue ? formatValue(c.revenue, "money") : c.attrValue ? <span title="Dari deal WA Leads bertanda kode campaign ini">{formatValue(c.attrValue, "money")}<span className="ml-1 text-[11px] text-[var(--muted)]">leads</span></span> : <span className="text-[var(--muted)]">isi</span>}
                           <Pencil size={11} className="opacity-50" />
                         </button>
                       </td>
-                      <td className="text-right tnum">{c.roas ? `${formatValue(c.roas, "decimal")}x` : "–"}</td>
+                      <td className="text-right tnum">{c.roas ? `${formatValue(c.roas, "decimal")}x` : c.attrValue && c.spend ? `${formatValue(c.attrValue / c.spend, "decimal")}x` : "–"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -156,6 +156,14 @@ export default function AdsPage() {
               rows={[...a.campaigns].filter((c) => c.conversations >= 3).sort((x, y) => (x.costPerConv ?? 0) - (y.costPerConv ?? 0)).slice(0, 6)}
             />
           </Card>
+          {a.attribution.length > 0 && (
+            <Card title="Atribusi per kode campaign (WA Leads)" subtitle="Leads & deal yang bertanda kode campaign, dibanding belanja iklan" className="lg:col-span-2">
+              <MiniTable
+                cols={[{ key: "ref", label: "Kode" }, { key: "leads", label: "Leads", format: "number" }, { key: "deals", label: "Deal", format: "number" }, { key: "dealValue", label: "Nilai deal", format: "money" }, { key: "spend", label: "Belanja", format: "money" }, { key: "cpl", label: "Biaya/lead", format: "money" }, { key: "cpa", label: "Biaya/deal", format: "money" }, { key: "roas", label: "ROAS", format: "decimal" }]}
+                rows={a.attribution}
+              />
+            </Card>
+          )}
           <Card title="Per brand">
             <MiniTable
               cols={[{ key: "name", label: "Brand" }, { key: "spend", label: "Belanja", format: "money" }, { key: "clicks", label: "Klik", format: "number" }, { key: "conversations", label: "Perc.", format: "number" }, { key: "costPerConv", label: "Biaya/Perc.", format: "money" }, { key: "roas", label: "ROAS", format: "decimal" }]}

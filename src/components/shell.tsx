@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { PRESETS, useFilter, useMeta, type Preset } from "./providers";
 import { NotificationBell } from "./notification-bell";
+import { GlobalSearch } from "./global-search";
 
 type Item = { href: string; label: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }> };
 const NAV: { section?: string; items: Item[] }[] = [
@@ -141,6 +142,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </Link>
           )}
           <GlobalFilter />
+          <GlobalSearch />
           <NotificationBell />
         </header>
         <main className="page mx-auto max-w-[1440px] px-4 py-7 lg:px-10">{children}</main>

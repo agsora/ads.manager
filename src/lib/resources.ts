@@ -23,7 +23,7 @@ export interface Field {
   options?: string;
   required?: boolean;
   /** offer suggestions from a live list (e.g. team member names) */
-  suggest?: "users";
+  suggest?: "users" | "campaigns";
   /** extra header names recognised on import (case-insensitive) */
   aliases?: string[];
   /** hide from the list table (still in form / export) */
@@ -289,7 +289,7 @@ export const RESOURCES: Resource[] = [
       { key: "phone", label: "No. WhatsApp", type: "phone", aliases: ["nomor whatsapp", "no wa", "whatsapp"] },
       { key: "customer_type", label: "Jenis Pelanggan", type: "select", options: "customer_type" },
       { key: "source", label: "Sumber Trafik", type: "select", options: "lead_source" },
-      { key: "campaign_ref", label: "Campaign/Blast Terkait", type: "text", hideInTable: true },
+      { key: "campaign_ref", label: "Kode Campaign / Blast", type: "text", suggest: "campaigns", aliases: ["campaign", "kode campaign", "ref"] },
       { key: "plan_timing", label: "Rencana", type: "select", options: "plan_timing", hideInTable: true, aliases: ["rencana pinjaman", "rencana pembelian", "rencana"] },
       { key: "post_chat_status", label: "Status Pasca Chat", type: "select", options: "post_chat_status", hideInTable: true },
       { key: "segment", label: "Segmen", type: "select", options: "lead_segment", aliases: ["segmentasi prospek", "segmentasi"] },
@@ -302,6 +302,14 @@ export const RESOURCES: Resource[] = [
       { key: "deal_value", label: "Nilai Deal", type: "money", aliases: ["nilai transaksi", "omzet"] },
       { key: "pic", label: "PIC/CS", type: "text", hideInTable: true },
     ],
+    derive: (r) => {
+      // "[ref: fasilitas-okt]" or "ref=fasilitas-okt" typed anywhere in the note becomes the campaign code
+      if (!r.campaign_ref && r.need) {
+        const m = String(r.need).match(/ref\s*[:=]\s*([\w\-. ]+?)(?:\]|\)|$|,|;)/i);
+        if (m) r.campaign_ref = m[1].trim();
+      }
+      return r;
+    },
     computed: [
       { key: "age_days", label: "Umur (hari)", format: "number", fn: (r) => daysBetween(r.chat_date, new Date().toISOString().slice(0, 10)) },
       {
@@ -521,6 +529,10 @@ export const DEFAULT_OPTIONS: Record<string, { label: string; values: string[] }
   initial_status: { label: "Status Awal", values: ["Follow Up", "Deal", "Pending", "Cancel"] },
   final_status: { label: "Status Akhir", values: ["Follow-up", "Pending", "Deal", "Cancel", "Ghosting"] },
   blast_tool: { label: "Tools Blast", values: ["Scooter", "WATI", "Qontak", "WA Business", "Lainnya"] },
+  wa_template_hot: { label: "Template WA — lead HOT", values: ["Halo {nama}, terima kasih sudah menghubungi {brand}. Untuk {kebutuhan}, apakah bisa kami bantu proses hari ini? Cukup balas YA ya 🙏", "Halo {nama}, kami sisakan slot untuk {kebutuhan} sampai besok. Mau kami amankan sekarang?"] },
+  wa_template_warm: { label: "Template WA — lead WARM", values: ["Halo {nama}, kami dari {brand}. Kemarin Anda menanyakan {kebutuhan}. Ada yang masih ingin ditanyakan?", "Halo {nama}, ini info lengkap & penawaran terbaru {brand} untuk {kebutuhan}. Kalau cocok kabari kami ya."] },
+  wa_template_cold: { label: "Template WA — lead COLD", values: ["Halo {nama}, kami dari {brand}. Jika masih berminat soal {kebutuhan}, kami siap bantu kapan saja.", "Halo {nama}, ada promo terbaru dari {brand} minggu ini. Mau kami kirimkan detailnya?"] },
+  wa_template_ghost: { label: "Template WA — lead tidak membalas", values: ["Halo {nama}, kami cek kembali soal {kebutuhan}. Apakah masih dibutuhkan? Kalau sudah tidak, tidak apa-apa, terima kasih 🙏", "Halo {nama}, tinggal beberapa slot untuk {kebutuhan} bulan ini. Kalau berminat, kabari kami ya."] },
   blast_status: { label: "Status Blast", values: ["Draft", "Terjadwal", "Terkirim", "Gagal"] },
   contact_status: { label: "Status Kontak Blast", values: ["Belum dikirim", "Terkirim", "Dibaca", "Dibalas", "Tertarik", "Deal", "Tidak tertarik", "Nomor tidak aktif"] },
   yes_no_en: { label: "Blast (yes/no)", values: ["yes", "no"] },

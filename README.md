@@ -16,12 +16,13 @@ Dibangun dari struktur workbook *WEBSITE MARKETING REPORT.xlsx* (Ads Report, Con
 | **Content Plan** | Kalender + event; tab **Planning** (jadwal, PIC, caption, approval: menunggu review/disetujui/revisi) terpisah dari tab **Hasil** (tanggal aktual, reach, like, comment, saved, followers → ER); analitik per channel/pilar/hari; angka reach/views/like/comment/share/save bisa ditarik dari link (TikTok & YouTube langsung; Instagram via Graph API: `IG_ACCESS_TOKEN`, `IG_USER_ID`), dan diperbarui otomatis tiap hari |
 | **Notifikasi** | Lonceng + email (Resend) ke semua user saat rencana konten baru/diubah/dihapus/disetujui, lead HOT baru, impor data; atur email per kategori. Otomasi 08.00 WIB: tutup campaign lewat tanggal, peringatan, ringkasan harian, laporan mingguan + Excel (Senin) |
 | **Target KPI / Followers / Event** | Target bulanan per brand, tracker followers, tanggal penting |
-| **WA Leads & Follow Up** | CRM chat masuk (sumber, segmen HOT/WARM/COLD, FU 1–3, status akhir, nilai deal) + papan follow up dengan jadwal H+3/H+7/H+14 |
+| **WA Leads & Follow Up** | CRM chat masuk (sumber, segmen HOT/WARM/COLD, FU 1–3, status akhir, nilai deal) + papan follow up H+3/H+7/H+14 dengan template pesan WA (bisa diubah di Pengaturan). **Atribusi:** pembuat link WA bertanda kode campaign → leads, deal, biaya/lead, ROAS per campaign |
 | **WA Blast** | *Kontak blast* format kontrak (nomor kontrak, nama, nomor, noresmi 62…, harga pasar, plafon, pinjaman, rekomendasi plafon, rek. resmi, tipe unit, tahun): upload, ekspor CSV siap kirim dengan pesan personal, status per kontak, rekap per batch & tipe unit, konversi ke WA Leads. *Laporan kampanye*: terkirim → dibaca → dibalas → leads → deal |
 | **Google Business** | Rekap berkala jumlah ulasan & rating per cabang (isian pertama = jumlah awal) dengan grafik perkembangan; ulasan satu per satu untuk sentimen, kategori, response rate |
 | **Influencer** | Fee, views, engagement, leads, omzet → biaya/engagement & ROI |
 | **Impor / Ekspor** | Impor workbook lengkap (deteksi sheet & kolom otomatis, pratinjau), impor per modul (.xlsx/.csv), template Excel dengan dropdown, ekspor Excel/CSV, backup seluruh data |
 | **Superadmin** | Akun pertama otomatis Superadmin: kelola semua workspace & user, reset password, ubah role, buka workspace mana pun, buka/tutup pendaftaran publik |
+| **Pencarian global** | Ctrl+K: lead, nomor, kontrak, campaign, konten, ulasan, influencer, event |
 | **Pengaturan** | Brand, daftar pilihan dropdown (bisa diubah), user & role (owner/admin/staff), ganti password, log aktivitas, hapus data |
 
 Semua tabel bisa diedit (klik baris → form, klik status → ubah cepat), dicari, difilter, diurutkan, dan dihapus massal. Filter brand & periode global berlaku di semua halaman.
