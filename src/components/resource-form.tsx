@@ -30,7 +30,7 @@ function toFormValue(f: Field, v: unknown) {
 }
 
 export function FieldInput({ f, value, onChange }: { f: Field; value: string; onChange: (v: string) => void }) {
-  const { brands, options } = useMeta();
+  const { brands, options, users } = useMeta();
   const common = { id: `f-${f.key}`, className: "input", value, onChange: (e: { target: { value: string } }) => onChange(e.target.value) };
   if (f.type === "brand" || f.type === "select") {
     const list = f.type === "brand" ? brands.map((b) => b.name) : options[f.options ?? ""] ?? [];
@@ -53,10 +53,21 @@ export function FieldInput({ f, value, onChange }: { f: Field; value: string; on
   if (["number", "money", "percent"].includes(f.type))
     return <input {...common} type="number" step="any" inputMode="decimal" placeholder={f.type === "money" ? "Rp" : f.type === "percent" ? "%" : ""} />;
   if (f.type === "url") return <input {...common} type="url" placeholder="https://" />;
+  if (f.suggest === "users")
+    return (
+      <>
+        <input {...common} type="text" list={`dl-${f.key}`} autoComplete="off" />
+        <datalist id={`dl-${f.key}`}>
+          {users.map((u) => (
+            <option key={u.id} value={u.name} />
+          ))}
+        </datalist>
+      </>
+    );
   return <input {...common} type={f.type === "phone" ? "tel" : "text"} />;
 }
 
-export function ResourceForm({ resource, row, onClose, onSaved, defaults }: { resource: Resource; row?: Row | null; onClose: () => void; onSaved: () => void; defaults?: Record<string, unknown> }) {
+export function ResourceForm({ resource, row, onClose, onSaved, defaults, groups: onlyGroups, title }: { resource: Resource; row?: Row | null; onClose: () => void; onSaved: () => void; defaults?: Record<string, unknown>; groups?: string[]; title?: string }) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
   const [vals, setVals] = useState<Record<string, string>>(() => {
@@ -67,14 +78,16 @@ export function ResourceForm({ resource, row, onClose, onSaved, defaults }: { re
     }
     return o;
   });
-  const groups = [...new Set(resource.fields.map((f) => f.group ?? ""))];
+  const groups = [...new Set(resource.fields.map((f) => f.group ?? ""))].filter((g) => !onlyGroups || onlyGroups.includes(g));
+  const shown = resource.fields.filter((f) => groups.includes(f.group ?? ""));
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
       const body: Record<string, unknown> = {};
-      for (const f of resource.fields) body[f.key] = vals[f.key] === "" ? null : vals[f.key];
+      // only send the visible part of the record, so editing results never overwrites the plan (and vice versa)
+      for (const f of row?.id ? shown : resource.fields) body[f.key] = vals[f.key] === "" ? null : vals[f.key];
       if (row?.id) await api(`/api/r/${resource.key}/${row.id}`, "PUT", body);
       else await api(`/api/r/${resource.key}`, "POST", body);
       toast(row?.id ? "Perubahan disimpan" : `${resource.singular} ditambahkan`);
@@ -88,7 +101,7 @@ export function ResourceForm({ resource, row, onClose, onSaved, defaults }: { re
   };
 
   return (
-    <Modal title={`${row?.id ? "Edit" : "Tambah"} ${resource.singular}`} onClose={onClose} wide={resource.fields.length > 12}>
+    <Modal title={title ?? `${row?.id ? "Edit" : "Tambah"} ${resource.singular}`} onClose={onClose} wide={shown.length > 12}>
       <form onSubmit={submit}>
         {groups.map((g) => (
           <fieldset key={g} className="mb-4">
@@ -111,7 +124,7 @@ export function ResourceForm({ resource, row, onClose, onSaved, defaults }: { re
           <button type="button" className="btn" onClick={onClose}>
             Batal
           </button>
-          <button className="btn btn-primary" disabled={saving}>
+          <button className="btn btn-accent" disabled={saving}>
             {saving ? "Menyimpan…" : "Simpan"}
           </button>
         </div>

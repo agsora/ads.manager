@@ -30,9 +30,16 @@ export interface ResourceTableProps {
   importPlatform?: string;
   /** remount key: change it to force a reload from outside */
   reloadKey?: number;
+  /** show only these fields as columns (in this order) */
+  columns?: string[];
+  /** limit the add/edit form to these field groups */
+  formGroups?: string[];
+  formTitle?: string;
+  allowCreate?: boolean;
+  searchPlaceholder?: string;
 }
 
-export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ignoreDate, rowFilter, defaults, onChanged, toolbar, selectionActions, importPlatform, reloadKey = 0 }: ResourceTableProps) {
+export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ignoreDate, rowFilter, defaults, onChanged, toolbar, selectionActions, importPlatform, reloadKey = 0, columns, formGroups, formTitle, allowCreate = true, searchPlaceholder }: ResourceTableProps) {
   const r = RESOURCE_MAP[resourceKey];
   const f = useFilter();
   const { options } = useMeta();
@@ -66,7 +73,9 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
     onChanged?.();
   };
 
-  const fields = r.fields.filter((x) => allCols || !x.hideInTable);
+  const fields = columns && !allCols
+    ? columns.map((k) => r.fields.find((x) => x.key === k)!).filter(Boolean)
+    : r.fields.filter((x) => allCols || !x.hideInTable);
   const comps = (r.computed ?? []).filter((c) => !computedCols || computedCols.includes(c.key));
 
   const rows = useMemo(() => {
@@ -139,7 +148,7 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
       <div className="flex flex-wrap items-center gap-2 border-b border-[var(--line)] p-3">
         <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
-          <input className="input !h-9 !pl-9 !text-[13px]" placeholder={`Cari ${r.singular.toLowerCase()}…`} value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input className="input !h-9 !pl-9 !text-[13px]" placeholder={searchPlaceholder ?? `Cari ${r.singular.toLowerCase()}…`} value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         {quickFilters.map((k) => {
           const fd = r.fields.find((x) => x.key === k)!;
@@ -180,9 +189,11 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
           <a className="btn btn-sm" href={exportUrl("csv")}>
             CSV
           </a>
-          <button className="btn btn-sm btn-accent" onClick={() => setEditing(null)}>
-            <Plus size={14} /> Tambah
-          </button>
+          {allowCreate && (
+            <button className="btn btn-sm btn-accent" onClick={() => setEditing(null)}>
+              <Plus size={14} /> Tambah
+            </button>
+          )}
         </div>
       </div>
 
@@ -295,7 +306,7 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
         </div>
       )}
 
-      {editing !== undefined && <ResourceForm resource={r} row={editing} defaults={defaults} onClose={() => setEditing(undefined)} onSaved={refresh} />}
+      {editing !== undefined && <ResourceForm resource={r} row={editing} defaults={defaults} groups={formGroups} title={formTitle} onClose={() => setEditing(undefined)} onSaved={refresh} />}
       {importing && <ImportDialog resourceKey={resourceKey} defaultPlatform={importPlatform} onClose={() => setImporting(false)} onDone={refresh} />}
     </div>
   );

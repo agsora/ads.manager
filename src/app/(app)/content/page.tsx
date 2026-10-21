@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, List, PieChart, Plus } from "lucide-react";
+import { BarChart3, CalendarDays, Check, ChevronLeft, ChevronRight, ClipboardList, PieChart, Plus, RotateCcw } from "lucide-react";
 import { PageHeader } from "@/components/shell";
 import { ResourceTable } from "@/components/resource-table";
-import { useFetch, useFilter } from "@/components/providers";
+import { api, useFetch, useFilter, useToast } from "@/components/providers";
 import { useAnalytics } from "@/components/use-analytics";
 import { ResourceForm } from "@/components/resource-form";
 import { Bars, BarList, Card, Kpi, MiniTable, SplitBar } from "@/components/charts";
@@ -16,15 +16,16 @@ const DAYS = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 const STATUS_DOT: Record<string, string> = { Posted: "var(--good)", Scheduled: "var(--s2)", Produksi: "var(--s5)", Review: "var(--s5)", Draft: "#c3c2b7", Ide: "#c3c2b7", Cancel: "var(--critical)" };
 
 export default function ContentPage() {
-  const [tab, setTab] = useState<"calendar" | "list" | "analytics">("calendar");
+  const [tab, setTab] = useState<"calendar" | "plan" | "results" | "analytics">("calendar");
   const tabs = [
     { key: "calendar", label: "Kalender", icon: CalendarDays },
-    { key: "list", label: "Daftar & Input Hasil", icon: List },
-    { key: "analytics", label: "Analitik Konten", icon: PieChart },
+    { key: "plan", label: "Planning", icon: ClipboardList },
+    { key: "results", label: "Hasil", icon: BarChart3 },
+    { key: "analytics", label: "Analitik", icon: PieChart },
   ] as const;
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow="Konten" title="Content Plan" desc="Rencanakan konten (tanggal, channel, pilar, PIC), lalu isi hasilnya setelah tayang (like, comment, saved, followers). Engagement Rate = (Like + Comment + Saved) ÷ Followers." />
+      <PageHeader eyebrow="Konten" title="Content Plan" desc="Planning = apa yang akan diposting (jadwal, channel, pilar, PIC, caption, approval). Hasil = performa setelah tayang (tanggal aktual, reach, like, comment, saved, followers → engagement rate). Setiap rencana baru, perubahan, dan approval dikirim sebagai notifikasi & email ke tim." />
       <div className="tabs">
         {tabs.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} className="tab" data-on={tab === t.key}>
@@ -33,8 +34,106 @@ export default function ContentPage() {
         ))}
       </div>
       {tab === "calendar" && <Calendar />}
-      {tab === "list" && <ResourceTable resourceKey="content" quickFilters={["channel", "pillar", "status"]} computedCols={["er", "on_time"]} />}
+      {tab === "plan" && <Planning />}
+      {tab === "results" && <Results />}
       {tab === "analytics" && <ContentAnalytics />}
+    </div>
+  );
+}
+
+const PLAN_COLUMNS = ["post_date", "post_time", "title", "brand", "channel", "content_type", "pillar", "pic", "status", "approval_status"];
+const RESULT_COLUMNS = ["post_date", "title", "channel", "status", "actual_date", "reach", "views", "likes", "comments", "saves", "followers"];
+
+function usePlanStats(tick: number) {
+  const f = useFilter();
+  return useFetch<{ rows: Row[] }>(`/api/r/content?from=${f.from}&to=${f.to}${f.brand ? `&brand=${encodeURIComponent(f.brand)}` : ""}&_=${tick}`);
+}
+
+function Planning() {
+  const toast = useToast();
+  const [tick, setTick] = useState(0);
+  const { data } = usePlanStats(tick);
+  const rows = (data?.rows ?? []).filter((r) => r.status !== "Cancel");
+  const today = todayISO();
+  const count = (fn: (r: Row) => boolean) => rows.filter(fn).length;
+  const approve = async (ids: number[], approval: string, done: () => void) => {
+    try {
+      await api("/api/r/content/bulk", "POST", { ids, data: { approval_status: approval } });
+      toast(`${ids.length} konten → ${approval}`);
+      done();
+      setTick((t) => t + 1);
+    } catch (e) {
+      toast((e as Error).message, "err");
+    }
+  };
+  return (
+    <div className="space-y-5">
+      <div className="stat-grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+        <Kpi label="Rencana di periode" value={rows.length} format="number" />
+        <Kpi label="7 hari ke depan" value={count((r) => String(r.post_date) >= today && String(r.post_date) <= addDays(today, 6))} format="number" />
+        <Kpi label="Menunggu review" value={count((r) => r.approval_status === "Menunggu review")} format="number" />
+        <Kpi label="Perlu revisi" value={count((r) => r.approval_status === "Perlu revisi")} format="number" />
+        <Kpi label="Disetujui" value={count((r) => r.approval_status === "Disetujui")} format="number" />
+        <Kpi label="Terlewat jadwal" value={count((r) => String(r.post_date) < today && r.status !== "Posted")} format="number" />
+      </div>
+      <ResourceTable
+        resourceKey="content"
+        columns={PLAN_COLUMNS}
+        formGroups={["Rencana", "Approval"]}
+        formTitle="Rencana konten"
+        quickFilters={["status", "approval_status", "channel"]}
+        computedCols={[]}
+        searchPlaceholder="Cari judul, PIC, caption…"
+        defaults={{ status: "Ide", approval_status: "Menunggu review" }}
+        reloadKey={tick}
+        onChanged={() => setTick((t) => t + 1)}
+        selectionActions={(ids, done) => (
+          <>
+            <button className="btn btn-sm" onClick={() => approve(ids, "Disetujui", done)}>
+              <Check size={13} /> Setujui
+            </button>
+            <button className="btn btn-sm" onClick={() => approve(ids, "Perlu revisi", done)}>
+              <RotateCcw size={13} /> Minta revisi
+            </button>
+          </>
+        )}
+      />
+    </div>
+  );
+}
+
+function Results() {
+  const [tick, setTick] = useState(0);
+  const { data } = usePlanStats(tick);
+  const today = todayISO();
+  const due = (data?.rows ?? []).filter((r) => r.status !== "Cancel" && (r.status === "Posted" || String(r.post_date) <= today));
+  const posted = due.filter((r) => r.status === "Posted");
+  const filled = posted.filter((r) => Number(r.likes) || Number(r.reach) || Number(r.views));
+  const ers = filled.filter((r) => Number(r.followers)).map((r) => (Number(r.likes ?? 0) + Number(r.comments ?? 0) + Number(r.saves ?? 0)) / Number(r.followers));
+  return (
+    <div className="space-y-5">
+      <div className="stat-grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+        <Kpi label="Sudah jatuh tempo" value={due.length} format="number" />
+        <Kpi label="Sudah tayang" value={posted.length} format="number" hint={due.length ? `${Math.round((posted.length / due.length) * 100)}% dari jadwal` : ""} />
+        <Kpi label="Hasil lengkap" value={filled.length} format="number" />
+        <Kpi label="Hasil belum diisi" value={posted.length - filled.length} format="number" />
+        <Kpi label="Rata-rata ER" value={ers.length ? ers.reduce((a, b) => a + b, 0) / ers.length : null} format="percent" />
+      </div>
+      <p className="text-[13px] text-[var(--ink-2)]">
+        Hanya konten yang tanggalnya sudah lewat atau sudah tayang. Klik baris untuk mengisi hasil — rencananya tidak ikut berubah. Tandai status <b>Posted</b> agar masuk perhitungan.
+      </p>
+      <ResourceTable
+        resourceKey="content"
+        columns={RESULT_COLUMNS}
+        formGroups={["Hasil"]}
+        formTitle="Input hasil konten"
+        allowCreate={false}
+        quickFilters={["channel", "status"]}
+        computedCols={["result_state", "er", "on_time"]}
+        rowFilter={(r) => r.status !== "Cancel" && (r.status === "Posted" || String(r.post_date) <= today)}
+        reloadKey={tick}
+        onChanged={() => setTick((t) => t + 1)}
+      />
     </div>
   );
 }
@@ -129,7 +228,7 @@ function Calendar() {
         </div>
       </div>
       {editing && (
-        <ResourceForm resource={RESOURCE_MAP.content} row={editing.row} defaults={{ post_date: editing.date, status: "Ide", brand: f.brand || undefined }} onClose={() => setEditing(null)} onSaved={content.reload} />
+        <ResourceForm resource={RESOURCE_MAP.content} row={editing.row} defaults={{ post_date: editing.date, status: "Ide", approval_status: "Menunggu review", brand: f.brand || undefined }} onClose={() => setEditing(null)} onSaved={content.reload} />
       )}
       {editEvent && <ResourceForm resource={RESOURCE_MAP.events} row={editEvent} onClose={() => setEditEvent(null)} onSaved={events.reload} />}
     </div>

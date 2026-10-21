@@ -1,0 +1,136 @@
+import { getSetting, logActivity, q, setSetting } from "./db";
+import { buildAnalytics } from "./analytics";
+import { buildReportWorkbook } from "./report";
+import { appUrl, emailEnabled, renderEmail, sendEmails, type EmailSection } from "./email";
+import { notify, orgUsers, wantsEmail } from "./notify";
+import { addDays, fmtDate, fmtMoney, fmtNum, fmtPct, monthEnd, monthStart, todayISO } from "./format";
+import type { Row } from "./resources";
+
+export interface DailyResult {
+  orgId: number;
+  closedCampaigns: number;
+  alerts: number;
+  digestEmails: number;
+  weeklyEmails: number;
+  skipped?: string;
+}
+
+/**
+ * Daily automation for one workspace:
+ *  1. campaigns still "Running" after their end date → "Done"
+ *  2. in-app alerts: overdue content, pending approvals, missing results, HOT follow ups, low ad balance, negative reviews
+ *  3. morning digest email
+ *  4. on Mondays (or when forced) the weekly report email with the Excel attached
+ */
+export async function runDaily(orgId: number, opts: { force?: boolean; weekly?: boolean; req?: Request } = {}): Promise<DailyResult> {
+  const today = todayISO();
+  const guard = `daily:${orgId}:${today}`;
+  if (!opts.force && (await getSetting(guard))) return { orgId, closedCampaigns: 0, alerts: 0, digestEmails: 0, weeklyEmails: 0, skipped: "sudah dijalankan hari ini" };
+  await setSetting(guard, new Date().toISOString());
+
+  const base = appUrl(opts.req);
+  const closed = await q(`UPDATE ad_campaigns SET status = 'Done', updated_at = now() WHERE org_id = $1 AND status = 'Running' AND end_date < $2 RETURNING id`, [orgId, today]);
+
+  const content = await q<Row>(`SELECT * FROM content_plans WHERE org_id = $1 AND post_date BETWEEN $2 AND $3 ORDER BY post_date, post_time NULLS LAST`, [orgId, addDays(today, -14), addDays(today, 1)]);
+  const live = content.filter((c) => c.status !== "Cancel");
+  const todays = live.filter((c) => String(c.post_date) === today);
+  const tomorrow = live.filter((c) => String(c.post_date) === addDays(today, 1));
+  const overdue = live.filter((c) => String(c.post_date) < today && c.status !== "Posted");
+  const pendingApproval = live.filter((c) => c.approval_status === "Menunggu review" || c.approval_status === "Perlu revisi");
+  const missingResults = live.filter((c) => c.status === "Posted" && String(c.post_date) <= addDays(today, -2) && !Number(c.likes) && !Number(c.reach) && !Number(c.views));
+
+  const a = await buildAnalytics(orgId, { from: monthStart(today), to: monthEnd(today) });
+  const hot = a.followUps.filter((f) => String(f.segment ?? "").toUpperCase() === "HOT");
+  const lowWallets = a.wallets.filter((w) => w.closing < 0 || (w.daysLeft !== null && w.daysLeft < 7));
+  const negative = a.unanswered.filter((u) => u.rating > 0 && u.rating <= 3);
+  const critical = a.insights.filter((i) => i.level === "critical");
+
+  // ---- in-app alerts (one per topic per day; email goes out in the digest instead)
+  let alerts = 0;
+  const alert = async (title: string, body: string, link: string) => {
+    await notify({ orgId, category: "alerts", title, body, link, skipActor: false });
+    alerts++;
+  };
+  if (overdue.length) await alert(`${overdue.length} konten terlewat jadwal`, overdue.slice(0, 3).map((c) => `${c.title} (${fmtDate(c.post_date)})`).join(", "), "/content");
+  if (pendingApproval.length) await alert(`${pendingApproval.length} konten menunggu review/revisi`, pendingApproval.slice(0, 3).map((c) => String(c.title)).join(", "), "/content");
+  if (missingResults.length) await alert(`${missingResults.length} konten tayang belum diisi hasilnya`, "Isi like, comment, saved & followers agar engagement rate terhitung.", "/content");
+  if (hot.length) await alert(`${hot.length} lead HOT jatuh tempo follow up`, hot.slice(0, 4).map((f) => `${f.name} (${f.age} hari)`).join(", "), "/leads/followup");
+  for (const w of lowWallets) await alert(`Saldo iklan ${w.brand} · ${w.platform} menipis`, `Sisa ${fmtMoney(w.closing)}${w.daysLeft !== null ? `, cukup ±${fmtNum(w.daysLeft, 0)} hari` : ""}.`, "/ads/budget");
+  if (negative.length) await alert(`${negative.length} ulasan negatif belum dibalas`, negative.slice(0, 3).map((n) => `${n.reviewer ?? "Anonim"} ${n.rating}★`).join(", "), "/reviews");
+  if (closed.length) await alert(`${closed.length} campaign otomatis ditandai Done`, "Tanggal berakhirnya sudah lewat.", "/ads");
+
+  // ---- digest email
+  const users = await orgUsers(orgId);
+  let digestEmails = 0;
+  if (emailEnabled()) {
+    const line = (c: Row) => `${c.post_time ? `${c.post_time} · ` : ""}${c.title} — ${c.channel ?? "-"}${c.brand ? ` · ${c.brand}` : ""} [${c.status ?? "-"}]`;
+    const sections: EmailSection[] = [
+      { title: `Konten hari ini (${todays.length})`, items: todays.map(line), empty: "Tidak ada konten terjadwal hari ini." },
+      { title: `Konten besok (${tomorrow.length})`, items: tomorrow.map(line), empty: "Belum ada konten untuk besok." },
+    ];
+    if (overdue.length) sections.push({ title: `Terlewat jadwal (${overdue.length})`, items: overdue.slice(0, 10).map((c) => `${fmtDate(c.post_date)} · ${c.title} [${c.status ?? "-"}]`) });
+    if (pendingApproval.length) sections.push({ title: `Menunggu review / revisi (${pendingApproval.length})`, items: pendingApproval.slice(0, 10).map((c) => `${c.title} — ${c.approval_status}`) });
+    if (missingResults.length) sections.push({ title: `Hasil konten belum diisi (${missingResults.length})`, items: missingResults.slice(0, 10).map((c) => `${fmtDate(c.post_date)} · ${c.title}`) });
+    if (a.followUps.length) sections.push({ title: `Follow up jatuh tempo (${a.followUps.length})`, items: a.followUps.slice(0, 10).map((f) => `${f.segment ?? "-"} · ${f.name} · ${f.age} hari · FU${f.stage > 3 ? "✓" : f.stage}`) });
+    if (lowWallets.length) sections.push({ title: "Saldo iklan menipis", items: lowWallets.map((w) => `${w.brand} · ${w.platform}: ${fmtMoney(w.closing)}`) });
+    if (negative.length) sections.push({ title: "Ulasan negatif belum dibalas", items: negative.map((n) => `${n.reviewer ?? "Anonim"} (${n.rating}★) — ${String(n.comment ?? "").slice(0, 80)}`) });
+    if (critical.length) sections.push({ title: "Insight kritis", items: critical.map((i) => `${i.title} → ${i.action}`) });
+    sections.push({
+      title: "Bulan ini sejauh ini",
+      rows: [
+        ["Belanja iklan", fmtMoney(a.kpis.ads.spend)],
+        ["Percakapan dari ads", fmtNum(a.kpis.ads.conversations)],
+        ["Leads / deal", `${a.kpis.leads.leads} / ${a.kpis.leads.deals} (${fmtPct(a.kpis.leads.dealRate)})`],
+        ["Konten tayang", `${a.kpis.content.posted} dari ${a.kpis.content.planned}`],
+      ],
+    });
+    const html = renderEmail({
+      eyebrow: `Ringkasan harian · ${fmtDate(today)}`,
+      title: todays.length ? `${todays.length} konten tayang hari ini` : "Ringkasan pagi Anda",
+      intro: `${overdue.length} terlewat · ${pendingApproval.length} menunggu review · ${a.followUps.length} follow up jatuh tempo.`,
+      sections,
+      cta: { label: "Buka dashboard", url: base },
+    });
+    const res = await sendEmails(users.filter((u) => wantsEmail(u, "digest")).map((u) => ({ to: u.email, subject: `Ringkasan harian ${fmtDate(today)} — Ads Manager`, html })));
+    digestEmails = res.sent;
+  }
+
+  // ---- weekly report (Monday)
+  let weeklyEmails = 0;
+  const isMonday = new Date(today + "T00:00:00Z").getUTCDay() === 1;
+  if ((opts.weekly ?? isMonday) && emailEnabled()) {
+    const from = addDays(today, -7);
+    const to = addDays(today, -1);
+    const { wb, a: w } = await buildReportWorkbook(orgId, from, to);
+    const file = Buffer.from(await wb.xlsx.writeBuffer()).toString("base64");
+    const html = renderEmail({
+      eyebrow: `Laporan mingguan · ${fmtDate(from)} – ${fmtDate(to)}`,
+      title: "Ringkasan 7 hari terakhir",
+      intro: `Skor kesehatan marketing ${w.scores.overall ?? "–"}/100. Laporan lengkap terlampir (Excel).`,
+      sections: [
+        {
+          title: "Angka utama",
+          rows: [
+            ["Belanja iklan", `${fmtMoney(w.kpis.ads.spend)} (vs ${fmtMoney(w.prevKpis.ads.spend)})`],
+            ["CTR · CPC", `${fmtPct(w.kpis.ads.ctr, 2)} · ${fmtMoney(w.kpis.ads.cpc)}`],
+            ["Biaya per percakapan", fmtMoney(w.kpis.ads.costPerConv)],
+            ["Leads", `${w.kpis.leads.leads} (vs ${w.prevKpis.leads.leads})`],
+            ["Deal · conversion", `${w.kpis.leads.deals} · ${fmtPct(w.kpis.leads.dealRate)}`],
+            ["Konten tayang · ER", `${w.kpis.content.posted} · ${fmtPct(w.kpis.content.avgER, 2)}`],
+            ["Rating Google", w.kpis.reviews.avgRating ? `${fmtNum(w.kpis.reviews.avgRating, 2)}★` : "–"],
+          ],
+        },
+        { title: "Yang perlu dilakukan", items: w.insights.filter((i) => i.level === "critical" || i.level === "warning").slice(0, 8).map((i) => `${i.title} → ${i.action}`), empty: "Tidak ada masalah besar minggu ini." },
+        { title: "Yang sudah bagus", items: w.insights.filter((i) => i.level === "good").slice(0, 5).map((i) => i.title) },
+      ],
+      cta: { label: "Buka laporan", url: `${base}/reports` },
+    });
+    const managers = users.filter((u) => ["superadmin", "owner", "admin"].includes(u.role) && wantsEmail(u, "weekly"));
+    const res = await sendEmails(managers.map((u) => ({ to: u.email, subject: `Laporan mingguan ${fmtDate(from)} – ${fmtDate(to)}`, html, attachments: [{ filename: `laporan-${from}_${to}.xlsx`, content: file }] })));
+    weeklyEmails = res.sent;
+    if (res.sent) await notify({ orgId, category: "weekly", title: "Laporan mingguan terkirim", body: `Dikirim ke ${res.sent} email (owner/admin).`, link: "/reports", skipActor: false, userIds: managers.map((m) => m.id) });
+  }
+
+  await logActivity(orgId, "Otomasi", "Otomasi harian", `${closed.length} campaign ditutup · ${alerts} peringatan · ${digestEmails} digest · ${weeklyEmails} laporan mingguan`);
+  return { orgId, closedCampaigns: closed.length, alerts, digestEmails, weeklyEmails };
+}

@@ -13,7 +13,8 @@ Dibangun dari struktur workbook *WEBSITE MARKETING REPORT.xlsx* (Ads Report, Con
 | **Laporan** | Ringkasan eksekutif, Iklan & Budget, Leads & Penjualan, Konten, WA Blast, Reputasi, Influencer, Atribusi & efisiensi biaya — cetak/PDF dan Excel multi-sheet |
 | **Ads Campaign** | Upload langsung file ekspor Meta Ads Manager (CSV/Excel, termasuk breakdown harian) — kolom dikenali otomatis, digabung per campaign, upload ulang tidak dobel dan omzet yang diisi manual tetap tersimpan. CTR, CPC, CPM, biaya/percakapan, ROAS, ROI otomatis |
 | **Saldo & Top Up** | Saldo awal, top up, rencana top up per brand/platform/bulan → saldo akhir, belanja per hari, estimasi hari tersisa |
-| **Content Plan** | Kalender bulanan + event, daftar & input hasil (like/comment/saved/followers → ER), analitik per channel/pilar/hari, top & bottom 5 |
+| **Content Plan** | Kalender + event; tab **Planning** (jadwal, PIC, caption, approval: menunggu review/disetujui/revisi) terpisah dari tab **Hasil** (tanggal aktual, reach, like, comment, saved, followers → ER); analitik per channel/pilar/hari |
+| **Notifikasi** | Lonceng + email (Resend) ke semua user saat rencana konten baru/diubah/dihapus/disetujui, lead HOT baru, impor data; atur email per kategori. Otomasi 08.00 WIB: tutup campaign lewat tanggal, peringatan, ringkasan harian, laporan mingguan + Excel (Senin) |
 | **Target KPI / Followers / Event** | Target bulanan per brand, tracker followers, tanggal penting |
 | **WA Leads & Follow Up** | CRM chat masuk (sumber, segmen HOT/WARM/COLD, FU 1–3, status akhir, nilai deal) + papan follow up dengan jadwal H+3/H+7/H+14 |
 | **WA Blast** | *Kontak blast* format kontrak (nomor kontrak, nama, nomor, noresmi 62…, harga pasar, plafon, pinjaman, rekomendasi plafon, rek. resmi, tipe unit, tahun): upload, ekspor CSV siap kirim dengan pesan personal, status per kontak, rekap per batch & tipe unit, konversi ke WA Leads. *Laporan kampanye*: terkirim → dibaca → dibalas → leads → deal |
@@ -47,6 +48,10 @@ Buka http://localhost:3000/register untuk membuat akun pertama — akun ini menj
 |---|---|
 | `DATABASE_URL` | Connection string Neon (pooled) |
 | `AUTH_SECRET` | String acak ≥ 32 karakter untuk menandatangani sesi |
+| `RESEND_API_KEY` | Kunci Resend untuk email notifikasi |
+| `EMAIL_FROM` | Pengirim, mis. `Ads Manager <notif@domain-anda.com>` (wajib domain terverifikasi agar bisa kirim ke semua user) |
+| `CRON_SECRET` | Rahasia untuk cron harian Vercel |
+| `APP_URL` | URL aplikasi untuk tautan di email |
 
 ## Deploy
 

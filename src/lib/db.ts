@@ -1,7 +1,7 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { RESOURCES, type FieldType } from "./resources";
 
-const SCHEMA_VERSION = "8";
+const SCHEMA_VERSION = "9";
 
 // Keep DATE/TIMESTAMP as raw strings (no timezone shifting) and NUMERIC/INT8 as numbers.
 const RAW = (v: string) => v;
@@ -75,6 +75,20 @@ export function schemaStatements(): string[] {
       vals jsonb NOT NULL,
       PRIMARY KEY (org_id, key)
     )`,
+    `CREATE TABLE IF NOT EXISTS notifications (
+      id serial PRIMARY KEY,
+      org_id int NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      user_id int NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      category text NOT NULL,
+      title text NOT NULL,
+      body text,
+      link text,
+      actor text,
+      read_at timestamptz,
+      created_at timestamptz DEFAULT now()
+    )`,
+    `CREATE INDEX IF NOT EXISTS notifications_user ON notifications (user_id, read_at, created_at DESC)`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_prefs jsonb NOT NULL DEFAULT '{}'::jsonb`,
     `CREATE TABLE IF NOT EXISTS activity_log (
       id serial PRIMARY KEY,
       org_id int NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,

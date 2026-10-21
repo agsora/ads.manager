@@ -3,6 +3,7 @@ import { handle, HttpError, requireSession } from "@/lib/auth";
 import { getResource } from "@/lib/resources";
 import { applyDerive, cleanInput, insertRow, listRows, validate } from "@/lib/repo";
 import { logActivity, q } from "@/lib/db";
+import { recordEvent } from "@/lib/events";
 
 type Ctx = { params: Promise<{ resource: string }> };
 
@@ -31,5 +32,6 @@ export const POST = handle(async (req: Request, ctx: Ctx) => {
     await q(`INSERT INTO brands (org_id, name) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [s.org, data.brand]);
   const row = await insertRow(s.org, r, data);
   await logActivity(s.org, s.name, `Tambah ${r.singular}`, String(data[r.titleField] ?? ""));
+  recordEvent({ s, r, action: "create", row, req });
   return NextResponse.json({ row });
 });

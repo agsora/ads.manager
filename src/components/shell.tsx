@@ -5,9 +5,10 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   LayoutDashboard, Lightbulb, FileBarChart, Megaphone, Wallet, CalendarDays, Target, Users, CalendarHeart,
-  MessageCircle, PhoneCall, Send, Star, Sparkles, ArrowUpDown, Settings, LogOut, Menu, X, ShieldCheck,
+  MessageCircle, PhoneCall, Send, Star, Sparkles, ArrowUpDown, Settings, LogOut, Menu, X, ShieldCheck, Bell,
 } from "lucide-react";
 import { PRESETS, useFilter, useMeta, type Preset } from "./providers";
+import { NotificationBell } from "./notification-bell";
 
 type Item = { href: string; label: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }> };
 const NAV: { section?: string; items: Item[] }[] = [
@@ -16,6 +17,7 @@ const NAV: { section?: string; items: Item[] }[] = [
       { href: "/", label: "Ringkasan", icon: LayoutDashboard },
       { href: "/insights", label: "Insight & Saran", icon: Lightbulb },
       { href: "/reports", label: "Laporan", icon: FileBarChart },
+      { href: "/notifications", label: "Notifikasi", icon: Bell },
     ],
   },
   {
@@ -139,6 +141,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </Link>
           )}
           <GlobalFilter />
+          <NotificationBell />
         </header>
         <main className="page mx-auto max-w-[1440px] px-4 py-7 lg:px-10">{children}</main>
       </div>

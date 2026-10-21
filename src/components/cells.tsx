@@ -19,6 +19,7 @@ const TONE_BY_VALUE: Record<string, string> = {
   hold: "amber", pending: "amber", netral: "amber", warm: "orange",
   hot: "red", cancel: "gray", batal: "gray", nonaktif: "gray", ghosting: "red", negatif: "red", tidak: "red", gagal: "red",
   cold: "blue",
+  "menunggu review": "amber", disetujui: "green", "perlu revisi": "red", lengkap: "green", "belum diisi": "amber", "belum tayang": "red",
   yes: "green", no: "gray", "belum dikirim": "gray", dibaca: "blue", dibalas: "violet", tertarik: "orange", "tidak tertarik": "gray", "nomor tidak aktif": "red",
 };
 
@@ -76,7 +77,7 @@ export function renderComputed(format: string, v: unknown) {
   if (v === null || v === undefined) return <span className="text-[var(--muted)]">–</span>;
   if (format === "text") {
     const s = String(v);
-    const tone = /jatuh tempo|ghosting/i.test(s) ? "red" : /selesai|ya$/i.test(s) ? "green" : /telat/i.test(s) ? "amber" : "gray";
+    const tone = TONE_BY_VALUE[s.toLowerCase()] ?? (/jatuh tempo|ghosting/i.test(s) ? "red" : /selesai|ya$/i.test(s) ? "green" : /telat/i.test(s) ? "amber" : "gray");
     return <Chip value={s} tone={tone} />;
   }
   return <span className="tnum whitespace-nowrap">{formatValue(v, format)}</span>;

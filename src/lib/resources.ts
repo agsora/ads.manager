@@ -22,6 +22,8 @@ export interface Field {
   /** option-set key (editable in Settings) for select fields */
   options?: string;
   required?: boolean;
+  /** offer suggestions from a live list (e.g. team member names) */
+  suggest?: "users";
   /** extra header names recognised on import (case-insensitive) */
   aliases?: string[];
   /** hide from the list table (still in form / export) */
@@ -168,9 +170,12 @@ export const RESOURCES: Resource[] = [
       { key: "content_type", label: "Jenis Konten", type: "select", options: "content_type", group: "Rencana" },
       { key: "pillar", label: "Konten Pilar", type: "select", options: "content_pillar", group: "Rencana", aliases: ["pilar"] },
       { key: "title", label: "Judul Konten", type: "text", required: true, group: "Rencana", aliases: ["judul"] },
-      { key: "pic", label: "PIC", type: "text", group: "Rencana" },
+      { key: "pic", label: "PIC", type: "text", group: "Rencana", suggest: "users" },
+      { key: "caption", label: "Caption / Brief", type: "longtext", hideInTable: true, group: "Rencana", aliases: ["caption", "brief", "copywriting"] },
       { key: "brief_link", label: "Link Brief/Detail", type: "url", hideInTable: true, group: "Rencana", aliases: ["link detail konten"] },
       { key: "status", label: "Status", type: "select", options: "content_status", group: "Rencana", aliases: ["status konten"] },
+      { key: "approval_status", label: "Approval", type: "select", options: "approval_status", group: "Approval", aliases: ["approval"] },
+      { key: "approval_note", label: "Catatan Reviewer", type: "longtext", hideInTable: true, group: "Approval", aliases: ["catatan reviewer", "revisi"] },
       { key: "actual_date", label: "Tanggal Aktual", type: "date", hideInTable: true, group: "Hasil" },
       { key: "post_link", label: "Link Postingan", type: "url", hideInTable: true, group: "Hasil" },
       { key: "reach", label: "Reach", type: "number", hideInTable: true, group: "Hasil" },
@@ -184,6 +189,17 @@ export const RESOURCES: Resource[] = [
     computed: [
       { key: "engagement", label: "Engagement", format: "number", fn: (r) => n(r.likes) + n(r.comments) + n(r.saves) },
       { key: "er", label: "ER", format: "percent", fn: (r) => div(n(r.likes) + n(r.comments) + n(r.saves), n(r.followers)) },
+      {
+        key: "result_state",
+        label: "Hasil",
+        format: "text",
+        fn: (r) => {
+          const due = String(r.post_date ?? "") <= new Date().toISOString().slice(0, 10);
+          if (r.status === "Cancel") return null;
+          if (r.status !== "Posted") return due ? "Belum tayang" : "Terjadwal";
+          return n(r.likes) || n(r.reach) || n(r.views) ? "Lengkap" : "Belum diisi";
+        },
+      },
       {
         key: "on_time",
         label: "Tepat Waktu",
@@ -467,6 +483,7 @@ export const DEFAULT_OPTIONS: Record<string, { label: string; values: string[] }
   content_type: { label: "Jenis Konten", values: ["Single Image", "Carousel", "Video/Reels", "Story", "Live", "Artikel"] },
   content_pillar: { label: "Konten Pilar", values: ["Edukasi", "Promosi", "Engagement", "Testimoni", "Behind The Scene", "Brand Awareness", "Hiburan"] },
   content_status: { label: "Status Konten", values: ["Ide", "Draft", "Produksi", "Review", "Scheduled", "Posted", "Cancel"] },
+  approval_status: { label: "Status Approval", values: ["Menunggu review", "Disetujui", "Perlu revisi"] },
   event_type: { label: "Jenis Event", values: ["Hari Besar", "Promo", "Launching", "Event Internal", "Pameran", "Lainnya"] },
   customer_type: { label: "Jenis Pelanggan", values: ["Baru", "Repeat Order", "Langganan"] },
   lead_source: { label: "Sumber Trafik", values: ["Organik", "Ads Meta", "Ads TikTok", "Google", "Whatsapp Blast", "Story WA", "Broadcast WA", "Influencer", "Referral", "Website"] },

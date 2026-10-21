@@ -3,6 +3,7 @@ import { handle, HttpError, requireSession } from "@/lib/auth";
 import { getResource } from "@/lib/resources";
 import { cleanInput } from "@/lib/repo";
 import { logActivity, q } from "@/lib/db";
+import { activityEvent } from "@/lib/events";
 
 type Ctx = { params: Promise<{ resource: string }> };
 
@@ -20,5 +21,7 @@ export const POST = handle(async (req: Request, ctx: Ctx) => {
     [s.org, ids.map(Number), ...keys.map((k) => clean[k])],
   );
   await logActivity(s.org, s.name, `Ubah ${res.length} ${r.singular}`, keys.join(", "));
+  const what = keys.map((k) => `${r.fields.find((f) => f.key === k)?.label ?? k} = ${String(clean[k] ?? "–")}`).join(", ");
+  activityEvent(s, `${s.name} mengubah ${res.length} ${r.singular.toLowerCase()}`, what, r.key === "content" ? "/content" : r.key === "contacts" ? "/blast" : "/", r.key === "content" ? "content" : "activity", req);
   return NextResponse.json({ updated: res.length });
 });

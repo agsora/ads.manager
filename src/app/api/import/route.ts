@@ -4,6 +4,7 @@ import { getResource, RESOURCE_MAP, type Resource } from "@/lib/resources";
 import { guessResource, parseSheet, parseWalletSummary, readWorkbook, type ParsedSheet } from "@/lib/excel";
 import { deleteMatching, getBrands, insertMany } from "@/lib/repo";
 import { logActivity, q } from "@/lib/db";
+import { activityEvent } from "@/lib/events";
 
 export const maxDuration = 60;
 
@@ -90,5 +91,16 @@ export const POST = handle(async (req: Request) => {
     total += await insertMany(s.org, p.resource, p.rows);
   }
   await logActivity(s.org, s.name, "Impor data", `${file.name}: ${total} baris${replaced ? ` (${replaced} diperbarui)` : ""}`);
+  const labels = [...new Set(parsed.map((p) => p.resource.label))].join(", ");
+  const firstKey = parsed[0].resource.key;
+  const LINK: Record<string, string> = { ads: "/ads", content: "/content", leads: "/leads", contacts: "/blast", blast: "/blast", reviews: "/reviews" };
+  activityEvent(
+    s,
+    `${s.name} mengimpor ${total} baris ${labels}`,
+    `File ${file.name}${replaced ? ` · ${replaced} baris lama diperbarui` : ""}.`,
+    LINK[firstKey] ?? "/data",
+    parsed.some((p) => p.resource.key === "content") ? "content" : "activity",
+    req,
+  );
   return NextResponse.json({ ok: true, imported: total, replaced, summary: summary.map((x) => ({ ...x, sample: undefined })), ignored });
 });

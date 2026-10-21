@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { handle, HttpError, requireSession } from "@/lib/auth";
 import { logActivity, q } from "@/lib/db";
+import { activityEvent } from "@/lib/events";
 import { RESOURCE_MAP } from "@/lib/resources";
 import { insertMany } from "@/lib/repo";
 import { fmtMoney, todayISO } from "@/lib/format";
@@ -48,5 +49,6 @@ export const POST = handle(async (req: Request) => {
     });
   const n = await insertMany(s.org, RESOURCE_MAP.leads, rows);
   await logActivity(s.org, s.name, "Kontak blast → leads", `${n} kontak`);
+  if (n) activityEvent(s, `${n} kontak blast masuk WA Leads`, `Dipindahkan oleh ${s.name}. Segera follow up yang tertarik.`, "/leads/followup", "activity", req);
   return NextResponse.json({ ok: true, created: n, skipped: contacts.length - n });
 });
