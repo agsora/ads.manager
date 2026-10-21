@@ -1,0 +1,276 @@
+"use client";
+
+import {
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from "recharts";
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, CheckCircle2, Info, OctagonAlert } from "lucide-react";
+import { fmtCompact, fmtDate, fmtMoney, fmtNum, fmtPct, formatValue } from "@/lib/format";
+import type { Insight } from "@/lib/analytics";
+
+export const SERIES = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s5)", "var(--s6)", "var(--s7)", "var(--s8)"];
+export const SEGMENT_COLORS: Record<string, string> = { HOT: "var(--s8)", WARM: "var(--s2)", COLD: "var(--s1)" };
+const AXIS = { fontSize: 11.5, fill: "#8b93a1" };
+
+export function Card({ title, subtitle, action, children, className = "" }: { title?: string; subtitle?: string; action?: React.ReactNode; children: React.ReactNode; className?: string }) {
+  return (
+    <section className={`card p-5 ${className}`}>
+      {(title || action) && (
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            {title && <h3 className="text-[14.5px] font-bold">{title}</h3>}
+            {subtitle && <p className="mt-0.5 text-[12.5px] text-[var(--muted)]">{subtitle}</p>}
+          </div>
+          {action}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+export function Kpi({ label, value, prev, format, invert, hint }: { label: string; value: number | null | undefined; prev?: number | null; format: string; invert?: boolean; hint?: string }) {
+  const delta = prev && value !== null && value !== undefined && Number.isFinite(prev) && prev !== 0 ? value / prev - 1 : null;
+  const good = delta !== null && (invert ? delta < 0 : delta > 0);
+  return (
+    <div className="card p-4">
+      <div className="text-[12.5px] font-semibold text-[var(--ink-2)]">{label}</div>
+      <div className="mt-1.5 text-[24px] font-bold leading-tight tracking-tight">{value === null || value === undefined ? "–" : format === "money" ? fmtMoneyCompact(value) : formatValue(value, format)}</div>
+      <div className="mt-1.5 flex items-center gap-1.5 text-[12px]">
+        {delta !== null ? (
+          <span className={`inline-flex items-center gap-0.5 font-semibold ${Math.abs(delta) < 0.005 ? "text-[var(--muted)]" : good ? "text-[var(--good-ink)]" : "text-[var(--critical)]"}`}>
+            {delta >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+            {fmtPct(Math.abs(delta), 0)}
+          </span>
+        ) : null}
+        <span className="text-[var(--muted)]">{hint ?? (delta !== null ? "vs periode lalu" : "")}</span>
+      </div>
+    </div>
+  );
+}
+
+function fmtMoneyCompact(v: number | null | undefined) {
+  if (v === null || v === undefined) return "–";
+  if (Math.abs(v) >= 1e6) return "Rp " + (v / 1e6).toLocaleString("id-ID", { maximumFractionDigits: 2 }) + " jt";
+  return fmtMoney(v);
+}
+
+function TipBox({ active, payload, label, fmt }: { active?: boolean; payload?: { name: string; value: number; color: string; dataKey: string }[]; label?: string; fmt: (k: string, v: number) => string }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-[12.5px] shadow-lg">
+      <div className="mb-1 font-semibold">{/^\d{4}-\d{2}-\d{2}$/.test(String(label)) ? fmtDate(label) : label}</div>
+      {payload.map((p) => (
+        <div key={p.dataKey} className="flex items-center gap-2">
+          <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: p.color }} />
+          <span className="text-[var(--ink-2)]">{p.name}</span>
+          <span className="ml-auto pl-3 font-semibold tnum">{fmt(p.dataKey, p.value)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const shortDate = (d: string) => (/^\d{4}-\d{2}-\d{2}$/.test(d) ? `${+d.slice(8)}/${+d.slice(5, 7)}` : d);
+
+export function TrendLines({ data, series, format = "number", height = 240, area }: { data: Record<string, unknown>[]; series: { key: string; label: string }[]; format?: string; height?: number; area?: boolean }) {
+  const fmt = (_k: string, v: number) => (format === "money" ? fmtMoney(v) : fmtNum(v, 1));
+  const Chart = area ? AreaChart : LineChart;
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <Chart data={data} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
+        <CartesianGrid stroke="#eceef1" vertical={false} />
+        <XAxis dataKey="date" tickFormatter={shortDate} tick={AXIS} tickLine={false} axisLine={{ stroke: "#d6d8dd" }} minTickGap={18} />
+        <YAxis tick={AXIS} tickLine={false} axisLine={false} width={format === "money" ? 56 : 36} tickFormatter={(v) => (format === "money" ? fmtCompact(v) : fmtCompact(v))} allowDecimals={false} />
+        <Tooltip content={<TipBox fmt={fmt} />} cursor={{ stroke: "#c3c2b7", strokeWidth: 1 }} />
+        {series.length > 1 && <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 12 }} />}
+        {series.map((s, i) =>
+          area ? (
+            <Area key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={SERIES[i]} fill={SERIES[i]} fillOpacity={0.12} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+          ) : (
+            <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={SERIES[i]} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+          ),
+        )}
+      </Chart>
+    </ResponsiveContainer>
+  );
+}
+
+export function Bars({ data, series, format = "number", height = 240, xKey = "name", stacked }: { data: Record<string, unknown>[]; series: { key: string; label: string }[]; format?: string; height?: number; xKey?: string; stacked?: boolean }) {
+  const fmt = (_k: string, v: number) => formatValue(v, format);
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={data} margin={{ top: 6, right: 8, left: 0, bottom: 0 }} barGap={2}>
+        <CartesianGrid stroke="#eceef1" vertical={false} />
+        <XAxis dataKey={xKey} tickFormatter={shortDate} tick={AXIS} tickLine={false} axisLine={{ stroke: "#d6d8dd" }} interval="preserveStartEnd" minTickGap={10} />
+        <YAxis tick={AXIS} tickLine={false} axisLine={false} width={format === "money" ? 56 : 36} tickFormatter={(v) => (format === "percent" ? fmtPct(v, 0) : fmtCompact(v))} />
+        <Tooltip content={<TipBox fmt={fmt} />} cursor={{ fill: "rgba(15,23,42,0.04)" }} />
+        {series.length > 1 && <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 12 }} />}
+        {series.map((s, i) => (
+          <Bar key={s.key} dataKey={s.key} name={s.label} fill={SERIES[i]} radius={stacked ? 0 : [4, 4, 0, 0]} maxBarSize={36} stackId={stacked ? "a" : undefined} stroke="#fff" strokeWidth={stacked ? 1 : 0} />
+        ))}
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+/** Horizontal labelled bars (HTML) — readable category ranking with values. */
+export function BarList({ items, format = "number", color = "var(--s1)", sub }: { items: { name: string; value: number; sub?: string }[]; format?: string; color?: string; sub?: boolean }) {
+  const max = Math.max(1, ...items.map((i) => i.value));
+  if (!items.length) return <Empty />;
+  return (
+    <div className="space-y-2.5">
+      {items.map((it) => (
+        <div key={it.name} title={`${it.name}: ${formatValue(it.value, format)}`}>
+          <div className="mb-1 flex items-baseline justify-between gap-3 text-[13px]">
+            <span className="truncate font-medium">{it.name || "(Kosong)"}</span>
+            <span className="shrink-0 font-semibold tnum">
+              {formatValue(it.value, format)}
+              {sub && it.sub && <span className="ml-1.5 font-normal text-[var(--muted)]">{it.sub}</span>}
+            </span>
+          </div>
+          <div className="h-2 rounded-full bg-[#f1f3f6]">
+            <div className="h-2 rounded-full" style={{ width: `${(it.value / max) * 100}%`, background: color }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function Funnel({ steps }: { steps: { name: string; value: number }[] }) {
+  const max = Math.max(1, ...steps.map((s) => s.value));
+  return (
+    <div className="space-y-1.5">
+      {steps.map((s, i) => {
+        const prev = i > 0 ? steps[i - 1].value : null;
+        const rate = prev ? s.value / prev : null;
+        return (
+          <div key={s.name} className="grid grid-cols-[110px_1fr_auto] items-center gap-3 text-[13px]">
+            <span className="font-medium text-[var(--ink-2)]">{s.name}</span>
+            <div className="h-7 rounded-md bg-[#f1f3f6]">
+              <div className="flex h-7 items-center rounded-md px-2 text-[12px] font-semibold text-white" style={{ width: `${Math.max(2, (s.value / max) * 100)}%`, background: i < 3 ? "var(--s1)" : "#1c5cab" }}>
+                {s.value / max > 0.18 ? fmtCompact(s.value) : ""}
+              </div>
+            </div>
+            <span className="w-24 text-right tnum">
+              <b>{fmtNum(s.value)}</b>
+              {rate !== null && <span className="ml-1 text-[11.5px] text-[var(--muted)]">{fmtPct(rate, 1)}</span>}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** One stacked bar for a part-to-whole split (e.g. HOT/WARM/COLD) with legend. */
+export function SplitBar({ parts, colors }: { parts: { name: string; value: number }[]; colors?: Record<string, string> }) {
+  const total = parts.reduce((s, p) => s + p.value, 0);
+  if (!total) return <Empty />;
+  return (
+    <div>
+      <div className="flex h-3.5 gap-[2px] overflow-hidden rounded-full">
+        {parts.map((p, i) =>
+          p.value ? <div key={p.name} title={`${p.name}: ${p.value}`} style={{ width: `${(p.value / total) * 100}%`, background: colors?.[p.name] ?? SERIES[i % 8] }} /> : null,
+        )}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[12.5px]">
+        {parts.map((p, i) => (
+          <span key={p.name} className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-sm" style={{ background: colors?.[p.name] ?? SERIES[i % 8] }} />
+            <span className="text-[var(--ink-2)]">{p.name || "(Kosong)"}</span>
+            <b className="tnum">{p.value}</b>
+            <span className="text-[var(--muted)] tnum">{fmtPct(p.value / total, 0)}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function Empty({ text = "Belum ada data" }: { text?: string }) {
+  return <div className="grid h-24 place-items-center rounded-lg bg-[var(--surface-2)] text-[13px] text-[var(--muted)]">{text}</div>;
+}
+
+const LEVEL_META: Record<Insight["level"], { label: string; icon: React.ComponentType<{ size?: number; className?: string }>; color: string; bg: string }> = {
+  critical: { label: "Kritis", icon: OctagonAlert, color: "var(--critical)", bg: "#fdf2f2" },
+  warning: { label: "Perlu perhatian", icon: AlertTriangle, color: "#b7791f", bg: "#fff8e8" },
+  info: { label: "Saran", icon: Info, color: "var(--accent)", bg: "#f0f6fd" },
+  good: { label: "Bagus", icon: CheckCircle2, color: "var(--good-ink)", bg: "#eff8ef" },
+};
+
+export function InsightItem({ i, compact }: { i: Insight; compact?: boolean }) {
+  const m = LEVEL_META[i.level];
+  const Icon = m.icon;
+  return (
+    <div className="rounded-xl border border-[var(--line)] p-3.5" style={{ background: m.bg }}>
+      <div className="flex items-start gap-3">
+        <Icon size={18} className="mt-0.5 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: m.color }}>
+              {m.label}
+            </span>
+            <span className="chip !bg-white/70 !text-[11px]">{i.area}</span>
+          </div>
+          <div className="mt-1 text-[14px] font-bold leading-snug">{i.title}</div>
+          {!compact && <div className="mt-1 text-[13px] text-[var(--ink-2)]">{i.detail}</div>}
+          <div className="mt-2 text-[13px]">
+            <span className="font-semibold">➜ Tindakan: </span>
+            {i.action}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function Score({ label, value }: { label: string; value: number | null }) {
+  const tone = value === null ? "#c3c2b7" : value >= 70 ? "var(--good)" : value >= 45 ? "var(--warning)" : "var(--critical)";
+  const word = value === null ? "Belum ada data" : value >= 70 ? "Sehat" : value >= 45 ? "Cukup" : "Perlu perbaikan";
+  return (
+    <div className="flex items-center gap-3">
+      <div className="relative h-12 w-12 shrink-0">
+        <svg viewBox="0 0 36 36" className="h-12 w-12 -rotate-90">
+          <circle cx="18" cy="18" r="15.5" fill="none" stroke="#eceef1" strokeWidth="4" />
+          <circle cx="18" cy="18" r="15.5" fill="none" stroke={tone} strokeWidth="4" strokeDasharray={`${((value ?? 0) / 100) * 97.4} 97.4`} strokeLinecap="round" />
+        </svg>
+        <span className="absolute inset-0 grid place-items-center text-[13px] font-bold tnum">{value ?? "–"}</span>
+      </div>
+      <div>
+        <div className="text-[13px] font-semibold">{label}</div>
+        <div className="text-[12px] text-[var(--muted)]">{word}</div>
+      </div>
+    </div>
+  );
+}
+
+export function MiniTable({ cols, rows, empty }: { cols: { key: string; label: string; format?: string; align?: "right" }[]; rows: Record<string, unknown>[]; empty?: string }) {
+  if (!rows.length) return <Empty text={empty} />;
+  return (
+    <div className="-mx-5 overflow-x-auto">
+      <table className="data">
+        <thead>
+          <tr>
+            {cols.map((c) => (
+              <th key={c.key} className={c.align === "right" || (c.format && c.format !== "text" && c.format !== "date") ? "text-right" : ""}>
+                {c.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i}>
+              {cols.map((c) => (
+                <td key={c.key} className={c.align === "right" || (c.format && c.format !== "text" && c.format !== "date") ? "text-right tnum" : ""}>
+                  {c.format ? formatValue(r[c.key], c.format) : String(r[c.key] ?? "–")}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
