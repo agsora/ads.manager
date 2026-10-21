@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { Check, Copy, ExternalLink, FolderOpen, FolderTree, Search } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
+import { Check, Copy, ExternalLink, FolderOpen, FolderTree, Plug, Search, Unplug } from "lucide-react";
 import { PageHeader } from "@/components/shell";
-import { useFetch, useToast } from "@/components/providers";
+import { api, useFetch, useMeta, useToast } from "@/components/providers";
 import { Card } from "@/components/charts";
-import { DRIVE_SCRIPT } from "@/lib/drive-script";
 import { fmtDate, fmtNum } from "@/lib/format";
 
 interface Overview {
@@ -15,57 +15,112 @@ interface Overview {
   files: { id: number; resource: string; folder_path: string; name: string; url: string; size: number | null; uploaded_by: string | null; created_at: string }[];
   totals: { files: number; bytes: number };
 }
+interface Conn {
+  hasClient: boolean;
+  connected: boolean;
+  needsFolder: boolean;
+  account: string | null;
+  rootUrl: string | null;
+  redirectUri: string;
+}
 
-const ROOT_ID = "1wCtjhK7YDFSuxsP-wfwY3oY4e_NeKlSM";
 const mb = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(0, Math.round(n / 1024))} KB`);
 
 export default function DrivePage() {
+  return (
+    <Suspense fallback={null}>
+      <DriveInner />
+    </Suspense>
+  );
+}
+
+function DriveInner() {
   const [term, setTerm] = useState("");
-  const { data } = useFetch<Overview>(`/api/drive/overview?q=${encodeURIComponent(term)}`);
   const toast = useToast();
+  const params = useSearchParams();
+  const { session } = useMeta();
+  const manager = session && ["superadmin", "owner", "admin"].includes(session.role);
+  const conn = useFetch<Conn>("/api/drive/oauth");
+  const { data } = useFetch<Overview>(`/api/drive/overview?q=${encodeURIComponent(term)}`);
   const [copied, setCopied] = useState(false);
-  const code = DRIVE_SCRIPT(ROOT_ID);
-  const copy = async () => {
+  const c = conn.data;
+  const error = params.get("error");
+
+  const copy = async (text: string) => {
     try {
-      await navigator.clipboard.writeText(code);
+      await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {
-      toast("Salin manual dari kotak kode", "err");
+      toast("Salin manual", "err");
     }
+  };
+  const disconnect = async () => {
+    if (!confirm("Putuskan Google Drive? File yang sudah ada tetap aman di Drive.")) return;
+    await api("/api/drive/oauth", "DELETE");
+    conn.reload();
   };
 
   return (
     <div className="space-y-6">
       <PageHeader eyebrow="Data" title="File & Google Drive" desc="Semua file kerja (desain konten, creative iklan, materi influencer, laporan, arsip impor) otomatis tersimpan rapi di Google Drive: Brand → Campaign → jenis file. Upload dilakukan dari tiap menu (kalender konten, campaign iklan, dll).">
-        {data?.rootUrl && (
-          <a className="btn" href={data.rootUrl} target="_blank" rel="noreferrer">
+        {c?.rootUrl && (
+          <a className="btn" href={c.rootUrl} target="_blank" rel="noreferrer">
             <FolderOpen size={15} /> Buka folder utama
           </a>
         )}
       </PageHeader>
 
-      {data && !data.enabled && (
-        <Card title="Hubungkan Google Drive (sekali saja, ±5 menit)" subtitle="Akun layanan (service account) tidak bisa menyimpan file di Drive pribadi, jadi upload dijembatani oleh skrip kecil yang berjalan atas nama akun Drive Anda.">
-          <ol className="list-decimal space-y-3 pl-5 text-[13.5px] leading-relaxed">
-            <li>
-              Buka <b>script.google.com</b> dengan akun Google pemilik folder → <b>Proyek baru</b>. Hapus isi default, tempel kode di bawah, ganti <code>GANTI_DENGAN_RAHASIA_PANJANG</code> dengan kata sandi acak panjang (catat, dipakai lagi di langkah 4).
-            </li>
-            <li>
-              Klik <b>Deploy → Deployment baru → Jenis: Aplikasi web</b>. Isi <b>Jalankan sebagai: Saya</b> dan <b>Yang memiliki akses: Siapa saja</b>. Klik Deploy, lalu <b>Otorisasi akses</b> (izinkan akses Drive; jika ada peringatan &quot;belum diverifikasi&quot; pilih Lanjutan → Buka).
-            </li>
-            <li>Salin <b>URL aplikasi web</b> (berakhiran <code>/exec</code>).</li>
-            <li>
-              Di Vercel → Project → Settings → Environment Variables, tambahkan: <code>DRIVE_SCRIPT_URL</code> (URL tadi), <code>DRIVE_SCRIPT_SECRET</code> (kata sandi langkah 1), dan <code>DRIVE_FOLDER_ID</code> = <code>{ROOT_ID}</code>. Lalu Redeploy.
-            </li>
-          </ol>
-          <div className="mt-4 flex items-center justify-between">
-            <div className="text-[12.5px] font-semibold text-[var(--ink-2)]">Kode Apps Script</div>
-            <button className="btn btn-sm" onClick={copy}>
-              {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? "Tersalin" : "Salin kode"}
+      {error && <div className="rounded-lg border border-[#eac9bf] bg-[#fbefec] px-4 py-3 text-[13.5px] text-[var(--critical-ink)]">Gagal menghubungkan: {decodeURIComponent(error)}</div>}
+      {params.get("connected") && <div className="rounded-lg border border-[#cfe3c8] bg-[#eaf2e3] px-4 py-3 text-[13.5px] text-[var(--good-ink)]">Google Drive berhasil terhubung.</div>}
+
+      {c?.connected && (
+        <Card title="Terhubung ke Google Drive" subtitle={c.account ? `Akun: ${c.account}. File tersimpan di Drive akun ini dan memakai kuota penyimpanannya.` : "File tersimpan di Drive akun yang terhubung."}>
+          {manager && (
+            <button className="btn btn-sm" onClick={disconnect}>
+              <Unplug size={14} /> Putuskan
             </button>
-          </div>
-          <textarea readOnly className="input mt-2 !h-64 font-mono !text-[12px]" value={code} onFocus={(e) => e.currentTarget.select()} aria-label="Kode Apps Script" />
+          )}
+        </Card>
+      )}
+
+      {c && !c.connected && (
+        <Card title="Hubungkan Google Drive" subtitle="Memakai Google Drive API dengan izin akun Anda sendiri (bukan service account, yang tidak punya kuota penyimpanan di Drive pribadi).">
+          {!c.hasClient ? (
+            <ol className="list-decimal space-y-3 pl-5 text-[13.5px] leading-relaxed">
+              <li>
+                Buka <b>console.cloud.google.com</b> → pilih project Anda → <b>APIs &amp; Services → Library</b> → aktifkan <b>Google Drive API</b>.
+              </li>
+              <li>
+                <b>OAuth consent screen</b>: tipe <b>External</b>, isi nama aplikasi dan email. Tambahkan akun Google Anda di <b>Test users</b>. Agar izin tidak kedaluwarsa tiap 7 hari, klik <b>Publish app</b> (boleh status belum diverifikasi, ini untuk pemakaian pribadi).
+              </li>
+              <li>
+                <b>Credentials → Create credentials → OAuth client ID</b>, tipe <b>Web application</b>. Pada <b>Authorized redirect URIs</b> tambahkan persis:
+                <div className="mt-2 flex items-center gap-2">
+                  <input readOnly className="input !h-9 flex-1 font-mono !text-[12.5px]" value={c.redirectUri} onFocus={(e) => e.currentTarget.select()} aria-label="Redirect URI" />
+                  <button className="btn btn-sm" onClick={() => copy(c.redirectUri)}>
+                    {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? "Tersalin" : "Salin"}
+                  </button>
+                </div>
+              </li>
+              <li>
+                Salin <b>Client ID</b> dan <b>Client secret</b>, lalu di Vercel → Settings → Environment Variables tambahkan <code>GOOGLE_CLIENT_ID</code> dan <code>GOOGLE_CLIENT_SECRET</code> (<code>DRIVE_FOLDER_ID</code> sudah terisi). Redeploy, lalu kembali ke halaman ini.
+              </li>
+            </ol>
+          ) : (
+            <div className="space-y-3 text-[13.5px] leading-relaxed">
+              <p>Client ID sudah terpasang. Klik tombol di bawah, login dengan akun Google pemilik folder, lalu izinkan akses Drive.</p>
+              {c.needsFolder && <p className="text-[var(--critical-ink)]">DRIVE_FOLDER_ID belum di-set di environment.</p>}
+              {manager ? (
+                <a className="btn btn-accent" href="/api/drive/oauth/start">
+                  <Plug size={15} /> Hubungkan Google Drive
+                </a>
+              ) : (
+                <p className="text-[var(--muted)]">Hanya owner/admin yang bisa menghubungkan.</p>
+              )}
+              <p className="text-[12.5px] text-[var(--muted)]">Jika muncul peringatan &quot;Google hasn&apos;t verified this app&quot;, pilih Advanced → Go to (nama aplikasi). Itu normal untuk aplikasi pribadi.</p>
+            </div>
+          )}
         </Card>
       )}
 
@@ -98,7 +153,7 @@ export default function DrivePage() {
                 ))}
               </ul>
             ) : (
-              <div className="py-8 text-center text-[13.5px] text-[var(--muted)]">Belum ada file. Upload dari kalender konten (buka konten → bagian &quot;Desain & file&quot;) atau dari tombol File di Ads Campaign.</div>
+              <div className="py-8 text-center text-[13.5px] text-[var(--muted)]">Belum ada file. Klik konten di kalender untuk upload desain, atau pakai tombol File di Ads Campaign.</div>
             )}
           </Card>
 

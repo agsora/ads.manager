@@ -19,5 +19,5 @@ export const GET = handle(async (req: Request) => {
       WHERE org_id = $1 AND ${own ? "resource = $2 AND record_id = $3" : "folder_path = $2"} ORDER BY created_at DESC`,
     own ? [s.org, resource, id] : [s.org, t.path],
   );
-  return NextResponse.json({ enabled: driveEnabled(), path: t.path, label: t.label, files, rootUrl: rootFolderUrl() });
+  return NextResponse.json({ enabled: await driveEnabled(), path: t.path, label: t.label, files, rootUrl: rootFolderUrl() });
 });

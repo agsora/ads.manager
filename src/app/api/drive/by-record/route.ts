@@ -10,7 +10,7 @@ export const GET = handle(async (req: Request) => {
   const resource = u.searchParams.get("resource") ?? "content";
   const from = u.searchParams.get("from") ?? "1900-01-01";
   const to = u.searchParams.get("to") ?? "2999-01-01";
-  if (resource !== "content") return NextResponse.json({ enabled: driveEnabled(), files: [] });
+  if (resource !== "content") return NextResponse.json({ enabled: await driveEnabled(), files: [] });
   const files = await q(
     `SELECT f.id, f.record_id, f.name, f.drive_id, f.url, f.mime, f.created_at
        FROM drive_files f JOIN content_plans c ON c.id = f.record_id AND c.org_id = f.org_id
@@ -18,5 +18,5 @@ export const GET = handle(async (req: Request) => {
       ORDER BY f.created_at DESC LIMIT 600`,
     [s.org, from, to],
   );
-  return NextResponse.json({ enabled: driveEnabled(), files });
+  return NextResponse.json({ enabled: await driveEnabled(), files });
 });

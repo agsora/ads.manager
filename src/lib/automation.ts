@@ -114,7 +114,7 @@ export async function runDaily(orgId: number, opts: { force?: boolean; weekly?: 
     const buffer = Buffer.from(await wb.xlsx.writeBuffer());
     const file = buffer.toString("base64");
     let driveLink: string | null = null;
-    if (driveEnabled()) {
+    if (await driveEnabled()) {
       try {
         const folder = `Laporan/Mingguan/${today.slice(0, 4)}`;
         const up = await uploadFromServer(folder, `laporan-${from}_${to}.xlsx`, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer);

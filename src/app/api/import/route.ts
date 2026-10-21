@@ -97,7 +97,7 @@ export const POST = handle(async (req: Request) => {
   const firstKey = parsed[0].resource.key;
   const LINK: Record<string, string> = { ads: "/ads", content: "/content", leads: "/leads", contacts: "/blast", blast: "/blast", reviews: "/reviews" };
   // keep the original upload in Drive: Arsip Impor / <module> / <yyyy-mm>
-  if (driveEnabled() && file.size <= 20 * 1024 * 1024) {
+  if ((await driveEnabled()) && file.size <= 20 * 1024 * 1024) {
     const bytes = Buffer.from(await file.arrayBuffer());
     const folder = `Arsip Impor/${parsed[0].resource.label}/${new Date().toISOString().slice(0, 7)}`;
     after(async () => {

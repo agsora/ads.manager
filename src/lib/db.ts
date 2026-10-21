@@ -1,7 +1,7 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { RESOURCES, type FieldType } from "./resources";
 
-const SCHEMA_VERSION = "11";
+const SCHEMA_VERSION = "12";
 
 // Keep DATE/TIMESTAMP as raw strings (no timezone shifting) and NUMERIC/INT8 as numbers.
 const RAW = (v: string) => v;
@@ -105,6 +105,12 @@ export function schemaStatements(): string[] {
       created_at timestamptz DEFAULT now()
     )`,
     `CREATE INDEX IF NOT EXISTS drive_files_path ON drive_files (org_id, folder_path, created_at DESC)`,
+    `CREATE TABLE IF NOT EXISTS drive_folders (
+      parent_id text NOT NULL,
+      name text NOT NULL,
+      drive_id text NOT NULL,
+      PRIMARY KEY (parent_id, name)
+    )`,
     `CREATE TABLE IF NOT EXISTS activity_log (
       id serial PRIMARY KEY,
       org_id int NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,

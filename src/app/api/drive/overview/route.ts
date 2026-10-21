@@ -15,7 +15,7 @@ export const GET = handle(async (req: Request) => {
     q<{ files: number; bytes: number }>(`SELECT count(*)::int AS files, COALESCE(sum(size),0)::bigint AS bytes FROM drive_files WHERE org_id = $1`, [s.org]),
   ]);
   return NextResponse.json({
-    enabled: driveEnabled(),
+    enabled: await driveEnabled(),
     rootUrl: rootFolderUrl(),
     folders,
     files,
