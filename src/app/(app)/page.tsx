@@ -5,7 +5,8 @@ import { Download, Printer, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/shell";
 import { api, useFilter, useMeta, useToast } from "@/components/providers";
 import { useAnalytics } from "@/components/use-analytics";
-import { BarList, Card, Empty, Funnel, InsightItem, Kpi, MiniTable, Score, SEGMENT_COLORS, SplitBar, TrendLines } from "@/components/charts";
+import { BarList, Card, Empty, Funnel, InsightItem, Kpi, MiniTable, PageSkeleton, ScoreRing, scoreTone, scoreWord, SEGMENT_COLORS, SplitBar, TrendLines } from "@/components/charts";
+import { ArrowRight } from "lucide-react";
 import { Chip } from "@/components/cells";
 import { fmtDate, fmtMoney, fmtNum, fmtPct, formatValue } from "@/lib/format";
 import { useState } from "react";
@@ -32,7 +33,7 @@ export default function Dashboard() {
   };
 
   if (error) return <div className="card p-6 text-[var(--critical)]">{error}</div>;
-  if (!a) return <div className="card p-10 text-center text-[var(--muted)]">{loading ? "Menghitung analitik…" : ""}</div>;
+  if (!a) return loading || !error ? <PageSkeleton kpis={12} /> : null;
   const k = a.kpis;
   const p = a.prevKpis;
   const empty = !k.ads.campaigns && !k.leads.leads && !k.content.planned && !k.reviews.reviews && !k.blast.blasts;
@@ -62,26 +63,55 @@ export default function Dashboard() {
         </div>
       )}
 
-      <Card>
-        <div className="grid grid-cols-2 gap-5 md:grid-cols-5">
-          <Score label="Skor Keseluruhan" value={a.scores.overall} />
-          <Score label="Iklan" value={a.scores.ads} />
-          <Score label="Leads & Closing" value={a.scores.leads} />
-          <Score label="Konten" value={a.scores.content} />
-          <Score label="Reputasi" value={a.scores.reputation} />
+      <section className="card overflow-hidden">
+        <div className="grid md:grid-cols-[minmax(280px,1.1fr)_2fr]">
+          <div className="flex items-center gap-5 border-b border-[var(--line)] p-6 md:border-b-0 md:border-r">
+            <ScoreRing value={a.scores.overall} />
+            <div className="min-w-0">
+              <div className="eyebrow">Kesehatan marketing</div>
+              <div className="serif mt-1 text-[24px] leading-tight">{scoreWord(a.scores.overall)}</div>
+              <Link href="/insights" className="mt-2 inline-flex items-center gap-1 text-[13px] text-[var(--ink-2)] hover:text-[var(--accent-ink)]">
+                {(() => {
+                  const crit = a.insights.filter((i) => i.level === "critical").length;
+                  const warn = a.insights.filter((i) => i.level === "warning").length;
+                  return crit + warn ? `${crit} kritis · ${warn} perlu perhatian` : "Tidak ada masalah mendesak";
+                })()}
+                <ArrowRight size={13} />
+              </Link>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4">
+            {(
+              [
+                ["Iklan", a.scores.ads, "/ads"],
+                ["Leads & closing", a.scores.leads, "/leads"],
+                ["Konten", a.scores.content, "/content"],
+                ["Reputasi", a.scores.reputation, "/reviews"],
+              ] as [string, number | null, string][]
+            ).map(([label, v, href]) => (
+              <Link key={label} href={href} className="group border-[var(--line)] p-5 transition hover:bg-[#fdfcf9] [&:not(:last-child)]:border-r max-sm:[&:nth-child(2)]:border-r-0 max-sm:[&:nth-child(-n+2)]:border-b">
+                <div className="text-[12.5px] text-[var(--ink-2)]">{label}</div>
+                <div className="serif mt-1 text-[28px] leading-tight tnum">{v ?? "–"}</div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--track)]">
+                  <div className="h-1.5 rounded-full" style={{ width: `${v ?? 0}%`, background: scoreTone(v), transition: "width .8s cubic-bezier(.2,.8,.2,1)" }} />
+                </div>
+                <div className="mt-1.5 text-[12px] text-[var(--muted)] group-hover:text-[var(--ink-2)]">{scoreWord(v)}</div>
+              </Link>
+            ))}
+          </div>
         </div>
-      </Card>
+      </section>
 
       <div className="stat-grid">
-        <Kpi label="Budget Iklan Terpakai" value={k.ads.spend} prev={p.ads.spend} format="money" invert />
+        <Kpi label="Budget Iklan Terpakai" value={k.ads.spend} prev={p.ads.spend} format="money" invert spark={a.trend.map((t) => t.spend)} />
         <Kpi label="Impresi" value={k.ads.impressions} prev={p.ads.impressions} format="number" />
         <Kpi label="CTR" value={k.ads.ctr} prev={p.ads.ctr} format="percent" />
-        <Kpi label="Percakapan dari Ads" value={k.ads.conversations} prev={p.ads.conversations} format="number" />
+        <Kpi label="Percakapan dari Ads" value={k.ads.conversations} prev={p.ads.conversations} format="number" spark={a.trend.map((t) => t.conversations)} />
         <Kpi label="Biaya / Percakapan" value={k.ads.costPerConv} prev={p.ads.costPerConv} format="money" invert />
         <Kpi label="ROAS" value={k.ads.roas} prev={p.ads.roas} format="decimal" hint={k.ads.roas ? "omzet ÷ biaya" : "isi omzet campaign"} />
-        <Kpi label="Total Leads WA" value={k.leads.leads} prev={p.leads.leads} format="number" />
+        <Kpi label="Total Leads WA" value={k.leads.leads} prev={p.leads.leads} format="number" spark={a.trend.map((t) => t.leads)} />
         <Kpi label="Leads HOT" value={k.leads.hot} prev={p.leads.hot} format="number" />
-        <Kpi label="Deal / Closing" value={k.leads.deals} prev={p.leads.deals} format="number" />
+        <Kpi label="Deal / Closing" value={k.leads.deals} prev={p.leads.deals} format="number" spark={a.trend.map((t) => t.deals)} />
         <Kpi label="Conversion Rate" value={k.leads.dealRate} prev={p.leads.dealRate} format="percent" />
         <Kpi label="Biaya per Lead (semua)" value={a.overall.cpl} format="money" hint="ads + blast + influencer" />
         <Kpi label="Nilai Deal" value={k.leads.dealValue} prev={p.leads.dealValue} format="money" />

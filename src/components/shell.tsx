@@ -5,10 +5,12 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   LayoutDashboard, Lightbulb, FileBarChart, Megaphone, Wallet, CalendarDays, Target, Users, CalendarHeart,
-  MessageCircle, PhoneCall, Send, Star, Sparkles, ArrowUpDown, Settings, LogOut, Menu, X, ShieldCheck, Bell, FolderOpen,
+  MessageCircle, PhoneCall, Send, Star, Sparkles, ArrowUpDown, Settings, LogOut, Menu, X, ShieldCheck, Bell, FolderOpen, Store, CalendarRange, ChevronDown, Check,
 } from "lucide-react";
-import { PRESETS, useFilter, useMeta, type Preset } from "./providers";
+import { PRESETS, useFilter, useMeta } from "./providers";
 import { NotificationBell } from "./notification-bell";
+import { MenuItem, Popover } from "./popover";
+import { fmtDate } from "@/lib/format";
 import { GlobalSearch } from "./global-search";
 
 type Item = { href: string; label: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }> };
@@ -133,7 +135,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </aside>
       {open && <div className="fixed inset-0 z-30 bg-[#1f1e1d]/30 lg:hidden" onClick={() => setOpen(false)} />}
       <div className="lg:pl-60">
-        <header className="sticky top-0 z-20 flex min-h-14 flex-wrap items-center gap-3 border-b border-[var(--line)] bg-[var(--bg)]/90 px-4 py-2.5 backdrop-blur lg:px-10">
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-[var(--line)] bg-[var(--bg)]/85 px-3 backdrop-blur-md sm:px-4 lg:px-10">
           <button className="btn btn-sm lg:hidden" onClick={() => setOpen(true)} aria-label="Buka menu">
             <Menu size={16} />
           </button>
@@ -164,27 +166,80 @@ function Mark() {
 function GlobalFilter() {
   const f = useFilter();
   const { brands } = useMeta();
-  const sel = "input !h-8 !w-auto !rounded-[7px] !px-2.5 !text-[13px]";
+  const [from, setFrom] = useState(f.from);
+  const [to, setTo] = useState(f.to);
+  const label = PRESETS.find((p) => p.key === f.preset && p.key !== "custom")?.label;
+  const sameYear = f.from.slice(0, 4) === f.to.slice(0, 4);
+  const range = `${sameYear ? fmtDate(f.from).replace(/ \d{4}$/, "") : fmtDate(f.from)} – ${fmtDate(f.to)}`;
   return (
-    <div className="ml-auto flex flex-wrap items-center gap-1.5">
-      <select className={sel} value={f.brand} onChange={(e) => f.setBrand(e.target.value)} aria-label="Filter brand">
-        <option value="">Semua brand</option>
-        {brands.map((b) => (
-          <option key={b.id} value={b.name}>
-            {b.name}
-          </option>
-        ))}
-      </select>
-      <select className={sel} value={f.preset} onChange={(e) => f.setPreset(e.target.value as Preset)} aria-label="Periode">
-        {PRESETS.map((p) => (
-          <option key={p.key} value={p.key}>
-            {p.label}
-          </option>
-        ))}
-      </select>
-      <input type="date" className={`${sel} !w-[132px]`} value={f.from} onChange={(e) => f.setRange(e.target.value, f.to)} aria-label="Dari tanggal" />
-      <span className="text-[var(--muted)]">–</span>
-      <input type="date" className={`${sel} !w-[132px]`} value={f.to} onChange={(e) => f.setRange(f.from, e.target.value)} aria-label="Sampai tanggal" />
+    <div className="ml-auto flex min-w-0 items-center gap-1.5">
+      <Popover
+        label="Pilih brand"
+        width={240}
+        button={(open) => (
+          <button className={`pill ${open ? "pill-on" : ""}`}>
+            <Store size={14} className="text-[var(--muted)]" />
+            <span className="max-w-[84px] truncate sm:max-w-[120px]">{f.brand || "Semua brand"}</span>
+            <ChevronDown size={13} className="text-[var(--muted)]" />
+          </button>
+        )}
+      >
+        {(close) => (
+          <div className="p-1.5">
+            <MenuItem active={!f.brand} onClick={() => (f.setBrand(""), close())} icon={!f.brand ? <Check size={14} /> : null}>
+              Semua brand
+            </MenuItem>
+            {brands.map((b) => (
+              <MenuItem key={b.id} active={f.brand === b.name} onClick={() => (f.setBrand(b.name), close())} icon={f.brand === b.name ? <Check size={14} /> : null}>
+                {b.name}
+              </MenuItem>
+            ))}
+          </div>
+        )}
+      </Popover>
+      <Popover
+        label="Pilih periode"
+        width={320}
+        button={(open) => (
+          <button className={`pill ${open ? "pill-on" : ""}`} onClick={() => (setFrom(f.from), setTo(f.to))}>
+            <CalendarRange size={14} className="text-[var(--muted)]" />
+            <span className="truncate sm:hidden">{label ?? range}</span>
+            <span className="hidden sm:inline">{label ?? "Custom"}</span>
+            <span className="hidden truncate text-[var(--muted)] sm:ml-0.5 sm:inline">{range}</span>
+            <ChevronDown size={13} className="text-[var(--muted)]" />
+          </button>
+        )}
+      >
+        {(close) => (
+          <div>
+            <div className="grid grid-cols-2 gap-0.5 p-1.5">
+              {PRESETS.filter((p) => p.key !== "custom").map((p) => (
+                <MenuItem key={p.key} active={f.preset === p.key} onClick={() => (f.setPreset(p.key), close())} icon={f.preset === p.key ? <Check size={14} /> : null}>
+                  {p.label}
+                </MenuItem>
+              ))}
+            </div>
+            <div className="border-t border-[var(--line)] p-3">
+              <div className="eyebrow mb-2">Rentang tanggal</div>
+              <div className="flex items-center gap-2">
+                <input type="date" className="input !h-9 !text-[13px]" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="Dari tanggal" />
+                <span className="text-[var(--muted)]">–</span>
+                <input type="date" className="input !h-9 !text-[13px]" value={to} onChange={(e) => setTo(e.target.value)} aria-label="Sampai tanggal" />
+              </div>
+              <button
+                className="btn btn-primary btn-sm mt-3 w-full"
+                disabled={!from || !to || from > to}
+                onClick={() => {
+                  f.setRange(from, to);
+                  close();
+                }}
+              >
+                Terapkan
+              </button>
+            </div>
+          </div>
+        )}
+      </Popover>
     </div>
   );
 }

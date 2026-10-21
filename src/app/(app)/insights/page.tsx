@@ -5,7 +5,7 @@ import { Download, Printer } from "lucide-react";
 import { PageHeader } from "@/components/shell";
 import { useFilter } from "@/components/providers";
 import { useAnalytics } from "@/components/use-analytics";
-import { Card, InsightItem, Score } from "@/components/charts";
+import { Card, InsightItem, PageSkeleton, Score } from "@/components/charts";
 import { fmtDate } from "@/lib/format";
 import type { Insight } from "@/lib/analytics";
 
@@ -41,7 +41,7 @@ export default function InsightsPage() {
       return nx;
     });
 
-  if (!a) return <div className="card p-10 text-center text-[var(--muted)]">{loading ? "Menganalisis data…" : ""}</div>;
+  if (!a) return loading ? <PageSkeleton kpis={4} /> : null;
   const areas = [...new Set(a.insights.map((i) => i.area))];
   const list = a.insights.filter((i) => (!level || i.level === level) && (!area || i.area === area));
   const actions = a.insights.filter((i) => i.level === "critical" || i.level === "warning");

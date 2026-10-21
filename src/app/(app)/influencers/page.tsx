@@ -3,7 +3,7 @@
 import { PageHeader } from "@/components/shell";
 import { ResourceTable } from "@/components/resource-table";
 import { useAnalytics } from "@/components/use-analytics";
-import { Card, Kpi, MiniTable } from "@/components/charts";
+import { Card, Kpi, KpiSkeleton, MiniTable } from "@/components/charts";
 
 export default function InfluencersPage() {
   const { data: a, reload } = useAnalytics();
@@ -11,6 +11,7 @@ export default function InfluencersPage() {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="Reputasi" title="Influencer & Endorsement" desc="Catat kerjasama KOL/influencer: fee, views, engagement, leads & omzet. Biaya per engagement dan ROI dihitung otomatis untuk menentukan siapa yang layak dilanjutkan." />
+      {!k && <KpiSkeleton />}
       {k && (
         <div className="stat-grid">
           <Kpi label="Kerjasama" value={k.collabs} format="number" />

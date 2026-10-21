@@ -5,7 +5,7 @@ import { Download, Printer } from "lucide-react";
 import { PageHeader } from "@/components/shell";
 import { useFilter } from "@/components/providers";
 import { useAnalytics } from "@/components/use-analytics";
-import { Bars, BarList, Card, Funnel, InsightItem, MiniTable, SEGMENT_COLORS, SplitBar, TrendLines } from "@/components/charts";
+import { Bars, BarList, Card, Funnel, InsightItem, MiniTable, SEGMENT_COLORS, SplitBar, TrendLines, PageSkeleton } from "@/components/charts";
 import { fmtDate, fmtPct, formatValue } from "@/lib/format";
 import type { Analytics } from "@/lib/analytics";
 
@@ -43,7 +43,7 @@ export default function ReportsPage() {
         ))}
       </div>
       {!a ? (
-        <div className="card p-10 text-center text-[var(--muted)]">Memuat laporan…</div>
+        <PageSkeleton kpis={4} cards={2} />
       ) : (
         <div className="space-y-5">
           <div className="card p-5">

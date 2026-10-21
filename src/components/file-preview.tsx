@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, ExternalLink, FileText, X } from "lucide-react";
 import { embedUrl, isImage, thumbUrl, type DriveFileLite } from "@/lib/drive-client";
 
@@ -34,16 +35,19 @@ export function FileViewer({ files, start = 0, onClose }: { files: DriveFileLite
   const f = files[i];
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        e.stopImmediatePropagation();
+        onClose();
+      }
       if (e.key === "ArrowRight") setI((x) => Math.min(files.length - 1, x + 1));
       if (e.key === "ArrowLeft") setI((x) => Math.max(0, x - 1));
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [files.length, onClose]);
   if (!f) return null;
   const img = isImage(f.mime, f.name);
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[70] flex flex-col bg-[#1f1e1d]/90" onMouseDown={onClose} role="dialog" aria-label={`Preview ${f.name}`}>
       <div className="flex items-center gap-3 px-4 py-3 text-white" onMouseDown={(e) => e.stopPropagation()}>
         <div className="min-w-0 flex-1 truncate text-[14px] font-medium">
@@ -75,6 +79,7 @@ export function FileViewer({ files, start = 0, onClose }: { files: DriveFileLite
           </button>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

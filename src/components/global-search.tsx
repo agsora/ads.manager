@@ -73,6 +73,7 @@ export function GlobalSearch() {
               <Search size={16} className="text-[var(--muted)]" />
               <input
                 ref={input}
+                autoFocus
                 value={term}
                 onChange={(e) => setTerm(e.target.value)}
                 onKeyDown={(e) => {

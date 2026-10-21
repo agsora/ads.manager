@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Download, FileDown, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, Columns3, Download, FileDown, Pencil, Plus, Search, SlidersHorizontal, Trash2, Upload } from "lucide-react";
+import { MenuItem, Popover } from "./popover";
 import { RESOURCE_MAP, n, type Field, type Row } from "@/lib/resources";
 import { api, useFetch, useFilter, useMeta, useToast } from "./providers";
 import { ResourceForm } from "./resource-form";
@@ -174,21 +175,38 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
               <Trash2 size={14} /> Hapus {sel.size}
             </button>
           )}
-          <label className="flex items-center gap-1.5 text-[12.5px] text-[var(--ink-2)]">
-            <input type="checkbox" checked={allCols} onChange={(e) => setAllCols(e.target.checked)} /> Semua kolom
-          </label>
-          <a className="btn btn-sm" href={`/api/template?resource=${resourceKey}`} title="Unduh template Excel">
-            <FileDown size={14} /> Template
-          </a>
-          <button className="btn btn-sm" onClick={() => setImporting(true)}>
-            <Upload size={14} /> Impor
-          </button>
-          <a className="btn btn-sm" href={exportUrl("xlsx")}>
-            <Download size={14} /> Excel
-          </a>
-          <a className="btn btn-sm" href={exportUrl("csv")}>
-            CSV
-          </a>
+          <span className="hidden text-[12.5px] text-[var(--muted)] md:inline tnum">{data ? `${fmtNum(rows.length)} baris` : ""}</span>
+          <Popover
+            label="Menu data"
+            width={250}
+            button={(open) => (
+              <button className={`btn btn-sm ${open ? "!border-[var(--ink)]" : ""}`}>
+                <SlidersHorizontal size={14} /> Data <ChevronDown size={13} className="text-[var(--muted)]" />
+              </button>
+            )}
+          >
+            {(close) => (
+              <div className="p-1.5">
+                <MenuItem icon={<Upload size={14} />} onClick={() => (setImporting(true), close())}>
+                  Impor dari Excel / CSV
+                </MenuItem>
+                <MenuItem icon={<FileDown size={14} />} href={`/api/template?resource=${resourceKey}`} onClick={close}>
+                  Unduh template
+                </MenuItem>
+                <div className="my-1 border-t border-[var(--line)]" />
+                <MenuItem icon={<Download size={14} />} href={exportUrl("xlsx")} onClick={close} hint=".xlsx">
+                  Ekspor Excel
+                </MenuItem>
+                <MenuItem icon={<Download size={14} />} href={exportUrl("csv")} onClick={close} hint=".csv">
+                  Ekspor CSV
+                </MenuItem>
+                <div className="my-1 border-t border-[var(--line)]" />
+                <MenuItem icon={allCols ? <Check size={14} /> : <Columns3 size={14} />} onClick={() => (setAllCols((v) => !v), close())}>
+                  {allCols ? "Kolom ringkas" : "Tampilkan semua kolom"}
+                </MenuItem>
+              </div>
+            )}
+          </Popover>
           {allowCreate && (
             <button className="btn btn-sm btn-accent" onClick={() => setEditing(null)}>
               <Plus size={14} /> Tambah
@@ -215,13 +233,15 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
             </tr>
           </thead>
           <tbody>
-            {loading && !data && (
-              <tr>
-                <td colSpan={fields.length + comps.length + 2} className="py-10 text-center text-[var(--muted)]">
-                  Memuat data…
-                </td>
-              </tr>
-            )}
+            {loading &&
+              !data &&
+              Array.from({ length: 6 }).map((_, i) => (
+                <tr key={`sk${i}`}>
+                  <td colSpan={fields.length + comps.length + 2}>
+                    <div className="skel h-4" style={{ width: `${88 - i * 7}%` }} />
+                  </td>
+                </tr>
+              ))}
             {error && (
               <tr>
                 <td colSpan={fields.length + comps.length + 2} className="py-10 text-center text-[var(--critical)]">
@@ -231,8 +251,9 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
             )}
             {data && rows.length === 0 && (
               <tr>
-                <td colSpan={fields.length + comps.length + 2} className="py-12 text-center text-[var(--muted)]">
-                  Belum ada data di periode/filter ini. Klik <b>Tambah</b> atau <b>Impor</b> dari Excel.
+                <td colSpan={fields.length + comps.length + 2} className="py-14 text-center">
+                  <div className="serif text-[18px] text-[var(--ink)]">Belum ada data</div>
+                  <div className="mt-1 text-[13px] text-[var(--muted)]">Tidak ada {r.singular.toLowerCase()} di periode atau filter ini. Klik Tambah, atau Data → Impor dari Excel.</div>
                 </td>
               </tr>
             )}

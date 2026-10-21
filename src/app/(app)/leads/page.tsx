@@ -4,7 +4,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/shell";
 import { ResourceTable } from "@/components/resource-table";
 import { useAnalytics } from "@/components/use-analytics";
-import { BarList, Card, Kpi, MiniTable, SEGMENT_COLORS, SplitBar } from "@/components/charts";
+import { BarList, Card, Kpi, KpiSkeleton, MiniTable, SEGMENT_COLORS, SplitBar } from "@/components/charts";
 import { WaLinkBuilder } from "@/components/wa-link-builder";
 
 export default function LeadsPage() {
@@ -18,6 +18,7 @@ export default function LeadsPage() {
           Buka papan Follow Up
         </Link>
       </PageHeader>
+      {!k && <KpiSkeleton />}
       {k && (
         <div className="stat-grid">
           <Kpi label="Total Chat Masuk" value={k.leads} prev={p?.leads} format="number" />

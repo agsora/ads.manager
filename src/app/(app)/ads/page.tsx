@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/shell";
 import { ResourceTable } from "@/components/resource-table";
 import { ImportDialog } from "@/components/import-dialog";
 import { useAnalytics } from "@/components/use-analytics";
-import { Bars, Card, Kpi, MiniTable } from "@/components/charts";
+import { Bars, Card, Kpi, KpiSkeleton, MiniTable } from "@/components/charts";
 import { Chip } from "@/components/cells";
 import { fmtDate, formatValue } from "@/lib/format";
 import { api, useToast } from "@/components/providers";
@@ -50,6 +50,7 @@ export default function AdsPage() {
         </button>
       </PageHeader>
 
+      {!k && <KpiSkeleton />}
       {k && (
         <div className="stat-grid">
           <Kpi label="Campaign aktif" value={k.campaigns} prev={p?.campaigns} format="number" hint={`${k.running} running`} />

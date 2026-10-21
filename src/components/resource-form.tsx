@@ -1,25 +1,72 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import type { Field, Resource, Row } from "@/lib/resources";
 import { api, useMeta, useToast } from "./providers";
 import { FileAttachments } from "./file-attachments";
 import { todayISO } from "@/lib/format";
 
-export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 sm:p-8" onMouseDown={onClose}>
-      <div className={`card w-full ${wide ? "max-w-4xl" : "max-w-2xl"} shadow-2xl`} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label={title}>
-        <div className="flex items-center justify-between border-b border-[var(--line)] px-5 py-4">
-          <h2 className="text-base font-bold">{title}</h2>
-          <button className="btn btn-sm btn-ghost" onClick={onClose} aria-label="Tutup">
-            <X size={16} />
-          </button>
-        </div>
-        <div className="p-5">{children}</div>
+/** Dialog. "drawer" slides in from the right (forms), "center" is a classic modal (details, imports). */
+export function Modal({ title, subtitle, onClose, children, wide, variant = "center" }: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode; wide?: boolean; variant?: "center" | "drawer" }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  const head = (
+    <div className="flex items-start justify-between gap-4 border-b border-[var(--line)] px-6 py-5">
+      <div className="min-w-0">
+        <h2 className="serif text-[22px] leading-tight">{title}</h2>
+        {subtitle && <p className="mt-1 text-[13px] text-[var(--muted)]">{subtitle}</p>}
       </div>
+      <button className="btn btn-sm btn-ghost -mr-2 !px-2" onClick={onClose} aria-label="Tutup">
+        <X size={18} />
+      </button>
     </div>
+  );
+
+  if (typeof document === "undefined") return null;
+  if (variant === "drawer")
+    return createPortal(
+      <div className="fixed inset-0 z-50 flex justify-end bg-[#1f1e1d]/25 backdrop-blur-[1.5px]" style={{ animation: "fade-in .15s ease" }} onMouseDown={onClose}>
+        <div
+          className={`flex h-full w-full ${wide ? "max-w-[780px]" : "max-w-[620px]"} flex-col bg-[var(--surface)] shadow-[-24px_0_60px_-20px_rgba(31,30,29,.35)]`}
+          style={{ animation: "slide-in .24s cubic-bezier(.2,.8,.2,1)" }}
+          onMouseDown={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
+        >
+          {head}
+          <div className="drawer-body flex-1 overflow-y-auto px-6 pt-5">{children}</div>
+        </div>
+      </div>,
+      document.body,
+    );
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[#1f1e1d]/30 p-4 backdrop-blur-[1.5px] sm:p-10" style={{ animation: "fade-in .15s ease" }} onMouseDown={onClose}>
+      <div
+        className={`card w-full ${wide ? "max-w-4xl" : "max-w-2xl"} !shadow-[0_30px_80px_-24px_rgba(31,30,29,.45)]`}
+        style={{ animation: "pop .18s cubic-bezier(.2,.8,.2,1)" }}
+        onMouseDown={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
+        {head}
+        <div className="p-6">{children}</div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -118,7 +165,13 @@ export function ResourceForm({ resource, row, onClose, onSaved, defaults, groups
   };
 
   return (
-    <Modal title={title ?? `${row?.id ? "Edit" : "Tambah"} ${resource.singular}`} onClose={onClose} wide={shown.length > 12}>
+    <Modal
+      variant="drawer"
+      title={title ?? `${row?.id ? "Edit" : "Tambah"} ${resource.singular}`}
+      subtitle={row?.id ? String(row[resource.titleField] ?? "") || undefined : resource.description}
+      onClose={onClose}
+      wide={shown.length > 14}
+    >
       <form onSubmit={submit}>
         {resource.key === "content" && shown.some((f) => f.key === "likes") && (
           <div className="mb-5 flex flex-wrap items-center gap-3 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] p-3">
@@ -133,11 +186,11 @@ export function ResourceForm({ resource, row, onClose, onSaved, defaults, groups
         {groups.map((g) => (
           <fieldset key={g} className="mb-4">
             {g && <legend className="mb-3 text-[12px] font-bold uppercase tracking-wider text-[var(--muted)]">{g}</legend>}
-            <div className="grid grid-cols-1 gap-x-4 gap-y-3.5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2">
               {resource.fields
                 .filter((f) => (f.group ?? "") === g)
                 .map((f) => (
-                  <div key={f.key} className={f.type === "longtext" ? "sm:col-span-2 lg:col-span-3" : ""}>
+                  <div key={f.key} className={f.type === "longtext" ? "sm:col-span-2" : ""}>
                     <label className="label" htmlFor={`f-${f.key}`}>
                       {f.label} {f.required && <span className="text-[var(--critical)]">*</span>}
                     </label>
@@ -153,7 +206,7 @@ export function ResourceForm({ resource, row, onClose, onSaved, defaults, groups
             <FileAttachments resource={resource.key} recordId={Number(row.id)} onChanged={onSaved} />
           </fieldset>
         )}
-        <div className="mt-5 flex justify-end gap-2 border-t border-[var(--line)] pt-4">
+        <div className="sticky bottom-0 -mx-6 mt-6 flex justify-end gap-2 border-t border-[var(--line)] bg-[var(--surface)]/95 px-6 py-4 backdrop-blur">
           <button type="button" className="btn" onClick={onClose}>
             Batal
           </button>

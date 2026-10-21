@@ -218,14 +218,28 @@ function Password() {
   );
 }
 
+/** Activity details are sometimes stored as JSON counts ({"leads":219,...}); show them as "leads 219 · …". */
+function readableDetail(detail: string) {
+  try {
+    const o = JSON.parse(detail);
+    if (o && typeof o === "object" && !Array.isArray(o))
+      return Object.entries(o)
+        .filter(([, v]) => v !== null && v !== "" && typeof v !== "object")
+        .map(([k, v]) => `${k} ${typeof v === "number" ? v.toLocaleString("id-ID") : v}`)
+        .join(" · ")
+        .slice(0, 120);
+  } catch {}
+  return detail.slice(0, 120);
+}
+
 function Activity() {
   const { data } = useFetch<{ rows: { user_name: string; action: string; detail: string | null; created_at: string }[] }>("/api/activity");
   return (
     <Card title="Log Aktivitas" subtitle="100 aktivitas terakhir">
       <ul className="max-h-[260px] divide-y divide-[var(--grid)] overflow-y-auto text-[12.5px]">
         {data?.rows.map((r, i) => (
-          <li key={i} className="py-1.5">
-            <b>{r.user_name}</b> · {r.action} {r.detail ? <span className="text-[var(--ink-2)]">— {r.detail.slice(0, 80)}</span> : null}
+          <li key={i} className="py-1.5 [overflow-wrap:anywhere]">
+            <b>{r.user_name}</b> · {r.action} {r.detail ? <span className="text-[var(--ink-2)]">— {readableDetail(r.detail)}</span> : null}
             <div className="text-[11.5px] text-[var(--muted)]">{new Date(r.created_at).toLocaleString("id-ID")}</div>
           </li>
         ))}

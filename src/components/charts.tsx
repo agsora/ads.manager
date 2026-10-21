@@ -29,13 +29,44 @@ export function Card({ title, subtitle, action, children, className = "" }: { ti
   );
 }
 
-export function Kpi({ label, value, prev, format, invert, hint }: { label: string; value: number | null | undefined; prev?: number | null; format: string; invert?: boolean; hint?: string }) {
+/** Tiny trend line for a KPI tile (no axes; the tile's number is the value). */
+export function Sparkline({ data, color = "var(--s1)", width = 84, height = 28 }: { data: number[]; color?: string; width?: number; height?: number }) {
+  if (data.length < 2 || data.every((v) => !v)) return null;
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const span = max - min || 1;
+  const pts = data.map((v, i) => [(i / (data.length - 1)) * width, height - 2 - ((v - min) / span) * (height - 4)]);
+  const line = pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const id = `sg${Math.round(Math.random() * 1e9)}`;
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="shrink-0 overflow-visible" aria-hidden>
+      <defs>
+        <linearGradient id={id} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0" stopColor={color} stopOpacity=".18" />
+          <stop offset="1" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={`${line} L${width},${height} L0,${height} Z`} fill={`url(#${id})`} />
+      <path d={line} fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="2.2" fill={color} />
+    </svg>
+  );
+}
+
+export function Kpi({ label, value, prev, format, invert, hint, spark }: { label: string; value: number | null | undefined; prev?: number | null; format: string; invert?: boolean; hint?: string; spark?: number[] }) {
   const delta = prev && value !== null && value !== undefined && Number.isFinite(prev) && prev !== 0 ? value / prev - 1 : null;
   const good = delta !== null && (invert ? delta < 0 : delta > 0);
   return (
     <div className="px-4 py-4">
       <div className="text-[12.5px] text-[var(--ink-2)]">{label}</div>
-      <div className="serif mt-1 whitespace-nowrap text-[26px] leading-tight tracking-[-0.01em]">{value === null || value === undefined ? "–" : format === "money" ? fmtMoneyCompact(value) : formatValue(value, format)}</div>
+      <div className="mt-1 flex items-end justify-between gap-2">
+        <div className="serif whitespace-nowrap text-[26px] leading-tight tracking-[-0.01em]">{value === null || value === undefined ? "–" : format === "money" ? fmtMoneyCompact(value) : formatValue(value, format)}</div>
+        {spark && (
+          <div className="mb-1.5 hidden opacity-90 min-[420px]:block">
+            <Sparkline data={spark} width={64} height={24} />
+          </div>
+        )}
+      </div>
       <div className="mt-1.5 flex items-center gap-1.5 text-[12px]">
         {delta !== null ? (
           <span className={`inline-flex items-center gap-0.5 font-semibold ${Math.abs(delta) < 0.005 ? "text-[var(--muted)]" : good ? "text-[var(--good-ink)]" : "text-[var(--critical-ink)]"}`}>
@@ -222,6 +253,64 @@ export function InsightItem({ i, compact }: { i: Insight; compact?: boolean }) {
             {i.action}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+export const scoreTone = (v: number | null) => (v === null ? "#d6d2c4" : v >= 70 ? "var(--good)" : v >= 45 ? "var(--warning)" : "var(--critical)");
+export const scoreWord = (v: number | null) => (v === null ? "Belum ada data" : v >= 70 ? "Sehat" : v >= 45 ? "Cukup" : "Perlu perbaikan");
+
+/** Large score ring for the dashboard hero. */
+export function ScoreRing({ value, size = 108 }: { value: number | null; size?: number }) {
+  const tone = scoreTone(value);
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg viewBox="0 0 36 36" className="-rotate-90" style={{ width: size, height: size }} aria-hidden>
+        <circle cx="18" cy="18" r="15.5" fill="none" stroke="#eeebe3" strokeWidth="2.6" />
+        <circle cx="18" cy="18" r="15.5" fill="none" stroke={tone} strokeWidth="2.6" strokeDasharray={`${((value ?? 0) / 100) * 97.4} 97.4`} strokeLinecap="round" style={{ transition: "stroke-dasharray .8s cubic-bezier(.2,.8,.2,1)" }} />
+      </svg>
+      <span className="absolute inset-0 grid place-items-center">
+        <span className="text-center">
+          <span className="serif block text-[34px] leading-none tnum">{value ?? "–"}</span>
+          <span className="mt-1 block text-[10.5px] uppercase tracking-[.08em] text-[var(--muted)]">dari 100</span>
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/** Skeleton for a row of KPI tiles while analytics load. */
+export function KpiSkeleton({ n = 8 }: { n?: number }) {
+  return (
+    <div className="stat-grid">
+      {Array.from({ length: n }).map((_, i) => (
+        <div key={i} className="px-4 py-4">
+          <div className="skel h-3 w-24" />
+          <div className="skel mt-3 h-7 w-28" />
+          <div className="skel mt-3 h-3 w-20" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function PageSkeleton({ kpis = 8, cards = 2 }: { kpis?: number; cards?: number }) {
+  return (
+    <div className="space-y-6" aria-busy="true" aria-label="Memuat">
+      <div>
+        <div className="skel h-3 w-24" />
+        <div className="skel mt-3 h-9 w-72" />
+        <div className="skel mt-3 h-4 w-[min(520px,90%)]" />
+      </div>
+      <KpiSkeleton n={kpis} />
+      <div className="grid gap-5 lg:grid-cols-2">
+        {Array.from({ length: cards }).map((_, i) => (
+          <div key={i} className="card p-5">
+            <div className="skel h-5 w-40" />
+            <div className="skel mt-5 h-40 w-full" />
+          </div>
+        ))}
       </div>
     </div>
   );

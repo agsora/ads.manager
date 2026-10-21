@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 import type { Session } from "@/lib/token";
 import { addDays, monthEnd, monthStart, todayISO } from "@/lib/format";
 
@@ -136,13 +137,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <FilterCtx.Provider value={filter}>
         <ToastCtx.Provider value={toast}>
           {children}
-          <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 no-print">
+          <div className="fixed bottom-4 right-4 z-[100] flex w-[min(380px,calc(100vw-32px))] flex-col gap-2 no-print" aria-live="polite">
             {toasts.map((t) => (
               <div
                 key={t.id}
-                className={`rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-lg ${t.kind === "err" ? "bg-[var(--critical)]" : "bg-slate-900"}`}
+                role="status"
+                className="pop flex items-start gap-3 !rounded-xl px-4 py-3 text-[13.5px] leading-snug"
+                style={{ animation: "slide-in .2s cubic-bezier(.2,.8,.2,1)" }}
               >
-                {t.msg}
+                {t.kind === "err" ? <AlertCircle size={17} className="mt-px shrink-0 text-[var(--critical)]" /> : <CheckCircle2 size={17} className="mt-px shrink-0 text-[var(--good)]" />}
+                <span className="min-w-0 flex-1">{t.msg}</span>
               </div>
             ))}
           </div>

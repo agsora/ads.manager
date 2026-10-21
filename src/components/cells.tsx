@@ -67,7 +67,7 @@ export function renderCell(f: Pick<Field, "type" | "key">, v: unknown) {
     case "select":
       return <Chip value={String(v)} />;
     case "longtext":
-      return <span className="line-clamp-2 max-w-[280px] text-[13px] text-[var(--ink-2)]">{String(v)}</span>;
+      return <span className="line-clamp-2 block min-w-[180px] max-w-[300px] whitespace-normal text-[13px] text-[var(--ink-2)]">{String(v)}</span>;
     default:
       return <span className="whitespace-nowrap">{String(v)}</span>;
   }
