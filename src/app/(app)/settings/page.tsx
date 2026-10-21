@@ -9,10 +9,10 @@ import { DEFAULT_OPTIONS } from "@/lib/resources";
 
 export default function SettingsPage() {
   const { session } = useMeta();
-  const admin = session?.role === "owner" || session?.role === "admin";
+  const admin = session?.role === "owner" || session?.role === "admin" || session?.role === "superadmin";
   return (
     <div className="space-y-5">
-      <PageHeader title="Pengaturan" desc="Kelola brand, daftar pilihan (dropdown), pengguna tim, dan data workspace." />
+      <PageHeader eyebrow="Data" title="Pengaturan" desc="Kelola brand, daftar pilihan (dropdown), pengguna tim, dan data workspace." />
       <div className="grid gap-5 xl:grid-cols-2">
         <Brands admin={admin} />
         <Users admin={admin} />
@@ -22,7 +22,7 @@ export default function SettingsPage() {
         <Password />
         <Activity />
       </div>
-      {session?.role === "owner" && <Danger />}
+      {(session?.role === "owner" || session?.role === "superadmin") && <Danger />}
     </div>
   );
 }

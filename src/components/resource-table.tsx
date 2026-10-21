@@ -24,9 +24,15 @@ export interface ResourceTableProps {
   defaults?: Record<string, unknown>;
   onChanged?: () => void;
   toolbar?: React.ReactNode;
+  /** extra buttons shown while rows are selected */
+  selectionActions?: (ids: number[], done: () => void) => React.ReactNode;
+  /** default platform offered by the import dialog */
+  importPlatform?: string;
+  /** remount key: change it to force a reload from outside */
+  reloadKey?: number;
 }
 
-export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ignoreDate, rowFilter, defaults, onChanged, toolbar }: ResourceTableProps) {
+export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ignoreDate, rowFilter, defaults, onChanged, toolbar, selectionActions, importPlatform, reloadKey = 0 }: ResourceTableProps) {
   const r = RESOURCE_MAP[resourceKey];
   const f = useFilter();
   const { options } = useMeta();
@@ -54,7 +60,7 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
   if (f.brand) params.set("brand", f.brand);
   if (debounced) params.set("q", debounced);
   const qs = params.toString();
-  const { data, loading, error, reload } = useFetch<{ rows: Row[] }>(`/api/r/${resourceKey}?${qs}`);
+  const { data, loading, error, reload } = useFetch<{ rows: Row[] }>(`/api/r/${resourceKey}?${qs}&_=${reloadKey}`);
   const refresh = () => {
     reload();
     onChanged?.();
@@ -149,6 +155,11 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
         })}
         {toolbar}
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          {sel.size > 0 &&
+            selectionActions?.([...sel], () => {
+              setSel(new Set());
+              refresh();
+            })}
           {sel.size > 0 && (
             <button className="btn btn-sm btn-danger" onClick={bulkDelete}>
               <Trash2 size={14} /> Hapus {sel.size}
@@ -169,7 +180,7 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
           <a className="btn btn-sm" href={exportUrl("csv")}>
             CSV
           </a>
-          <button className="btn btn-sm btn-primary" onClick={() => setEditing(null)}>
+          <button className="btn btn-sm btn-accent" onClick={() => setEditing(null)}>
             <Plus size={14} /> Tambah
           </button>
         </div>
@@ -285,7 +296,7 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
       )}
 
       {editing !== undefined && <ResourceForm resource={r} row={editing} defaults={defaults} onClose={() => setEditing(undefined)} onSaved={refresh} />}
-      {importing && <ImportDialog resourceKey={resourceKey} onClose={() => setImporting(false)} onDone={refresh} />}
+      {importing && <ImportDialog resourceKey={resourceKey} defaultPlatform={importPlatform} onClose={() => setImporting(false)} onDone={refresh} />}
     </div>
   );
 }

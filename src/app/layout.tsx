@@ -1,18 +1,19 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import { Instrument_Sans, Newsreader } from "next/font/google";
 import "./globals.css";
 
-const font = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-sans" });
+const body = Instrument_Sans({ subsets: ["latin"], variable: "--font-body" });
+const display = Newsreader({ subsets: ["latin"], variable: "--font-display", style: ["normal", "italic"], weight: ["400", "500", "600"] });
 
 export const metadata: Metadata = {
-  title: "Ads Manager — Digital Marketing Dashboard",
-  description: "Monitor ads, content plan, WA leads, blast, Google review & influencer dalam satu dashboard dengan insight otomatis.",
+  title: "Ads Manager — Digital Marketing",
+  description: "Monitor iklan, content plan, WA leads, blast, Google review & influencer dalam satu dashboard dengan insight otomatis.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="id">
-      <body className={`${font.variable} antialiased`}>{children}</body>
+      <body className={`${body.variable} ${display.variable}`}>{children}</body>
     </html>
   );
 }

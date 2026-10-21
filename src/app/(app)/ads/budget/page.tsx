@@ -10,7 +10,7 @@ export default function BudgetPage() {
   const { data: a, reload } = useAnalytics();
   return (
     <div className="space-y-5">
-      <PageHeader title="Saldo & Top Up Iklan" desc="Ringkasan bulanan per brand & platform. Saldo akhir dihitung otomatis: (saldo awal + top up) − budget terpakai dari data campaign. Isi 1 baris per brand/platform per bulan." />
+      <PageHeader eyebrow="Iklan" title="Saldo & Top Up Iklan" desc="Ringkasan bulanan per brand & platform. Saldo akhir dihitung otomatis: (saldo awal + top up) − budget terpakai dari data campaign. Isi 1 baris per brand/platform per bulan." />
       <Card title="Posisi Saldo (bulan pada akhir periode filter)" subtitle="Belanja/hari & estimasi hari tersisa dari rata-rata belanja bulan berjalan">
         <MiniTable
           cols={[

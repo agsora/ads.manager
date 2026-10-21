@@ -49,7 +49,7 @@ export default function InsightsPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Insight & Rekomendasi" desc={`Kesimpulan otomatis dari data ads, leads, blast, konten, reputasi & influencer periode ${fmtDate(a.period.from)} – ${fmtDate(a.period.to)}. Setiap temuan disertai tindakan yang disarankan.`}>
+      <PageHeader eyebrow="Analisis otomatis" title="Insight & Rekomendasi" desc={`Kesimpulan otomatis dari data ads, leads, blast, konten, reputasi & influencer periode ${fmtDate(a.period.from)} – ${fmtDate(a.period.to)}. Setiap temuan disertai tindakan yang disarankan.`}>
         <a className="btn" href={`/api/report?${f.qs}`}>
           <Download size={15} /> Excel
         </a>
@@ -68,10 +68,10 @@ export default function InsightsPage() {
             <Score label="Reputasi" value={a.scores.reputation} />
           </div>
           <div className="mt-5 grid grid-cols-4 gap-2 text-center text-[12px]">
-            <div className="rounded-lg bg-[#fdf2f2] p-2"><div className="text-lg font-bold text-[var(--critical)]">{count("critical")}</div>Kritis</div>
-            <div className="rounded-lg bg-[#fff8e8] p-2"><div className="text-lg font-bold text-[#b7791f]">{count("warning")}</div>Perhatian</div>
-            <div className="rounded-lg bg-[#f0f6fd] p-2"><div className="text-lg font-bold text-[var(--accent)]">{count("info")}</div>Saran</div>
-            <div className="rounded-lg bg-[#eff8ef] p-2"><div className="text-lg font-bold text-[var(--good-ink)]">{count("good")}</div>Bagus</div>
+            <div className="rounded-lg border border-[var(--line)] p-2"><div className="serif text-[22px] text-[var(--critical-ink)]">{count("critical")}</div>Kritis</div>
+            <div className="rounded-lg border border-[var(--line)] p-2"><div className="serif text-[22px] text-[var(--warning-ink)]">{count("warning")}</div>Perhatian</div>
+            <div className="rounded-lg border border-[var(--line)] p-2"><div className="serif text-[22px] text-[var(--ink-2)]">{count("info")}</div>Saran</div>
+            <div className="rounded-lg border border-[var(--line)] p-2"><div className="serif text-[22px] text-[var(--good-ink)]">{count("good")}</div>Bagus</div>
           </div>
         </Card>
         <Card title="Rencana Aksi" subtitle="Centang setelah dikerjakan (tersimpan di browser ini)" className="lg:col-span-2">
@@ -84,7 +84,7 @@ export default function InsightsPage() {
                     <input type="checkbox" className="mt-1" checked={!!done[key]} onChange={() => toggle(key)} aria-label="Tandai selesai" />
                     <div className={done[key] ? "text-[var(--muted)] line-through" : ""}>
                       <div className="text-[13px] font-semibold">
-                        <span className={i.level === "critical" ? "text-[var(--critical)]" : "text-[#b7791f]"}>{i.level === "critical" ? "● " : "○ "}</span>
+                        <span className={i.level === "critical" ? "text-[var(--critical-ink)]" : "text-[var(--warning-ink)]"}>{i.level === "critical" ? "● " : "○ "}</span>
                         [{i.area}] {i.action}
                       </div>
                       <div className="text-[12px] text-[var(--muted)]">{i.title}</div>

@@ -31,7 +31,7 @@ export const PUT = handle(async (req: Request) => {
     if (b.password.length < 8) throw new HttpError(400, "Password minimal 8 karakter");
     await q(`UPDATE users SET password_hash=$3 WHERE org_id=$1 AND id=$2`, [s.org, id, await bcrypt.hash(b.password, 10)]);
   }
-  if (b.role && s.role === "owner" && id !== s.uid) await q(`UPDATE users SET role=$3 WHERE org_id=$1 AND id=$2`, [s.org, id, b.role === "admin" ? "admin" : "staff"]);
+  if (b.role && (s.role === "owner" || s.role === "superadmin") && id !== s.uid) await q(`UPDATE users SET role=$3 WHERE org_id=$1 AND id=$2 AND role <> 'superadmin'`, [s.org, id, b.role === "admin" ? "admin" : "staff"]);
   if (b.name) await q(`UPDATE users SET name=$3 WHERE org_id=$1 AND id=$2`, [s.org, id, b.name]);
   return NextResponse.json({ ok: true });
 });
@@ -40,7 +40,7 @@ export const DELETE = handle(async (req: Request) => {
   const s = await requireSession(["owner", "admin"]);
   const id = Number(new URL(req.url).searchParams.get("id"));
   if (id === s.uid) throw new HttpError(400, "Tidak bisa menghapus akun sendiri");
-  await q(`DELETE FROM users WHERE org_id=$1 AND id=$2 AND role <> 'owner'`, [s.org, id]);
+  await q(`DELETE FROM users WHERE org_id=$1 AND id=$2 AND role NOT IN ('owner', 'superadmin')`, [s.org, id]);
   await logActivity(s.org, s.name, "Hapus user", `id ${id}`);
   return NextResponse.json({ ok: true });
 });

@@ -11,9 +11,9 @@ export default function ReviewsPage() {
   const p = a?.prevKpis.reviews;
   return (
     <div className="space-y-5">
-      <PageHeader title="Google Business Report" desc="Rekap ulasan Google Maps per cabang: rating, sentimen, kategori komentar dan respon admin. Ulasan negatif yang belum dibalas muncul sebagai prioritas di Insight." />
+      <PageHeader eyebrow="Reputasi" title="Google Business Report" desc="Rekap ulasan Google Maps per cabang: rating, sentimen, kategori komentar dan respon admin. Ulasan negatif yang belum dibalas muncul sebagai prioritas di Insight." />
       {k && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <div className="stat-grid grid-cols-2 md:grid-cols-5">
           <Kpi label="Jumlah Ulasan" value={k.reviews} prev={p?.reviews} format="number" />
           <Kpi label="Rata-rata Rating" value={k.avgRating} prev={p?.avgRating} format="decimal" />
           <Kpi label="Ulasan Positif" value={k.positive} prev={p?.positive} format="number" />

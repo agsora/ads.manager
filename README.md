@@ -11,15 +11,16 @@ Dibangun dari struktur workbook *WEBSITE MARKETING REPORT.xlsx* (Ads Report, Con
 | **Dashboard** | Skor kesehatan marketing, KPI vs periode lalu, tren belanja iklan & leads, funnel, sumber leads, saldo iklan, follow up jatuh tempo, konten 7 hari ke depan, progres target KPI |
 | **Insight & Rekomendasi** | ±40 aturan analisis (CTR, ad fatigue, ROAS, realokasi budget, pacing, saldo menipis, conversion, ghosting, leads HOT, kualitas sumber, blast delivery/read/reply, ER konten, pilar & hari terbaik, rating & ulasan negatif, ROI influencer, event mendatang) + rencana aksi |
 | **Laporan** | Ringkasan eksekutif, Iklan & Budget, Leads & Penjualan, Konten, WA Blast, Reputasi, Influencer, Atribusi & efisiensi biaya — cetak/PDF dan Excel multi-sheet |
-| **Ads Campaign** | Meta/TikTok/Google: jangkauan, impresi, spend, klik, percakapan, omzet → CTR, CPC, CPM, frekuensi, biaya/percakapan, ROAS, ROI otomatis |
+| **Ads Campaign** | Upload langsung file ekspor Meta Ads Manager (CSV/Excel, termasuk breakdown harian) — kolom dikenali otomatis, digabung per campaign, upload ulang tidak dobel dan omzet yang diisi manual tetap tersimpan. CTR, CPC, CPM, biaya/percakapan, ROAS, ROI otomatis |
 | **Saldo & Top Up** | Saldo awal, top up, rencana top up per brand/platform/bulan → saldo akhir, belanja per hari, estimasi hari tersisa |
 | **Content Plan** | Kalender bulanan + event, daftar & input hasil (like/comment/saved/followers → ER), analitik per channel/pilar/hari, top & bottom 5 |
 | **Target KPI / Followers / Event** | Target bulanan per brand, tracker followers, tanggal penting |
 | **WA Leads & Follow Up** | CRM chat masuk (sumber, segmen HOT/WARM/COLD, FU 1–3, status akhir, nilai deal) + papan follow up dengan jadwal H+3/H+7/H+14 |
-| **WA Blast** | Terkirim → delivered → dibaca → dibalas → leads → deal, biaya per lead |
+| **WA Blast** | *Kontak blast* format kontrak (nomor kontrak, nama, nomor, noresmi 62…, harga pasar, plafon, pinjaman, rekomendasi plafon, rek. resmi, tipe unit, tahun): upload, ekspor CSV siap kirim dengan pesan personal, status per kontak, rekap per batch & tipe unit, konversi ke WA Leads. *Laporan kampanye*: terkirim → dibaca → dibalas → leads → deal |
 | **Google Business** | Rating per cabang, sentimen, kategori, response rate, ulasan belum dibalas |
 | **Influencer** | Fee, views, engagement, leads, omzet → biaya/engagement & ROI |
 | **Impor / Ekspor** | Impor workbook lengkap (deteksi sheet & kolom otomatis, pratinjau), impor per modul (.xlsx/.csv), template Excel dengan dropdown, ekspor Excel/CSV, backup seluruh data |
+| **Superadmin** | Akun pertama otomatis Superadmin: kelola semua workspace & user, reset password, ubah role, buka workspace mana pun, buka/tutup pendaftaran publik |
 | **Pengaturan** | Brand, daftar pilihan dropdown (bisa diubah), user & role (owner/admin/staff), ganti password, log aktivitas, hapus data |
 
 Semua tabel bisa diedit (klik baris → form, klik status → ubah cepat), dicari, difilter, diurutkan, dan dihapus massal. Filter brand & periode global berlaku di semua halaman.
@@ -38,7 +39,7 @@ npm install
 npm run dev
 ```
 
-Buka http://localhost:3000/register untuk membuat workspace pertama (akun pertama = Owner). Di dashboard kosong ada tombol **Isi data contoh** untuk mencoba semua fitur.
+Buka http://localhost:3000/register untuk membuat akun pertama — akun ini menjadi **Superadmin**. Setelah itu pendaftaran tertutup (bisa dibuka dari halaman Superadmin); user lain dibuat dari Pengaturan atau Superadmin. Di dashboard kosong ada tombol **Isi data contoh** untuk mencoba semua fitur.
 
 ## Environment variables
 

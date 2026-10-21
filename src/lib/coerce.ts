@@ -87,6 +87,12 @@ export function coerce(f: Field, v: unknown, fromImport = false): unknown {
       return toISODate(typeof v === "object" && v && !(v instanceof Date) ? cellText(v) : v);
     case "time":
       return toTime(v);
+    case "phone": {
+      const s = typeof v === "number" ? String(Math.round(v)) : cellText(v);
+      if (!s) return null;
+      // Excel drops the leading 0 of numbers stored as numeric cells: 81212770981 -> 081212770981
+      return /^8\d{8,12}$/.test(s) ? "0" + s : s;
+    }
     case "number":
     case "money":
     case "rating":

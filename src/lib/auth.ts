@@ -18,7 +18,8 @@ export class HttpError extends Error {
 export async function requireSession(roles?: Session["role"][]): Promise<Session> {
   const s = await getSession();
   if (!s) throw new HttpError(401, "Silakan login terlebih dahulu");
-  if (roles && !roles.includes(s.role)) throw new HttpError(403, "Akses ditolak untuk role Anda");
+  // superadmin passes every role check
+  if (roles && s.role !== "superadmin" && !roles.includes(s.role)) throw new HttpError(403, "Akses ditolak untuk role Anda");
   return s;
 }
 

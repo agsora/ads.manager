@@ -13,7 +13,7 @@ import { addDays, monthEnd, monthStart, todayISO, fmtPct } from "@/lib/format";
 
 const MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 const DAYS = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
-const STATUS_DOT: Record<string, string> = { Posted: "var(--good)", Scheduled: "var(--s1)", Produksi: "var(--s7)", Review: "var(--s7)", Draft: "#c3c2b7", Ide: "#c3c2b7", Cancel: "var(--critical)" };
+const STATUS_DOT: Record<string, string> = { Posted: "var(--good)", Scheduled: "var(--s2)", Produksi: "var(--s5)", Review: "var(--s5)", Draft: "#c3c2b7", Ide: "#c3c2b7", Cancel: "var(--critical)" };
 
 export default function ContentPage() {
   const [tab, setTab] = useState<"calendar" | "list" | "analytics">("calendar");
@@ -24,10 +24,10 @@ export default function ContentPage() {
   ] as const;
   return (
     <div className="space-y-5">
-      <PageHeader title="Content Plan" desc="Rencanakan konten (tanggal, channel, pilar, PIC), lalu isi hasilnya setelah tayang (like, comment, saved, followers). Engagement Rate = (Like + Comment + Saved) ÷ Followers." />
-      <div className="flex gap-1 rounded-xl border border-[var(--line)] bg-white p-1 sm:w-fit">
+      <PageHeader eyebrow="Konten" title="Content Plan" desc="Rencanakan konten (tanggal, channel, pilar, PIC), lalu isi hasilnya setelah tayang (like, comment, saved, followers). Engagement Rate = (Like + Comment + Saved) ÷ Followers." />
+      <div className="tabs">
         {tabs.map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)} className={`flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-[13px] font-semibold ${tab === t.key ? "bg-[var(--accent)] text-white" : "text-[var(--ink-2)] hover:bg-[var(--surface-2)]"}`}>
+          <button key={t.key} onClick={() => setTab(t.key)} className="tab" data-on={tab === t.key}>
             <t.icon size={15} /> {t.label}
           </button>
         ))}
@@ -106,19 +106,19 @@ function Calendar() {
               {d && (
                 <>
                   <div className="mb-1 flex items-center justify-between">
-                    <span className={`grid h-6 w-6 place-items-center rounded-full text-[12px] font-semibold tnum ${d === today ? "bg-[var(--accent)] text-white" : "text-[var(--ink-2)]"}`}>{+d.slice(8)}</span>
+                    <span className={`grid h-6 w-6 place-items-center rounded-full text-[12px] font-semibold tnum ${d === today ? "bg-[var(--ink)] text-[#faf9f5]" : "text-[var(--ink-2)]"}`}>{+d.slice(8)}</span>
                     <button className="rounded p-0.5 text-[var(--muted)] opacity-0 hover:bg-[var(--surface-2)] hover:text-[var(--accent)] group-hover:opacity-100" onClick={() => setEditing({ row: null, date: d })} aria-label="Tambah konten">
                       <Plus size={14} />
                     </button>
                   </div>
                   {eventsOn(d).map((e) => (
-                    <button key={`e${e.id}`} onClick={() => setEditEvent(e)} className="mb-1 block w-full truncate rounded bg-[#fdf3dc] px-1.5 py-0.5 text-left text-[11px] font-semibold text-[#8a5a00]">
+                    <button key={`e${e.id}`} onClick={() => setEditEvent(e)} className="mb-1 block w-full truncate rounded bg-[var(--accent-soft)] px-1.5 py-0.5 text-left text-[11px] font-semibold text-[var(--accent-ink)]">
                       ★ {String(e.title)}
                     </button>
                   ))}
                   {byDate(d).map((c) => (
                     <button key={c.id} onClick={() => setEditing({ row: c })} className="mb-1 flex w-full items-center gap-1.5 rounded border border-[var(--line)] bg-white px-1.5 py-0.5 text-left text-[11.5px] hover:border-[var(--accent)]" title={`${c.title} · ${c.channel ?? ""} · ${c.status ?? ""}`}>
-                      <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: STATUS_DOT[String(c.status)] ?? "#c3c2b7" }} />
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: STATUS_DOT[String(c.status)] ?? "#d6d2c4" }} />
                       <span className="truncate">{String(c.title)}</span>
                     </button>
                   ))}
@@ -143,7 +143,7 @@ function ContentAnalytics() {
   const p = a.prevKpis.content;
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="stat-grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
         <Kpi label="Direncanakan" value={k.planned} prev={p.planned} format="number" />
         <Kpi label="Tayang" value={k.posted} prev={p.posted} format="number" />
         <Kpi label="Completion Rate" value={k.completionRate} prev={p.completionRate} format="percent" />

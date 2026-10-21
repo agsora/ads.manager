@@ -39,7 +39,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title={`Halo, ${session?.name?.split(" ")[0] ?? ""} 👋`} desc={`Ringkasan digital marketing ${fmtDate(a.period.from)} – ${fmtDate(a.period.to)}${f.brand ? ` · ${f.brand}` : " · semua brand"}, dibandingkan ${a.period.days} hari sebelumnya.`}>
+      <PageHeader eyebrow={new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })} title={`${greeting()}, ${session?.name?.split(" ")[0] ?? ""}`} desc={`Ringkasan digital marketing ${fmtDate(a.period.from)} – ${fmtDate(a.period.to)}${f.brand ? ` · ${f.brand}` : " · semua brand"}, dibandingkan dengan periode yang sama sebelumnya.`}>
         <a className="btn" href={`/api/report?${f.qs}`}>
           <Download size={15} /> Laporan Excel
         </a>
@@ -72,7 +72,7 @@ export default function Dashboard() {
         </div>
       </Card>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="stat-grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
         <Kpi label="Budget Iklan Terpakai" value={k.ads.spend} prev={p.ads.spend} format="money" invert />
         <Kpi label="Impresi" value={k.ads.impressions} prev={p.ads.impressions} format="number" />
         <Kpi label="CTR" value={k.ads.ctr} prev={p.ads.ctr} format="percent" />
@@ -158,7 +158,7 @@ export default function Dashboard() {
                     <div className="text-[12px] text-[var(--muted)]">
                       sisa dari {fmtMoney(w.available)} · terpakai {fmtPct(pct, 0)}
                     </div>
-                    <div className="mt-2 h-1.5 rounded-full bg-[#f1f3f6]">
+                    <div className="mt-2 h-1.5 rounded-full bg-[var(--track)]">
                       <div className="h-1.5 rounded-full" style={{ width: `${pct * 100}%`, background: low ? "var(--critical)" : "var(--s1)" }} />
                     </div>
                     {w.daysLeft !== null && (
@@ -253,7 +253,7 @@ export default function Dashboard() {
                       <span className={`ml-2 font-semibold ${ok ? "text-[var(--good-ink)]" : "text-[var(--ink-2)]"}`}>{fmtPct(pct, 0)}</span>
                     </span>
                   </div>
-                  <div className="mt-1.5 h-2 rounded-full bg-[#f1f3f6]">
+                  <div className="mt-1.5 h-2 rounded-full bg-[var(--track)]">
                     <div className="h-2 rounded-full" style={{ width: `${Math.min(100, pct * 100)}%`, background: x.higherBetter ? "var(--s1)" : pct > 1 ? "var(--critical)" : "var(--s3)" }} />
                   </div>
                 </div>
@@ -264,6 +264,11 @@ export default function Dashboard() {
       )}
     </div>
   );
+}
+
+function greeting() {
+  const h = new Date().getHours();
+  return h < 11 ? "Selamat pagi" : h < 15 ? "Selamat siang" : h < 18 ? "Selamat sore" : "Selamat malam";
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

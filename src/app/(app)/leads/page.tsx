@@ -12,13 +12,13 @@ export default function LeadsPage() {
   const p = a?.prevKpis.leads;
   return (
     <div className="space-y-5">
-      <PageHeader title="WA Leads" desc="Laporan chat masuk WhatsApp: sumber trafik, segmentasi HOT/WARM/COLD, follow up 1–3 (H+3, H+7, H+14), dan status akhir. Kolom 'Aksi Berikutnya' memberi tahu kapan lead harus di-follow up.">
+      <PageHeader eyebrow="Leads" title="WA Leads" desc="Laporan chat masuk WhatsApp: sumber trafik, segmentasi HOT/WARM/COLD, follow up 1–3 (H+3, H+7, H+14), dan status akhir. Kolom 'Aksi Berikutnya' memberi tahu kapan lead harus di-follow up.">
         <Link href="/leads/followup" className="btn btn-primary">
           Buka papan Follow Up
         </Link>
       </PageHeader>
       {k && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 2xl:grid-cols-8">
+        <div className="stat-grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-8">
           <Kpi label="Total Chat Masuk" value={k.leads} prev={p?.leads} format="number" />
           <Kpi label="HOT" value={k.hot} prev={p?.hot} format="number" />
           <Kpi label="WARM" value={k.warm} prev={p?.warm} format="number" />

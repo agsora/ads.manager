@@ -52,6 +52,12 @@ export interface Resource {
   importKeys: string[];
   /** sheet-name keywords used when importing a whole workbook */
   sheetHints: string[];
+  /** re-importing a row with the same values for these keys replaces the old row */
+  upsertKeys?: string[];
+  /** on re-import, these fields keep their saved value when the file has no such column */
+  preserveOnReimport?: string[];
+  /** fill derived values (e.g. normalised phone, loan amount) before saving */
+  derive?: (r: Record<string, unknown>) => Record<string, unknown>;
   defaultSort?: string;
 }
 
@@ -77,24 +83,33 @@ export const RESOURCES: Resource[] = [
     dateField: "start_date",
     titleField: "campaign_name",
     importKeys: ["campaign_name"],
-    sheetHints: ["detail ads", "ads report - detail", "campaign"],
+    sheetHints: ["detail ads", "ads report - detail", "campaign", "report-ads", "meta ads", "ads manager"],
     defaultSort: "start_date",
+    upsertKeys: ["brand", "platform", "campaign_name", "start_date", "end_date"],
+    preserveOnReimport: ["revenue", "notes", "focus", "content_link", "objective"],
+    derive: (r) => {
+      const today = new Date().toISOString().slice(0, 10);
+      if (!r.end_date && r.start_date) r.end_date = r.start_date;
+      if (!r.status && r.end_date) r.status = String(r.end_date) < today ? "Done" : "Running";
+      if (!r.objective && n(r.conversations) > 0) r.objective = "Pesan WhatsApp";
+      return r;
+    },
     fields: [
       { key: "brand", label: "Brand", type: "brand", required: true },
       { key: "platform", label: "Platform", type: "select", options: "platform", required: true },
-      { key: "campaign_name", label: "Nama Campaign", type: "text", required: true, aliases: ["campaign"] },
+      { key: "campaign_name", label: "Nama Campaign", type: "text", required: true, aliases: ["campaign", "nama kampanye", "campaign name", "nama campaign"] },
       { key: "objective", label: "Jenis Campaign", type: "select", options: "ad_objective", aliases: ["objective", "tujuan"] },
       { key: "focus", label: "Fokus Campaign", type: "text", hideInTable: true },
       { key: "content_link", label: "Link Konten", type: "url", hideInTable: true, aliases: ["link konten (file asli)", "link konten"] },
-      { key: "start_date", label: "Mulai", type: "date", required: true, aliases: ["tanggal mulai", "hari/tgl"] },
-      { key: "end_date", label: "Berakhir", type: "date", aliases: ["tanggal berakhir", "selesai"] },
-      { key: "daily_budget", label: "Anggaran/Hari", type: "money", hideInTable: true, aliases: ["anggaran per hari", "budget harian"] },
+      { key: "start_date", label: "Mulai", type: "date", required: true, aliases: ["tanggal", "awal pelaporan", "reporting starts", "day", "tanggal mulai", "hari/tgl"] },
+      { key: "end_date", label: "Berakhir", type: "date", aliases: ["akhir pelaporan", "reporting ends", "tanggal berakhir", "selesai"] },
+      { key: "daily_budget", label: "Anggaran/Hari", type: "money", hideInTable: true, aliases: ["anggaran kampanye", "anggaran set iklan", "campaign budget", "ad set budget", "anggaran per hari", "budget harian"] },
       { key: "reach", label: "Jangkauan", type: "number", aliases: ["reach"] },
       { key: "impressions", label: "Impresi", type: "number", aliases: ["impression", "impressions"] },
-      { key: "spend", label: "Budget Terpakai", type: "money", aliases: ["jumlah yang dibelanjakan (idr)/budget terpakai", "jumlah yang dibelanjakan", "spend", "amount spent"] },
+      { key: "spend", label: "Budget Terpakai", type: "money", aliases: ["jumlah yang dibelanjakan (idr)", "jumlah yang dibelanjakan (idr)/budget terpakai", "jumlah yang dibelanjakan", "amount spent (idr)", "amount spent", "spend", "biaya (idr)", "cost"] },
       { key: "clicks", label: "Klik Tautan", type: "number", aliases: ["klik tautan", "link clicks", "clicks"] },
-      { key: "views", label: "Tayangan", type: "number", hideInTable: true, aliases: ["views", "video views"] },
-      { key: "conversations", label: "Percakapan", type: "number", aliases: ["percakapan pesan dimulai", "messaging conversations started", "leads"] },
+      { key: "views", label: "Tayangan", type: "number", hideInTable: true, aliases: ["tayangan", "views", "video views"] },
+      { key: "conversations", label: "Percakapan", type: "number", aliases: ["percakapan pesan dimulai", "messaging conversations started", "hasil", "results", "leads"] },
       { key: "revenue", label: "Omzet", type: "money", aliases: ["omset", "revenue", "omzet dari ads"] },
       { key: "status", label: "Status", type: "select", options: "ad_status" },
       { key: "notes", label: "Keterangan", type: "longtext", hideInTable: true, aliases: ["catatan"] },
@@ -326,6 +341,58 @@ export const RESOURCES: Resource[] = [
     ],
   },
   {
+    key: "contacts",
+    table: "blast_contacts",
+    label: "Kontak Blast",
+    singular: "Kontak",
+    description: "Database target WA Blast (format kontrak pembiayaan): nomor kontrak, nama, nomor resmi 62, harga pasar, plafon, pinjaman, rekomendasi plafon, tipe unit & tahun, plus status hasil blast.",
+    dateField: "blast_date",
+    titleField: "name",
+    importKeys: ["contract_no", "name", "phone_official", "phone"],
+    sheetHints: ["kontak blast", "data blast", "target blast", "database blast", "contacts"],
+    defaultSort: "blast_date",
+    upsertKeys: ["contract_no"],
+    preserveOnReimport: ["status", "batch", "notes", "blast_date", "brand"],
+    fields: [
+      { key: "blast_date", label: "Tanggal Blast", type: "date", required: true, group: "Blast", aliases: ["tanggal kirim"] },
+      { key: "batch", label: "Nama Blast / Batch", type: "text", group: "Blast", aliases: ["batch", "nama blast"] },
+      { key: "brand", label: "Brand", type: "brand", required: true, group: "Blast" },
+      { key: "blast", label: "Blast", type: "select", options: "yes_no_en", group: "Blast", aliases: ["blast?", "kirim"] },
+      { key: "status", label: "Status Blast", type: "select", options: "contact_status", group: "Blast" },
+      { key: "contract_no", label: "Nomor Kontrak", type: "text", group: "Data Konsumen", aliases: ["nomor kontrak", "no kontrak", "no. kontrak", "contract"] },
+      { key: "name", label: "Nama", type: "text", required: true, group: "Data Konsumen", aliases: ["nama", "nama konsumen"] },
+      { key: "phone", label: "Nomor", type: "phone", group: "Data Konsumen", hideInTable: true, aliases: ["nomor", "no hp", "no. hp", "hp", "no wa"] },
+      { key: "phone_official", label: "No. Resmi (62)", type: "phone", group: "Data Konsumen", aliases: ["noresmi", "no resmi", "nomor resmi"] },
+      { key: "unit_type", label: "Tipe Unit", type: "text", group: "Data Konsumen", aliases: ["nm_tipe", "nm tipe", "tipe", "tipe unit", "type"] },
+      { key: "year", label: "Tahun", type: "text", group: "Data Konsumen", aliases: ["tahun", "thn"] },
+      { key: "market_price", label: "Harga Pasar", type: "money", group: "Pembiayaan", aliases: ["harga pasar", "otr"] },
+      { key: "plafon_pct", label: "Plafon", type: "percent", group: "Pembiayaan", aliases: ["plafon", "plafon %", "ltv"] },
+      { key: "loan", label: "Pinjaman", type: "money", group: "Pembiayaan", aliases: ["pinjama", "pinjaman", "nilai pinjaman"] },
+      { key: "recommended", label: "Rekomendasi Plafon", type: "money", group: "Pembiayaan", hideInTable: true, aliases: ["rekomendasi plafon", "rekomendasi"] },
+      { key: "official_rec", label: "Rek. Resmi", type: "money", group: "Pembiayaan", aliases: ["rek resmi", "rekomendasi resmi"] },
+      { key: "notes", label: "Catatan / Respon", type: "longtext", group: "Blast", hideInTable: true, aliases: ["catatan", "respon", "keterangan"] },
+    ],
+    derive: (r) => {
+      const digits = (v: unknown) => String(v ?? "").replace(/\D/g, "");
+      if (!r.phone_official && r.phone) {
+        const d = digits(r.phone);
+        r.phone_official = d.startsWith("0") ? "62" + d.slice(1) : d.startsWith("8") ? "62" + d : d;
+      }
+      if (!r.phone && r.phone_official) {
+        const d = digits(r.phone_official);
+        r.phone = d.startsWith("62") ? "0" + d.slice(2) : d;
+      }
+      if ((r.loan === null || r.loan === undefined) && n(r.market_price) && n(r.plafon_pct)) r.loan = Math.round(n(r.market_price) * n(r.plafon_pct));
+      if ((r.recommended === null || r.recommended === undefined) && n(r.loan)) r.recommended = Math.floor(n(r.loan) / 500000) * 500000;
+      if ((r.official_rec === null || r.official_rec === undefined) && n(r.recommended)) r.official_rec = r.recommended;
+      if (!r.blast) r.blast = "yes";
+      return r;
+    },
+    computed: [
+      { key: "ltv", label: "Pinjaman/Harga", format: "percent", fn: (r) => div(n(r.loan), n(r.market_price)) },
+    ],
+  },
+  {
     key: "reviews",
     table: "reviews",
     label: "Google Business",
@@ -417,6 +484,8 @@ export const DEFAULT_OPTIONS: Record<string, { label: string; values: string[] }
   final_status: { label: "Status Akhir", values: ["Follow-up", "Pending", "Deal", "Cancel", "Ghosting"] },
   blast_tool: { label: "Tools Blast", values: ["Scooter", "WATI", "Qontak", "WA Business", "Lainnya"] },
   blast_status: { label: "Status Blast", values: ["Draft", "Terjadwal", "Terkirim", "Gagal"] },
+  contact_status: { label: "Status Kontak Blast", values: ["Belum dikirim", "Terkirim", "Dibaca", "Dibalas", "Tertarik", "Deal", "Tidak tertarik", "Nomor tidak aktif"] },
+  yes_no_en: { label: "Blast (yes/no)", values: ["yes", "no"] },
   branch: { label: "Cabang", values: ["Nibung Raya", "SM Raja", "Pekanbaru", "Aceh", "Batam"] },
   yes_no: { label: "Ya/Tidak", values: ["Ya", "Tidak"] },
   sentiment: { label: "Sentimen", values: ["Positif", "Netral", "Negatif"] },

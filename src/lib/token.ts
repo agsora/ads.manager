@@ -8,7 +8,7 @@ export interface Session {
   orgName: string;
   name: string;
   email: string;
-  role: "owner" | "admin" | "staff";
+  role: "superadmin" | "owner" | "admin" | "staff";
 }
 
 const secret = () => new TextEncoder().encode(process.env.AUTH_SECRET || "dev-insecure-secret-change-me");

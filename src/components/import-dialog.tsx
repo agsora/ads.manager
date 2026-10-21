@@ -13,15 +13,19 @@ interface Summary {
   rows: number;
   skipped: number;
   matched: string[];
+  upsert?: boolean;
   sample?: Record<string, unknown>[];
 }
 
-export function ImportDialog({ resourceKey, onClose, onDone }: { resourceKey: string; onClose: () => void; onDone: () => void }) {
+export function ImportDialog({ resourceKey, onClose, onDone, defaultPlatform, title }: { resourceKey: string; onClose: () => void; onDone: () => void; defaultPlatform?: string; title?: string }) {
   const toast = useToast();
   const { brands, reloadMeta } = useMeta();
   const [file, setFile] = useState<File | null>(null);
   const [target, setTarget] = useState(resourceKey);
   const [brand, setBrand] = useState("");
+  const [platform, setPlatform] = useState(defaultPlatform ?? (resourceKey === "ads" ? "Meta" : ""));
+  const { options } = useMeta();
+  const showPlatform = target === "ads" || target === "wallets" || target === "auto";
   const [replace, setReplace] = useState(false);
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<{ summary: Summary[]; ignored: string[] } | null>(null);
@@ -34,12 +38,13 @@ export function ImportDialog({ resourceKey, onClose, onDone }: { resourceKey: st
       fd.append("file", file);
       fd.append("resource", target);
       fd.append("brand", brand);
+      if (showPlatform && platform) fd.append("platform", platform);
       if (isPreview) fd.append("preview", "1");
       if (replace) fd.append("replace", "1");
-      const j = await api<{ summary: Summary[]; ignored: string[]; imported?: number }>("/api/import", "POST", fd);
+      const j = await api<{ summary: Summary[]; ignored: string[]; imported?: number; replaced?: number }>("/api/import", "POST", fd);
       if (isPreview) setPreview(j);
       else {
-        toast(`${j.imported} baris berhasil diimpor`);
+        toast(`${j.imported} baris diimpor${j.replaced ? ` · ${j.replaced} baris lama diperbarui` : ""}`);
         await reloadMeta();
         onDone();
         onClose();
@@ -52,7 +57,7 @@ export function ImportDialog({ resourceKey, onClose, onDone }: { resourceKey: st
   };
 
   return (
-    <Modal title="Impor Data dari Excel / CSV" onClose={onClose} wide>
+    <Modal title={title ?? "Impor Data dari Excel / CSV"} onClose={onClose} wide>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <label className="label">File (.xlsx atau .csv)</label>
@@ -93,6 +98,17 @@ export function ImportDialog({ resourceKey, onClose, onDone }: { resourceKey: st
             ))}
           </select>
         </div>
+        {showPlatform && (
+          <div>
+            <label className="label">Platform default (jika file tidak punya kolom platform)</label>
+            <select className="input" value={platform} onChange={(e) => setPlatform(e.target.value)}>
+              <option value="">— tidak ada —</option>
+              {(options.platform ?? []).map((o) => (
+                <option key={o}>{o}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <label className="flex items-center gap-2 text-sm sm:col-span-2">
           <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />
           Ganti semua data lama di modul tujuan (hapus dulu, lalu impor)
@@ -113,6 +129,7 @@ export function ImportDialog({ resourceKey, onClose, onDone }: { resourceKey: st
                 </div>
               </div>
               <div className="mt-1.5 text-[12px] text-[var(--ink-2)]">Kolom terdeteksi: {s.matched.join(", ")}</div>
+              {s.upsert && <div className="mt-1 text-[12px] text-[var(--good-ink)]">Upload ulang aman: baris yang sudah ada (kunci sama) akan diperbarui, bukan diduplikasi.</div>}
             </div>
           ))}
           {preview.ignored.length > 0 && <div className="text-[12px] text-[var(--muted)]">Sheet dilewati (tidak dikenali / kosong): {preview.ignored.join(", ")}</div>}
@@ -126,7 +143,7 @@ export function ImportDialog({ resourceKey, onClose, onDone }: { resourceKey: st
         <button className="btn" onClick={() => send(true)} disabled={busy || !file}>
           Pratinjau
         </button>
-        <button className="btn btn-primary" onClick={() => send(false)} disabled={busy || !file}>
+        <button className="btn btn-accent" onClick={() => send(false)} disabled={busy || !file}>
           <Upload size={15} /> {busy ? "Memproses…" : "Impor Sekarang"}
         </button>
       </div>

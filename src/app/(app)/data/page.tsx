@@ -13,7 +13,7 @@ export default function DataPage() {
   const [imp, setImp] = useState<string | null>(null);
   return (
     <div className="space-y-5">
-      <PageHeader title="Impor / Ekspor Data" desc="Pindahkan data dari/ke Excel. Impor otomatis mengenali sheet workbook 'WEBSITE MARKETING REPORT' (Ads Report - Detail Ads, Ads Report - Ringkasan, Input Content Plan, WA Leads, Google Business Report) beserta judul kolomnya." />
+      <PageHeader eyebrow="Data" title="Impor / Ekspor Data" desc="Pindahkan data dari/ke Excel. Dikenali otomatis: file ekspor Meta Ads Manager (CSV/Excel), daftar kontak blast (nomor kontrak, nama, noresmi, plafon, tipe unit…), dan workbook 'WEBSITE MARKETING REPORT'." />
       <div className="grid gap-5 lg:grid-cols-2">
         <Card title="Impor Workbook Lengkap" subtitle="Satu file Excel berisi banyak sheet — tiap sheet dipetakan ke modul yang sesuai">
           <ul className="mb-4 list-disc space-y-1 pl-5 text-[13px] text-[var(--ink-2)]">

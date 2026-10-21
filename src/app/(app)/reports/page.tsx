@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Download, Printer } from "lucide-react";
 import { PageHeader } from "@/components/shell";
-import { useFilter, useMeta } from "@/components/providers";
+import { useFilter } from "@/components/providers";
 import { useAnalytics } from "@/components/use-analytics";
 import { Bars, BarList, Card, Funnel, InsightItem, MiniTable, SEGMENT_COLORS, SplitBar, TrendLines } from "@/components/charts";
 import { fmtDate, fmtPct, formatValue } from "@/lib/format";
@@ -23,12 +23,11 @@ type Key = (typeof REPORTS)[number]["key"];
 
 export default function ReportsPage() {
   const f = useFilter();
-  const { session } = useMeta();
   const { data: a } = useAnalytics();
   const [tab, setTab] = useState<Key>("exec");
   return (
     <div className="space-y-5">
-      <PageHeader title="Laporan" desc="Laporan siap kirim ke atasan/klien. Pilih jenis laporan, atur periode & brand di bagian atas, lalu cetak (Simpan sebagai PDF) atau unduh Excel lengkap (semua laporan dalam satu file).">
+      <PageHeader eyebrow="Laporan" title="Laporan" desc="Laporan siap kirim ke atasan/klien. Pilih jenis laporan, atur periode & brand di bagian atas, lalu cetak (Simpan sebagai PDF) atau unduh Excel lengkap (semua laporan dalam satu file).">
         <a className="btn btn-primary" href={`/api/report?${f.qs}`}>
           <Download size={15} /> Unduh Excel Lengkap
         </a>
@@ -48,8 +47,8 @@ export default function ReportsPage() {
       ) : (
         <div className="space-y-5">
           <div className="card p-5">
-            <div className="text-[12px] font-semibold uppercase tracking-wider text-[var(--muted)]">{session?.orgName}</div>
-            <div className="mt-1 text-[20px] font-bold">{REPORTS.find((r) => r.key === tab)?.label}</div>
+            <div className="eyebrow">Laporan digital marketing</div>
+            <div className="serif mt-1 text-[26px]">{REPORTS.find((r) => r.key === tab)?.label}</div>
             <div className="text-[13px] text-[var(--ink-2)]">
               Periode {fmtDate(a.period.from)} – {fmtDate(a.period.to)} · pembanding {fmtDate(a.period.prevFrom)} – {fmtDate(a.period.prevTo)} · {a.brand ?? "Semua brand"}
             </div>

@@ -8,16 +8,17 @@ import { fmtCompact, fmtDate, fmtMoney, fmtNum, fmtPct, formatValue } from "@/li
 import type { Insight } from "@/lib/analytics";
 
 export const SERIES = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s5)", "var(--s6)", "var(--s7)", "var(--s8)"];
-export const SEGMENT_COLORS: Record<string, string> = { HOT: "var(--s8)", WARM: "var(--s2)", COLD: "var(--s1)" };
-const AXIS = { fontSize: 11.5, fill: "#8b93a1" };
+export const SEGMENT_COLORS: Record<string, string> = { HOT: "var(--s1)", WARM: "var(--s4)", COLD: "var(--s2)" };
+const AXIS = { fontSize: 11.5, fill: "#8a8880" };
+const GRID = "#eeebe3";
 
 export function Card({ title, subtitle, action, children, className = "" }: { title?: string; subtitle?: string; action?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
-    <section className={`card p-5 ${className}`}>
+    <section className={`card min-w-0 p-5 ${className}`}>
       {(title || action) && (
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            {title && <h3 className="text-[14.5px] font-bold">{title}</h3>}
+            {title && <h3 className="serif text-[18px] font-medium leading-snug">{title}</h3>}
             {subtitle && <p className="mt-0.5 text-[12.5px] text-[var(--muted)]">{subtitle}</p>}
           </div>
           {action}
@@ -32,12 +33,12 @@ export function Kpi({ label, value, prev, format, invert, hint }: { label: strin
   const delta = prev && value !== null && value !== undefined && Number.isFinite(prev) && prev !== 0 ? value / prev - 1 : null;
   const good = delta !== null && (invert ? delta < 0 : delta > 0);
   return (
-    <div className="card p-4">
-      <div className="text-[12.5px] font-semibold text-[var(--ink-2)]">{label}</div>
-      <div className="mt-1.5 text-[24px] font-bold leading-tight tracking-tight">{value === null || value === undefined ? "–" : format === "money" ? fmtMoneyCompact(value) : formatValue(value, format)}</div>
+    <div className="px-4 py-4">
+      <div className="text-[12.5px] text-[var(--ink-2)]">{label}</div>
+      <div className="serif mt-1 text-[28px] leading-tight tracking-[-0.01em]">{value === null || value === undefined ? "–" : format === "money" ? fmtMoneyCompact(value) : formatValue(value, format)}</div>
       <div className="mt-1.5 flex items-center gap-1.5 text-[12px]">
         {delta !== null ? (
-          <span className={`inline-flex items-center gap-0.5 font-semibold ${Math.abs(delta) < 0.005 ? "text-[var(--muted)]" : good ? "text-[var(--good-ink)]" : "text-[var(--critical)]"}`}>
+          <span className={`inline-flex items-center gap-0.5 font-semibold ${Math.abs(delta) < 0.005 ? "text-[var(--muted)]" : good ? "text-[var(--good-ink)]" : "text-[var(--critical-ink)]"}`}>
             {delta >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
             {fmtPct(Math.abs(delta), 0)}
           </span>
@@ -78,8 +79,8 @@ export function TrendLines({ data, series, format = "number", height = 240, area
   return (
     <ResponsiveContainer width="100%" height={height}>
       <Chart data={data} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
-        <CartesianGrid stroke="#eceef1" vertical={false} />
-        <XAxis dataKey="date" tickFormatter={shortDate} tick={AXIS} tickLine={false} axisLine={{ stroke: "#d6d8dd" }} minTickGap={18} />
+        <CartesianGrid stroke={GRID} vertical={false} />
+        <XAxis dataKey="date" tickFormatter={shortDate} tick={AXIS} tickLine={false} axisLine={{ stroke: "#d6d2c4" }} minTickGap={18} />
         <YAxis tick={AXIS} tickLine={false} axisLine={false} width={format === "money" ? 56 : 36} tickFormatter={(v) => (format === "money" ? fmtCompact(v) : fmtCompact(v))} allowDecimals={false} />
         <Tooltip content={<TipBox fmt={fmt} />} cursor={{ stroke: "#c3c2b7", strokeWidth: 1 }} />
         {series.length > 1 && <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 12 }} />}
@@ -100,10 +101,10 @@ export function Bars({ data, series, format = "number", height = 240, xKey = "na
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 6, right: 8, left: 0, bottom: 0 }} barGap={2}>
-        <CartesianGrid stroke="#eceef1" vertical={false} />
-        <XAxis dataKey={xKey} tickFormatter={shortDate} tick={AXIS} tickLine={false} axisLine={{ stroke: "#d6d8dd" }} interval="preserveStartEnd" minTickGap={10} />
+        <CartesianGrid stroke={GRID} vertical={false} />
+        <XAxis dataKey={xKey} tickFormatter={shortDate} tick={AXIS} tickLine={false} axisLine={{ stroke: "#d6d2c4" }} interval="preserveStartEnd" minTickGap={10} />
         <YAxis tick={AXIS} tickLine={false} axisLine={false} width={format === "money" ? 56 : 36} tickFormatter={(v) => (format === "percent" ? fmtPct(v, 0) : fmtCompact(v))} />
-        <Tooltip content={<TipBox fmt={fmt} />} cursor={{ fill: "rgba(15,23,42,0.04)" }} />
+        <Tooltip content={<TipBox fmt={fmt} />} cursor={{ fill: "rgba(31,30,29,0.04)" }} />
         {series.length > 1 && <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 12 }} />}
         {series.map((s, i) => (
           <Bar key={s.key} dataKey={s.key} name={s.label} fill={SERIES[i]} radius={stacked ? 0 : [4, 4, 0, 0]} maxBarSize={36} stackId={stacked ? "a" : undefined} stroke="#fff" strokeWidth={stacked ? 1 : 0} />
@@ -128,7 +129,7 @@ export function BarList({ items, format = "number", color = "var(--s1)", sub }: 
               {sub && it.sub && <span className="ml-1.5 font-normal text-[var(--muted)]">{it.sub}</span>}
             </span>
           </div>
-          <div className="h-2 rounded-full bg-[#f1f3f6]">
+          <div className="h-2 rounded-full bg-[var(--track)]">
             <div className="h-2 rounded-full" style={{ width: `${(it.value / max) * 100}%`, background: color }} />
           </div>
         </div>
@@ -147,8 +148,8 @@ export function Funnel({ steps }: { steps: { name: string; value: number }[] }) 
         return (
           <div key={s.name} className="grid grid-cols-[110px_1fr_auto] items-center gap-3 text-[13px]">
             <span className="font-medium text-[var(--ink-2)]">{s.name}</span>
-            <div className="h-7 rounded-md bg-[#f1f3f6]">
-              <div className="flex h-7 items-center rounded-md px-2 text-[12px] font-semibold text-white" style={{ width: `${Math.max(2, (s.value / max) * 100)}%`, background: i < 3 ? "var(--s1)" : "#1c5cab" }}>
+            <div className="h-7 rounded-md bg-[var(--track)]">
+              <div className="flex h-7 items-center rounded-md px-2 text-[12px] font-semibold text-white" style={{ width: `${Math.max(2, (s.value / max) * 100)}%`, background: i < 3 ? "var(--s1)" : "var(--accent-ink)" }}>
                 {s.value / max > 0.18 ? fmtCompact(s.value) : ""}
               </div>
             </div>
@@ -189,14 +190,14 @@ export function SplitBar({ parts, colors }: { parts: { name: string; value: numb
 }
 
 export function Empty({ text = "Belum ada data" }: { text?: string }) {
-  return <div className="grid h-24 place-items-center rounded-lg bg-[var(--surface-2)] text-[13px] text-[var(--muted)]">{text}</div>;
+  return <div className="grid h-24 place-items-center rounded-lg border border-dashed border-[var(--line)] text-[13px] text-[var(--muted)]">{text}</div>;
 }
 
-const LEVEL_META: Record<Insight["level"], { label: string; icon: React.ComponentType<{ size?: number; className?: string }>; color: string; bg: string }> = {
-  critical: { label: "Kritis", icon: OctagonAlert, color: "var(--critical)", bg: "#fdf2f2" },
-  warning: { label: "Perlu perhatian", icon: AlertTriangle, color: "#b7791f", bg: "#fff8e8" },
-  info: { label: "Saran", icon: Info, color: "var(--accent)", bg: "#f0f6fd" },
-  good: { label: "Bagus", icon: CheckCircle2, color: "var(--good-ink)", bg: "#eff8ef" },
+const LEVEL_META: Record<Insight["level"], { label: string; icon: React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>; color: string; bg: string }> = {
+  critical: { label: "Kritis", icon: OctagonAlert, color: "var(--critical-ink)", bg: "#fff" },
+  warning: { label: "Perlu perhatian", icon: AlertTriangle, color: "var(--warning-ink)", bg: "#fff" },
+  info: { label: "Saran", icon: Info, color: "var(--ink-2)", bg: "#fff" },
+  good: { label: "Bagus", icon: CheckCircle2, color: "var(--good-ink)", bg: "#fff" },
 };
 
 export function InsightItem({ i, compact }: { i: Insight; compact?: boolean }) {
@@ -205,18 +206,18 @@ export function InsightItem({ i, compact }: { i: Insight; compact?: boolean }) {
   return (
     <div className="rounded-xl border border-[var(--line)] p-3.5" style={{ background: m.bg }}>
       <div className="flex items-start gap-3">
-        <Icon size={18} className="mt-0.5 shrink-0" />
+        <Icon size={17} className="mt-0.5 shrink-0" style={{ color: m.color }} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: m.color }}>
               {m.label}
             </span>
-            <span className="chip !bg-white/70 !text-[11px]">{i.area}</span>
+            <span className="text-[11px] text-[var(--muted)]">· {i.area}</span>
           </div>
-          <div className="mt-1 text-[14px] font-bold leading-snug">{i.title}</div>
+          <div className="mt-1 text-[14.5px] font-semibold leading-snug">{i.title}</div>
           {!compact && <div className="mt-1 text-[13px] text-[var(--ink-2)]">{i.detail}</div>}
-          <div className="mt-2 text-[13px]">
-            <span className="font-semibold">➜ Tindakan: </span>
+          <div className="mt-2 rounded-md bg-[var(--surface-2)] px-2.5 py-1.5 text-[13px] leading-relaxed">
+            <span className="font-semibold text-[var(--accent-ink)]">Lakukan: </span>
             {i.action}
           </div>
         </div>
@@ -226,16 +227,16 @@ export function InsightItem({ i, compact }: { i: Insight; compact?: boolean }) {
 }
 
 export function Score({ label, value }: { label: string; value: number | null }) {
-  const tone = value === null ? "#c3c2b7" : value >= 70 ? "var(--good)" : value >= 45 ? "var(--warning)" : "var(--critical)";
+  const tone = value === null ? "#d6d2c4" : value >= 70 ? "var(--good)" : value >= 45 ? "var(--warning)" : "var(--critical)";
   const word = value === null ? "Belum ada data" : value >= 70 ? "Sehat" : value >= 45 ? "Cukup" : "Perlu perbaikan";
   return (
     <div className="flex items-center gap-3">
       <div className="relative h-12 w-12 shrink-0">
         <svg viewBox="0 0 36 36" className="h-12 w-12 -rotate-90">
-          <circle cx="18" cy="18" r="15.5" fill="none" stroke="#eceef1" strokeWidth="4" />
-          <circle cx="18" cy="18" r="15.5" fill="none" stroke={tone} strokeWidth="4" strokeDasharray={`${((value ?? 0) / 100) * 97.4} 97.4`} strokeLinecap="round" />
+          <circle cx="18" cy="18" r="15.5" fill="none" stroke="#eeebe3" strokeWidth="3.5" />
+          <circle cx="18" cy="18" r="15.5" fill="none" stroke={tone} strokeWidth="3.5" strokeDasharray={`${((value ?? 0) / 100) * 97.4} 97.4`} strokeLinecap="round" />
         </svg>
-        <span className="absolute inset-0 grid place-items-center text-[13px] font-bold tnum">{value ?? "–"}</span>
+        <span className="serif absolute inset-0 grid place-items-center text-[16px] tnum">{value ?? "–"}</span>
       </div>
       <div>
         <div className="text-[13px] font-semibold">{label}</div>

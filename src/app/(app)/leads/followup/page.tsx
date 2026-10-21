@@ -51,7 +51,7 @@ export default function FollowUpBoard() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Papan Follow Up" desc="Semua lead terbuka 90 hari terakhir, dikelompokkan berdasarkan tahap follow up. Kartu merah = sudah jatuh tempo. Klik ✎ untuk menulis hasil follow up; tombol status untuk menutup lead.">
+      <PageHeader eyebrow="Leads" title="Papan Follow Up" desc="Semua lead terbuka 90 hari terakhir, dikelompokkan berdasarkan tahap follow up. Kartu merah = sudah jatuh tempo. Klik ✎ untuk menulis hasil follow up; tombol status untuk menutup lead.">
         <label className="flex items-center gap-2 text-[13px]">
           <input type="checkbox" checked={onlyDue} onChange={(e) => setOnlyDue(e.target.checked)} /> Hanya yang jatuh tempo
         </label>
@@ -60,10 +60,10 @@ export default function FollowUpBoard() {
         {COLS.map((c) => {
           const items = open.filter((x) => x.stage === c.stage);
           return (
-            <div key={c.stage} className="rounded-2xl bg-[#eef0f3] p-3">
+            <div key={c.stage} className="rounded-xl bg-[var(--sidebar)] p-3">
               <div className="mb-3 flex items-baseline justify-between px-1">
                 <div>
-                  <div className="text-[14px] font-bold">{c.title}</div>
+                  <div className="serif text-[17px]">{c.title}</div>
                   <div className="text-[11.5px] text-[var(--muted)]">{c.hint}</div>
                 </div>
                 <span className="chip !bg-white">
@@ -74,7 +74,7 @@ export default function FollowUpBoard() {
                 {items.slice(0, 60).map(({ r, age, due }) => {
                   const wa = String(r.phone ?? "").replace(/\D/g, "").replace(/^0/, "62");
                   return (
-                    <div key={r.id} className={`rounded-xl border bg-white p-3 ${due ? "border-[#f3c4c4]" : "border-[var(--line)]"}`}>
+                    <div key={r.id} className={`rounded-xl border bg-white p-3 ${due ? "border-[#e2b7a5]" : "border-[var(--line)]"}`}>
                       <div className="flex items-center gap-2">
                         {r.segment ? <Chip value={String(r.segment)} /> : null}
                         <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold">{String(r.name ?? r.phone ?? "(tanpa nama)")}</span>
@@ -83,7 +83,7 @@ export default function FollowUpBoard() {
                         </button>
                       </div>
                       <div className="mt-1 text-[12px] text-[var(--ink-2)]">
-                        {fmtDate(r.chat_date)} · <span className={due ? "font-semibold text-[var(--critical)]" : ""}>{age} hari</span> · {String(r.source ?? "–")}
+                        {fmtDate(r.chat_date)} · <span className={due ? "font-semibold text-[var(--critical-ink)]" : ""}>{age} hari</span> · {String(r.source ?? "–")}
                         {r.brand ? ` · ${r.brand}` : ""}
                       </div>
                       {r.need ? <div className="mt-1.5 line-clamp-2 text-[12.5px]">{String(r.need)}</div> : null}
@@ -102,7 +102,7 @@ export default function FollowUpBoard() {
                     </div>
                   );
                 })}
-                {!items.length && <div className="rounded-xl border border-dashed border-[#d6d8dd] p-4 text-center text-[12.5px] text-[var(--muted)]">Kosong</div>}
+                {!items.length && <div className="rounded-xl border border-dashed border-[#d6d2c4] p-4 text-center text-[12.5px] text-[var(--muted)]">Kosong</div>}
               </div>
             </div>
           );

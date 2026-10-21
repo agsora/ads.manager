@@ -24,7 +24,7 @@ export const GET = handle(async (req: Request) => {
 
   const sum = wb.addWorksheet("Ringkasan");
   sum.columns = [{ width: 16 }, { width: 42 }, { width: 22 }, { width: 22 }];
-  sum.addRow([`Laporan Digital Marketing — ${s.orgName}`]).font = { bold: true, size: 14 };
+  sum.addRow(["Laporan Digital Marketing"]).font = { bold: true, size: 14 };
   sum.addRow([`Periode ${from} s/d ${to} (pembanding ${a.period.prevFrom} s/d ${a.period.prevTo})${brand ? ` · Brand: ${brand}` : " · Semua brand"} · dibuat ${t}`]);
   sum.addRow([]);
   const head = sum.addRow(["Area", "Metrik", "Periode Ini", "Periode Lalu"]);

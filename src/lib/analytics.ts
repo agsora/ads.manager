@@ -58,8 +58,9 @@ function adsKpis(ads: Row[]) {
     costPerConv: div(spend, conversations),
     roas: div(revenue, revSpend),
     frequency: div(impressions, reach),
-    campaigns: ads.length,
-    running: ads.filter((r) => r.status === "Running").length,
+    // daily rows from a Meta export belong to one campaign: count distinct campaigns
+    campaigns: new Set(ads.map((r) => `${r.brand}|${r.platform}|${r.campaign_name}`)).size,
+    running: new Set(ads.filter((r) => r.status === "Running").map((r) => `${r.brand}|${r.platform}|${r.campaign_name}`)).size,
   };
 }
 
@@ -163,7 +164,7 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
   const prevFrom = addDays(prevTo, -(cmpLen - 1));
 
   const load = (key: string, f: string, t: string) => listRows(orgId, RESOURCE_MAP[key], { from: f, to: t, brand });
-  const [adsAll, leadsAll, contentAll, reviewsAll, blastAll, inflAll, kpiRows, walletRows, events, followers, openLeads, upcomingContent] =
+  const [adsAll, leadsAll, contentAll, reviewsAll, blastAll, inflAll, kpiRows, walletRows, events, followers, openLeads, upcomingContent, contactsAll] =
     await Promise.all([
       // campaigns may start before the window and still spend in it
       load("ads", addDays(prevFrom, -90), to),
@@ -178,6 +179,7 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
       load("followers", addDays(from, -120), to),
       load("leads", addDays(today, -60), today),
       load("content", today, addDays(today, 7)),
+      load("contacts", prevFrom, to),
     ]);
 
   const overlapAds = (f: string, t: string) =>
@@ -270,10 +272,17 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
   const byPlatform = breakdown(ads, "platform");
   const byBrand = breakdown(ads, "brand");
   const byObjective = breakdown(ads, "objective");
-  const campaigns = ads
-    .map((r) => {
-      const k = adsKpis([r]);
-      return { id: r.id, name: String(r.campaign_name), brand: r.brand, platform: r.platform, status: r.status, objective: r.objective, ...k, end_date: r.end_date };
+  const campaigns = [...groupBy(ads, (r) => `${r.brand}|${r.platform}|${r.campaign_name}`).values()]
+    .map((rs) => {
+      const k = adsKpis(rs);
+      const starts = rs.map((r) => String(r.start_date ?? "")).filter(Boolean).sort();
+      const ends = rs.map((r) => String(r.end_date ?? r.start_date ?? "")).filter(Boolean).sort();
+      const latest = [...rs].sort((a, b) => String(b.end_date ?? b.start_date).localeCompare(String(a.end_date ?? a.start_date)))[0];
+      return {
+        id: latest.id, name: String(latest.campaign_name), brand: latest.brand, platform: latest.platform,
+        status: rs.some((r) => r.status === "Running") ? "Running" : latest.status, objective: latest.objective,
+        ...k, days: rs.length, start_date: starts[0], end_date: ends[ends.length - 1],
+      };
     })
     .sort((a, b) => b.spend - a.spend);
 
@@ -386,6 +395,44 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
   const influencerList = infl
     .map((r) => ({ id: r.id, name: String(r.influencer), platform: r.platform, fee: n(r.fee), views: n(r.views), engagement: n(r.engagement), leads: n(r.leads), revenue: n(r.revenue), cpe: div(n(r.fee), n(r.engagement)), roi: n(r.fee) && n(r.revenue) ? (n(r.revenue) - n(r.fee)) / n(r.fee) : null }))
     .sort((a, b) => (b.roi ?? -9) - (a.roi ?? -9));
+
+  // ---- blast contacts (target list format: contract, unit type, plafon, status)
+  const contacts = contactsAll.filter((r) => inRange(r.blast_date, from, to));
+  const SENT = ["Terkirim", "Dibaca", "Dibalas", "Tertarik", "Deal", "Tidak tertarik"];
+  const RESPONDED = ["Dibalas", "Tertarik", "Deal", "Tidak tertarik"];
+  const contactKpis = (rows: Row[]) => {
+    const sent = rows.filter((r) => SENT.includes(String(r.status))).length;
+    const responded = rows.filter((r) => RESPONDED.includes(String(r.status))).length;
+    const interested = rows.filter((r) => r.status === "Tertarik" || r.status === "Deal").length;
+    return {
+      contacts: rows.length,
+      ready: rows.filter((r) => lc(r.blast) !== "no").length,
+      pending: rows.filter((r) => lc(r.blast) !== "no" && (!r.status || r.status === "Belum dikirim")).length,
+      sent,
+      responded,
+      interested,
+      deals: rows.filter((r) => r.status === "Deal").length,
+      inactive: rows.filter((r) => r.status === "Nomor tidak aktif").length,
+      responseRate: div(responded, sent),
+      interestRate: div(interested, sent),
+      potential: sum(rows.filter((r) => lc(r.blast) !== "no"), "official_rec") || sum(rows.filter((r) => lc(r.blast) !== "no"), "recommended"),
+      interestedValue: sum(rows.filter((r) => r.status === "Tertarik" || r.status === "Deal"), "official_rec"),
+    };
+  };
+  const contactsByBatch = [...groupBy(contacts, (r) => String(r.batch ?? "").trim()).entries()]
+    .map(([name, rs]) => ({ name, ...contactKpis(rs), date: rs.map((r) => String(r.blast_date)).sort()[0] }))
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const contactsByUnit = [...groupBy(contacts, (r) => String(r.unit_type ?? "").trim()).entries()]
+    .map(([name, rs]) => ({ name, ...contactKpis(rs) }))
+    .sort((a, b) => b.contacts - a.contacts);
+  const contactsByYear = [...groupBy(contacts, (r) => String(r.year ?? "").trim()).entries()]
+    .map(([name, rs]) => ({ name, ...contactKpis(rs) }))
+    .sort((a, b) => b.name.localeCompare(a.name));
+  const contactStatus = countBy(contacts, "status");
+  const leadPhones = new Set(leadsAll.concat(openLeads).map((r) => String(r.phone ?? "").replace(/\D/g, "").replace(/^62/, "0")));
+  const notConverted = contacts.filter(
+    (r) => (r.status === "Tertarik" || r.status === "Dibalas") && !leadPhones.has(String(r.phone ?? "").replace(/\D/g, "").replace(/^62/, "0")),
+  );
 
   // ---- wallets (balance per brand+platform for the month of `to`)
   const walletMonth = monthStart(to);
@@ -600,6 +647,26 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
   const unansweredNeg = unanswered.filter((u) => u.rating > 0 && u.rating <= 3);
   if (unansweredNeg.length) push({ level: "critical", area: "Reputasi", title: `${unansweredNeg.length} ulasan negatif belum dibalas`, detail: unansweredNeg.slice(0, 3).map((u) => `${u.reviewer ?? "Anonim"} (${u.rating}★)`).join(", "), action: "Balas hari ini dengan permintaan maaf + solusi + ajakan menghubungi CS." });
 
+  // BLAST CONTACTS
+  const K = contactKpis(contacts);
+  if (K.contacts) {
+    if (K.pending && contacts.some((r) => String(r.blast_date) <= today && (!r.status || r.status === "Belum dikirim")))
+      push({ level: "warning", area: "WA Blast", title: `${K.pending} kontak blast belum dikirim / belum diupdate`, detail: `Dari ${K.ready} kontak yang ditandai blast = yes.`, action: "Kirim blast lalu update status (Terkirim/Dibaca/Dibalas/Tertarik) agar respon per batch & tipe unit terukur." });
+    if (notConverted.length)
+      push({ level: "critical", area: "WA Blast", title: `${notConverted.length} kontak membalas/tertarik belum masuk WA Leads`, detail: notConverted.slice(0, 4).map((r) => `${r.name} (${r.unit_type ?? "-"})`).join(", "), action: "Pilih kontak tersebut di tab Kontak Blast lalu klik 'Jadikan Leads' agar langsung masuk antrian follow up." });
+    if (K.sent >= 20 && K.inactive / K.sent > 0.1)
+      push({ level: "warning", area: "WA Blast", title: `${fmtPct(K.inactive / K.sent, 0)} nomor tidak aktif`, detail: `${K.inactive} dari ${K.sent} kontak terkirim.`, action: "Perbarui nomor dari data kontrak terbaru (nomor resmi 62…), atau minta update nomor saat konsumen datang ke kantor." });
+    const units = contactsByUnit.filter((u) => u.sent >= 10 && u.name);
+    if (units.length >= 2) {
+      const best = [...units].sort((a, b) => (b.interestRate ?? 0) - (a.interestRate ?? 0))[0];
+      push({ level: "info", area: "WA Blast", title: `Tipe unit paling responsif: ${best.name}`, detail: units.slice(0, 5).map((u) => `${u.name} ${fmtPct(u.interestRate, 0)} tertarik`).join(" · "), action: `Prioritaskan blast & iklan fasilitas dana untuk pemilik ${best.name}; uji pesan berbeda untuk tipe dengan respon rendah.` });
+    }
+    if (K.interestRate !== null && K.sent >= 20) {
+      if (K.interestRate < 0.03) push({ level: "warning", area: "WA Blast", title: `Minat dari blast kontak rendah (${fmtPct(K.interestRate, 1)})`, detail: `${K.interested} tertarik dari ${K.sent} terkirim.`, action: "Sebut nama & tipe unit konsumen, tampilkan nominal rekomendasi plafon (mis. 'cair s/d Rp 16,5 jt'), dan beri CTA balas 'YA'." });
+      else if (K.interestRate >= 0.08) push({ level: "good", area: "WA Blast", title: `Blast kontak efektif (${fmtPct(K.interestRate, 1)} tertarik)`, detail: `Potensi pembiayaan dari yang tertarik ${fmtMoney(K.interestedValue)}.`, action: "Ulangi format pesan ini untuk batch berikutnya dan follow up yang tertarik dalam 1×24 jam." });
+    }
+  }
+
   // INFLUENCER
   const I = kpis.influencer;
   if (I.collabs) {
@@ -665,6 +732,12 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     unanswered,
     blastList,
     blastFunnel,
+    contactKpis: contactKpis(contacts),
+    contactsByBatch,
+    contactsByUnit,
+    contactsByYear,
+    contactStatus,
+    notConverted: notConverted.slice(0, 50).map((r) => ({ id: r.id, name: r.name, phone: r.phone, unit_type: r.unit_type, status: r.status })),
     influencerList,
     wallets,
     kpiProgress,

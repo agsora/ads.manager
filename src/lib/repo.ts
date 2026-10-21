@@ -44,6 +44,29 @@ export function cleanInput(r: Resource, body: Record<string, unknown>, fromImpor
   return out;
 }
 
+/** Fill derived values for a complete new row (create / import), never for partial updates. */
+export function applyDerive(r: Resource, data: Record<string, unknown>) {
+  return r.derive ? r.derive({ ...data }) : data;
+}
+
+/** Delete rows that an import is about to replace (same values for the resource's upsertKeys); returns the old rows. */
+export async function deleteMatching(orgId: number, r: Resource, rows: Record<string, unknown>[]): Promise<Row[]> {
+  if (!r.upsertKeys?.length || !rows.length) return [];
+  const keys = r.upsertKeys;
+  const tuples = rows.filter((x) => keys.some((k) => x[k] !== null && x[k] !== undefined && x[k] !== ""));
+  const deleted: Row[] = [];
+  for (let i = 0; i < tuples.length; i += 500) {
+    const chunk = tuples.slice(i, i + 500);
+    const cols = keys.map((k) => chunk.map((x) => (x[k] === null || x[k] === undefined ? "" : String(x[k]))));
+    const res = await q<Row>(
+      `DELETE FROM ${r.table} WHERE org_id = $1 AND (${keys.map((k) => `COALESCE(${k}::text, '')`).join(", ")}) IN (SELECT * FROM unnest(${keys.map((_, j) => `$${j + 2}::text[]`).join(", ")})) RETURNING *`,
+      [orgId, ...cols],
+    );
+    deleted.push(...res);
+  }
+  return deleted;
+}
+
 export function validate(r: Resource, data: Record<string, unknown>): string | null {
   for (const f of r.fields) {
     if (f.required && (data[f.key] === null || data[f.key] === undefined || data[f.key] === "")) return `${f.label} wajib diisi`;

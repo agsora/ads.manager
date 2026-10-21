@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { handle, HttpError, requireSession } from "@/lib/auth";
 import { getResource } from "@/lib/resources";
-import { cleanInput, insertRow, listRows, validate } from "@/lib/repo";
+import { applyDerive, cleanInput, insertRow, listRows, validate } from "@/lib/repo";
 import { logActivity, q } from "@/lib/db";
 
 type Ctx = { params: Promise<{ resource: string }> };
@@ -24,7 +24,7 @@ export const POST = handle(async (req: Request, ctx: Ctx) => {
   const s = await requireSession();
   const r = getResource((await ctx.params).resource);
   if (!r) throw new HttpError(404, "Modul tidak ditemukan");
-  const data = cleanInput(r, await req.json());
+  const data = applyDerive(r, cleanInput(r, await req.json()));
   const err = validate(r, data);
   if (err) throw new HttpError(400, err);
   if (typeof data.brand === "string" && data.brand)

@@ -1,7 +1,7 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { RESOURCES, type FieldType } from "./resources";
 
-const SCHEMA_VERSION = "7";
+const SCHEMA_VERSION = "8";
 
 // Keep DATE/TIMESTAMP as raw strings (no timezone shifting) and NUMERIC/INT8 as numbers.
 const RAW = (v: string) => v;
@@ -127,4 +127,13 @@ export async function logActivity(orgId: number, user: string, action: string, d
   } catch {
     /* non-critical */
   }
+}
+
+export async function getSetting(key: string) {
+  const rows = await q<{ value: string }>(`SELECT value FROM app_meta WHERE key = $1`, [key]);
+  return rows[0]?.value ?? null;
+}
+
+export async function setSetting(key: string, value: string) {
+  await q(`INSERT INTO app_meta (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [key, value]);
 }

@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import { RESOURCES, type Resource, type Row } from "./resources";
-import { cleanInput } from "./repo";
+import { applyDerive, cleanInput } from "./repo";
 import { toNumber, toISODate } from "./coerce";
 
 export interface Sheet {
@@ -112,7 +112,7 @@ export interface ParsedSheet {
   matched: string[];
 }
 
-export function parseSheet(sheet: Sheet, r: Resource, defaultBrand?: string | null): ParsedSheet | null {
+export function parseSheet(sheet: Sheet, r: Resource, defaultBrand?: string | null, defaultPlatform?: string | null): ParsedSheet | null {
   // find best header row in first 15 rows
   let headerIdx = -1;
   let bestMap = new Map<string, { col: number; score: number }>();
@@ -162,13 +162,14 @@ export function parseSheet(sheet: Sheet, r: Resource, defaultBrand?: string | nu
       continue;
     }
     if (!clean.brand && r.fields.some((f) => f.key === "brand") && defaultBrand) clean.brand = defaultBrand;
+    if (!clean.platform && r.fields.some((f) => f.key === "platform") && defaultPlatform) clean.platform = defaultPlatform;
     // fill required date from another date if missing
     if (!clean[r.dateField]) {
       const alt = r.fields.find((f) => f.type === "date" && clean[f.key]);
       clean[r.dateField] = alt ? clean[alt.key] : new Date().toISOString().slice(0, 10);
     }
     for (const f of r.fields) if (!(f.key in clean)) clean[f.key] = null;
-    out.push(clean);
+    out.push(applyDerive(r, clean));
   }
   return { sheet: sheet.name, resource: r, rows: out, skipped, matched: [...bestMap.keys()] };
 }
