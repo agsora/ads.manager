@@ -2,6 +2,7 @@
 export const DRIVE_SCRIPT = (rootId: string) => `// Ads Manager — jembatan upload ke Google Drive (jalan atas nama akun Anda)
 const SECRET = 'GANTI_DENGAN_RAHASIA_PANJANG';   // isi sama persis dengan DRIVE_SCRIPT_SECRET di Vercel
 const ROOT_ID = '${rootId}';  // folder utama di Drive
+const SHARE_WITH_LINK = true;  // true = file bisa dilihat siapa pun yang punya link, supaya preview di kalender tampil untuk seluruh tim
 
 function doGet() { return out({ ok: true, service: 'ads-manager-drive' }); }
 
@@ -32,6 +33,7 @@ function save(path, name, mime, data) {
   const folder = ensurePath(path);
   const blob = Utilities.newBlob(Utilities.base64Decode(data), mime || 'application/octet-stream', name);
   const f = folder.createFile(blob);
+  if (SHARE_WITH_LINK) { try { f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {} }
   return out({ ok: true, id: f.getId(), url: f.getUrl(), size: f.getSize(), folderUrl: folder.getUrl() });
 }
 

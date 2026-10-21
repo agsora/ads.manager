@@ -13,9 +13,11 @@ export const GET = handle(async (req: Request) => {
   const t = await resolveTarget(s.org, resource, id).catch((e) => {
     throw new HttpError(404, (e as Error).message);
   });
+  const own = u.searchParams.get("scope") === "record";
   const files = await q(
-    `SELECT id, name, url, mime, size, uploaded_by, created_at FROM drive_files WHERE org_id = $1 AND folder_path = $2 ORDER BY created_at DESC`,
-    [s.org, t.path],
+    `SELECT id, name, url, drive_id, mime, size, uploaded_by, created_at FROM drive_files
+      WHERE org_id = $1 AND ${own ? "resource = $2 AND record_id = $3" : "folder_path = $2"} ORDER BY created_at DESC`,
+    own ? [s.org, resource, id] : [s.org, t.path],
   );
   return NextResponse.json({ enabled: driveEnabled(), path: t.path, label: t.label, files, rootUrl: rootFolderUrl() });
 });

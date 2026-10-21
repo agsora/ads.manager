@@ -2,109 +2,63 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ExternalLink, FileText, FolderOpen, Image as ImageIcon, Trash2, UploadCloud, Video } from "lucide-react";
+import { ExternalLink, FolderOpen, Trash2, UploadCloud } from "lucide-react";
 import { api, useToast } from "./providers";
+import { FileThumb, FileViewer } from "./file-preview";
+import { uploadToDrive, type DriveFileLite } from "@/lib/drive-client";
 import { fmtDate } from "@/lib/format";
 
-interface DriveFile {
-  id: number;
-  name: string;
-  url: string;
-  mime: string | null;
-  size: number | null;
-  uploaded_by: string | null;
-  created_at: string;
-}
 interface Listing {
   enabled: boolean;
   path: string;
   label: string;
-  files: DriveFile[];
+  files: DriveFileLite[];
   rootUrl: string | null;
 }
-interface Grant {
-  grant: string;
-  sig: string;
-  scriptUrl: string;
-  path: string;
-  name: string;
-}
 
-const MAX = 25 * 1024 * 1024;
+const size = (n: number | null | undefined) => (!n ? "" : n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
-const toBase64 = (buf: ArrayBuffer) => {
-  let s = "";
-  const bytes = new Uint8Array(buf);
-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(s);
-};
-const size = (n: number | null) => (!n ? "" : n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
-
-function FileIcon({ mime }: { mime: string | null }) {
-  const c = "text-[var(--muted)]";
-  if (mime?.startsWith("image/")) return <ImageIcon size={16} className={c} />;
-  if (mime?.startsWith("video/")) return <Video size={16} className={c} />;
-  return <FileText size={16} className={c} />;
-}
-
-/** Files of one record: uploads go to Drive in a Brand / Campaign / kind folder. */
-export function FileAttachments({ resource, recordId, onChanged }: { resource: string; recordId: number; onChanged?: () => void }) {
+/** Files of one record with thumbnails + preview. Uploads go to Drive in a Brand / Campaign / kind folder. */
+export function FileAttachments({ resource, recordId, onChanged, scope }: { resource: string; recordId: number; onChanged?: () => void; /** "record": only this record's files; default: everything in its folder */ scope?: "record" }) {
   const toast = useToast();
   const input = useRef<HTMLInputElement>(null);
   const [data, setData] = useState<Listing | null>(null);
   const [busy, setBusy] = useState("");
   const [drag, setDrag] = useState(false);
+  const [view, setView] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setData(await api<Listing>(`/api/drive/files?resource=${resource}&id=${recordId}`, "GET"));
+      setData(await api<Listing>(`/api/drive/files?resource=${resource}&id=${recordId}${scope ? `&scope=${scope}` : ""}`, "GET"));
     } catch {
       setData(null);
     }
-  }, [resource, recordId]);
+  }, [resource, recordId, scope]);
   useEffect(() => {
     load();
   }, [load]);
 
-  const upload = async (file: File) => {
-    if (file.size > MAX) return toast("Ukuran file maksimal 25 MB", "err");
-    setBusy(file.name);
-    try {
-      const g = await api<Grant>("/api/drive/grant", "POST", { resource, recordId, filename: file.name, size: file.size });
-      let res: { ok?: boolean; id?: string; url?: string; size?: number; folderUrl?: string; error?: string };
+  const upload = async (files: FileList | File[]) => {
+    for (const file of Array.from(files)) {
+      setBusy(file.name);
       try {
-        const r = await fetch(g.scriptUrl, {
-          method: "POST",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ grant: g.grant, sig: g.sig, mime: file.type, data: toBase64(await file.arrayBuffer()) }),
-        });
-        res = await r.json();
-      } catch {
-        // the browser could not reach Apps Script directly: small files can go through our server
-        if (file.size > 4 * 1024 * 1024) throw new Error("Upload langsung ke Drive gagal (cek deploy Apps Script: akses 'Anyone'). File di atas 4 MB tidak bisa lewat server.");
-        const fd = new FormData();
-        fd.append("file", file);
-        fd.append("resource", resource);
-        fd.append("recordId", String(recordId));
-        res = await api("/api/drive/proxy", "POST", fd);
+        const r = await uploadToDrive(resource, recordId, file);
+        toast(`${r.name} tersimpan di Drive`);
+      } catch (e) {
+        toast((e as Error).message, "err");
       }
-      if (res.error || !res.id || !res.url) throw new Error(res.error ?? "Upload gagal");
-      await api("/api/drive/register", "POST", { resource, recordId, path: g.path, name: g.name, driveId: res.id, url: res.url, folderUrl: res.folderUrl, mime: file.type, size: res.size ?? file.size });
-      toast(`${g.name} tersimpan di Drive`);
-      await load();
-      onChanged?.();
-    } catch (e) {
-      toast((e as Error).message, "err");
-    } finally {
-      setBusy("");
     }
+    setBusy("");
+    await load();
+    onChanged?.();
   };
 
-  const remove = async (f: DriveFile) => {
+  const remove = async (f: DriveFileLite) => {
     if (!confirm(`Hapus "${f.name}"? File dipindah ke sampah Google Drive.`)) return;
     try {
       await api(`/api/drive/files/${f.id}`, "DELETE");
       await load();
+      onChanged?.();
     } catch (e) {
       toast((e as Error).message, "err");
     }
@@ -130,13 +84,15 @@ export function FileAttachments({ resource, recordId, onChanged }: { resource: s
         </span>
       </div>
       <div
-        onDragOver={(e) => (e.preventDefault(), setDrag(true))}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDrag(true);
+        }}
         onDragLeave={() => setDrag(false)}
         onDrop={(e) => {
           e.preventDefault();
           setDrag(false);
-          const f = e.dataTransfer.files?.[0];
-          if (f) upload(f);
+          if (e.dataTransfer.files?.length) upload(e.dataTransfer.files);
         }}
         className={`flex flex-wrap items-center gap-3 rounded-lg border-2 border-dashed px-4 py-3 ${drag ? "border-[var(--accent)] bg-[var(--accent-soft)]" : "border-[var(--line)]"}`}
       >
@@ -148,33 +104,37 @@ export function FileAttachments({ resource, recordId, onChanged }: { resource: s
         <input
           ref={input}
           type="file"
+          multiple
           className="hidden"
           onChange={(e) => {
-            const f = e.target.files?.[0];
+            const fl = e.target.files;
+            if (fl?.length) upload(Array.from(fl));
             e.target.value = "";
-            if (f) upload(f);
           }}
         />
       </div>
       {data.files.length > 0 && (
-        <ul className="mt-3 divide-y divide-[var(--grid)] rounded-lg border border-[var(--line)]">
-          {data.files.map((f) => (
-            <li key={f.id} className="flex items-center gap-3 px-3 py-2 text-[13px]">
-              <FileIcon mime={f.mime} />
-              <a href={f.url} target="_blank" rel="noreferrer" className="inline-flex min-w-0 flex-1 items-center gap-1.5 truncate font-medium hover:text-[var(--accent-ink)]">
-                <span className="truncate">{f.name}</span>
-                <ExternalLink size={12} className="shrink-0 opacity-50" />
+        <ul className="mt-3 space-y-2">
+          {data.files.map((f, i) => (
+            <li key={f.id} className="flex items-center gap-3 rounded-lg border border-[var(--line)] p-2 text-[13px]">
+              <FileThumb f={f} size={48} onClick={() => setView(i)} />
+              <button type="button" onClick={() => setView(i)} className="min-w-0 flex-1 truncate text-left font-medium hover:text-[var(--accent-ink)]">
+                {f.name}
+                <span className="mt-0.5 block text-[12px] font-normal text-[var(--muted)]">
+                  {size(f.size)} · {f.uploaded_by} · {fmtDate(f.created_at)}
+                </span>
+              </button>
+              <a href={f.url} target="_blank" rel="noreferrer" className="rounded p-1.5 text-[var(--muted)] hover:bg-[var(--surface-2)]" aria-label="Buka di Drive" title="Buka di Drive">
+                <ExternalLink size={14} />
               </a>
-              <span className="hidden shrink-0 text-[12px] text-[var(--muted)] sm:inline">
-                {size(f.size)} · {f.uploaded_by} · {fmtDate(f.created_at)}
-              </span>
-              <button type="button" className="rounded p-1 text-[var(--muted)] hover:bg-[#fbefec] hover:text-[var(--critical-ink)]" onClick={() => remove(f)} aria-label="Hapus file">
+              <button type="button" className="rounded p-1.5 text-[var(--muted)] hover:bg-[#fbefec] hover:text-[var(--critical-ink)]" onClick={() => remove(f)} aria-label="Hapus file">
                 <Trash2 size={14} />
               </button>
             </li>
           ))}
         </ul>
       )}
+      {view !== null && <FileViewer files={data.files} start={view} onClose={() => setView(null)} />}
     </div>
   );
 }

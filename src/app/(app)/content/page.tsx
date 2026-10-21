@@ -7,6 +7,9 @@ import { ResourceTable } from "@/components/resource-table";
 import { api, useFetch, useFilter, useToast } from "@/components/providers";
 import { useAnalytics } from "@/components/use-analytics";
 import { ResourceForm } from "@/components/resource-form";
+import { ContentDrawer } from "@/components/content-drawer";
+import { uploadToDrive, thumbUrl, isImage, type DriveFileLite } from "@/lib/drive-client";
+import { Paperclip } from "lucide-react";
 import { Bars, BarList, Card, Kpi, MiniTable, SplitBar } from "@/components/charts";
 import { RESOURCE_MAP, type Row } from "@/lib/resources";
 import { addDays, monthEnd, monthStart, todayISO, fmtPct } from "@/lib/format";
@@ -166,6 +169,24 @@ function Calendar() {
   const events = useFetch<{ rows: Row[] }>(`/api/r/events?from=${addDays(from, -31)}&to=${to}${bq}`);
   const [editing, setEditing] = useState<{ row: Row | null; date?: string } | null>(null);
   const [editEvent, setEditEvent] = useState<Row | null>(null);
+  const [detail, setDetail] = useState<Row | null>(null);
+  const [dropOn, setDropOn] = useState<number | null>(null);
+  const toast = useToast();
+  const [tick, setTick] = useState(0);
+  const filesQ = useFetch<{ enabled: boolean; files: (DriveFileLite & { record_id: number })[] }>(`/api/drive/by-record?resource=content&from=${from}&to=${to}&_=${tick}`);
+  const filesOf = (id: unknown) => (filesQ.data?.files ?? []).filter((x) => x.record_id === Number(id));
+  const dropFile = async (c: Row, list: FileList) => {
+    for (const file of Array.from(list)) {
+      try {
+        const r = await uploadToDrive("content", Number(c.id), file);
+        toast(`${r.name} tersimpan di Drive`);
+      } catch (e) {
+        toast((e as Error).message, "err");
+      }
+    }
+    setTick((t) => t + 1);
+    content.reload();
+  };
 
   const cells = useMemo(() => {
     const startDow = new Date(from + "T00:00:00Z").getUTCDay();
@@ -234,9 +255,37 @@ function Calendar() {
                     </button>
                   ))}
                   {byDate(d).map((c) => (
-                    <button key={c.id} onClick={() => setEditing({ row: c })} className="mb-1 flex w-full items-center gap-1.5 rounded border border-[var(--line)] bg-white px-1.5 py-0.5 text-left text-[11.5px] hover:border-[var(--accent)]" title={`${c.title} · ${c.channel ?? ""} · ${c.status ?? ""}`}>
-                      <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: STATUS_DOT[String(c.status)] ?? "#d6d2c4" }} />
-                      <span className="truncate">{String(c.title)}</span>
+                    <button
+                      key={c.id}
+                      onClick={() => setDetail(c)}
+                      onDragOver={(e) => {
+                        if (filesQ.data?.enabled) {
+                          e.preventDefault();
+                          setDropOn(Number(c.id));
+                        }
+                      }}
+                      onDragLeave={() => setDropOn(null)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setDropOn(null);
+                        if (e.dataTransfer.files?.length) dropFile(c, e.dataTransfer.files);
+                      }}
+                      className={`mb-1 block w-full overflow-hidden rounded border bg-white text-left text-[11.5px] hover:border-[var(--accent)] ${dropOn === Number(c.id) ? "border-[var(--accent)] ring-2 ring-[var(--accent-soft)]" : "border-[var(--line)]"}`}
+                      title={`${c.title} · ${c.channel ?? ""} · ${c.status ?? ""}${filesQ.data?.enabled ? " — seret file ke sini untuk upload" : ""}`}
+                    >
+                      {(() => {
+                        const fs = filesOf(c.id);
+                        const img = fs.find((x) => isImage(x.mime, x.name));
+                        return img ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={thumbUrl(img.drive_id, 320)} alt="" className="h-14 w-full object-cover" loading="lazy" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.display = "none")} />
+                        ) : null;
+                      })()}
+                      <span className="flex items-center gap-1.5 px-1.5 py-0.5">
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: STATUS_DOT[String(c.status)] ?? "#d6d2c4" }} />
+                        <span className="truncate">{String(c.title)}</span>
+                        {filesOf(c.id).length > 0 && <Paperclip size={10} className="ml-auto shrink-0 text-[var(--muted)]" />}
+                      </span>
                     </button>
                   ))}
                 </>
@@ -245,6 +294,20 @@ function Calendar() {
           ))}
         </div>
       </div>
+      {detail && (
+        <ContentDrawer
+          row={detail}
+          onClose={() => setDetail(null)}
+          onEdit={() => {
+            setEditing({ row: detail });
+            setDetail(null);
+          }}
+          onChanged={() => {
+            content.reload();
+            setTick((t) => t + 1);
+          }}
+        />
+      )}
       {editing && (
         <ResourceForm resource={RESOURCE_MAP.content} row={editing.row} defaults={{ post_date: editing.date, status: "Ide", approval_status: "Menunggu review", brand: f.brand || undefined }} onClose={() => setEditing(null)} onSaved={content.reload} />
       )}
