@@ -4,6 +4,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import type { Field, Resource, Row } from "@/lib/resources";
 import { api, useMeta, useToast } from "./providers";
+import { FileAttachments } from "./file-attachments";
 import { todayISO } from "@/lib/format";
 
 export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
@@ -146,6 +147,12 @@ export function ResourceForm({ resource, row, onClose, onSaved, defaults, groups
             </div>
           </fieldset>
         ))}
+        {row?.id && ["content", "influencers", "events"].includes(resource.key) && (!onlyGroups || onlyGroups.includes("Rencana")) && (
+          <fieldset className="mb-4">
+            <legend className="mb-3 text-[12px] font-bold uppercase tracking-wider text-[var(--muted)]">{resource.key === "content" ? "Desain & file (otomatis masuk folder Drive per campaign)" : "File di Drive"}</legend>
+            <FileAttachments resource={resource.key} recordId={Number(row.id)} onChanged={onSaved} />
+          </fieldset>
+        )}
         <div className="mt-5 flex justify-end gap-2 border-t border-[var(--line)] pt-4">
           <button type="button" className="btn" onClick={onClose}>
             Batal

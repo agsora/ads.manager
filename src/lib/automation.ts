@@ -4,6 +4,7 @@ import { buildReportWorkbook } from "./report";
 import { appUrl, emailEnabled, renderEmail, sendEmails, type EmailSection } from "./email";
 import { notify, orgUsers, wantsEmail } from "./notify";
 import { refreshContentMetrics } from "./metrics-sync";
+import { driveEnabled, saveFileRecord, uploadFromServer } from "./drive";
 import { addDays, fmtDate, fmtMoney, fmtNum, fmtPct, monthEnd, monthStart, todayISO } from "./format";
 import type { Row } from "./resources";
 
@@ -110,7 +111,19 @@ export async function runDaily(orgId: number, opts: { force?: boolean; weekly?: 
     const from = addDays(today, -7);
     const to = addDays(today, -1);
     const { wb, a: w } = await buildReportWorkbook(orgId, from, to);
-    const file = Buffer.from(await wb.xlsx.writeBuffer()).toString("base64");
+    const buffer = Buffer.from(await wb.xlsx.writeBuffer());
+    const file = buffer.toString("base64");
+    let driveLink: string | null = null;
+    if (driveEnabled()) {
+      try {
+        const folder = `Laporan/Mingguan/${today.slice(0, 4)}`;
+        const up = await uploadFromServer(folder, `laporan-${from}_${to}.xlsx`, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer);
+        await saveFileRecord({ orgId, resource: "report", recordId: null, folderPath: folder, name: `laporan-${from}_${to}.xlsx`, driveId: up.id, url: up.url, folderUrl: up.folderUrl, mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", size: buffer.length, by: "Otomasi" });
+        driveLink = up.url;
+      } catch (e) {
+        console.error("report to drive failed", e);
+      }
+    }
     const html = renderEmail({
       eyebrow: `Laporan mingguan · ${fmtDate(from)} – ${fmtDate(to)}`,
       title: "Ringkasan 7 hari terakhir",
@@ -131,7 +144,7 @@ export async function runDaily(orgId: number, opts: { force?: boolean; weekly?: 
         { title: "Yang perlu dilakukan", items: w.insights.filter((i) => i.level === "critical" || i.level === "warning").slice(0, 8).map((i) => `${i.title} → ${i.action}`), empty: "Tidak ada masalah besar minggu ini." },
         { title: "Yang sudah bagus", items: w.insights.filter((i) => i.level === "good").slice(0, 5).map((i) => i.title) },
       ],
-      cta: { label: "Buka laporan", url: `${base}/reports` },
+      cta: { label: driveLink ? "Buka laporan di Drive" : "Buka laporan", url: driveLink ?? `${base}/reports` },
     });
     const managers = users.filter((u) => ["superadmin", "owner", "admin"].includes(u.role) && wantsEmail(u, "weekly"));
     const res = await sendEmails(managers.map((u) => ({ to: u.email, subject: `Laporan mingguan ${fmtDate(from)} – ${fmtDate(to)}`, html, attachments: [{ filename: `laporan-${from}_${to}.xlsx`, content: file }] })));

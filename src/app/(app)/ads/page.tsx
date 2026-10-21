@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Upload } from "lucide-react";
+import { FolderOpen, Pencil, Upload } from "lucide-react";
+import { Modal } from "@/components/resource-form";
+import { FileAttachments } from "@/components/file-attachments";
 import { PageHeader } from "@/components/shell";
 import { ResourceTable } from "@/components/resource-table";
 import { ImportDialog } from "@/components/import-dialog";
@@ -17,6 +19,7 @@ export default function AdsPage() {
   const [upload, setUpload] = useState(false);
   const [tick, setTick] = useState(0);
   const toast = useToast();
+  const [filesFor, setFilesFor] = useState<{ id: number; name: string } | null>(null);
   const k = a?.kpis.ads;
   const p = a?.prevKpis.ads;
   const refresh = () => {
@@ -86,6 +89,7 @@ export default function AdsPage() {
                     <th className="text-right">Biaya/Perc.</th>
                     <th className="text-right">Omzet</th>
                     <th className="text-right">ROAS</th>
+                    <th>File</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -117,6 +121,11 @@ export default function AdsPage() {
                         </button>
                       </td>
                       <td className="text-right tnum">{c.roas ? `${formatValue(c.roas, "decimal")}x` : c.attrValue && c.spend ? `${formatValue(c.attrValue / c.spend, "decimal")}x` : "–"}</td>
+                      <td>
+                        <button className="btn btn-sm" onClick={() => setFilesFor({ id: Number(c.latestRowId), name: c.name })} title="File & creative campaign di Google Drive">
+                          <FolderOpen size={13} /> File
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -172,6 +181,11 @@ export default function AdsPage() {
         </div>
       )}
 
+      {filesFor && (
+        <Modal title={`File campaign: ${filesFor.name}`} onClose={() => setFilesFor(null)}>
+          <FileAttachments resource="ads" recordId={filesFor.id} />
+        </Modal>
+      )}
       {upload && (
         <ImportDialog
           resourceKey="ads"

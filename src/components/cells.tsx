@@ -15,7 +15,7 @@ const TONES: Record<string, string> = {
 const TONE_BY_VALUE: Record<string, string> = {
   done: "green", posted: "green", deal: "green", selesai: "green", terkirim: "green", ya: "green", positif: "green", tayang: "green", "deal reservasi": "green",
   running: "blue", scheduled: "blue", terjadwal: "blue", produksi: "blue", "follow-up": "blue", "follow up": "blue", review: "blue", negosiasi: "blue",
-  planning: "violet", ide: "violet", draft: "violet",
+  planning: "violet", ide: "violet", draft: "violet", "desain selesai": "orange",
   hold: "amber", pending: "amber", netral: "amber", warm: "orange",
   hot: "red", cancel: "gray", batal: "gray", nonaktif: "gray", ghosting: "red", negatif: "red", tidak: "red", gagal: "red",
   cold: "blue",

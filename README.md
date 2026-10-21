@@ -22,6 +22,7 @@ Dibangun dari struktur workbook *WEBSITE MARKETING REPORT.xlsx* (Ads Report, Con
 | **Influencer** | Fee, views, engagement, leads, omzet → biaya/engagement & ROI |
 | **Impor / Ekspor** | Impor workbook lengkap (deteksi sheet & kolom otomatis, pratinjau), impor per modul (.xlsx/.csv), template Excel dengan dropdown, ekspor Excel/CSV, backup seluruh data |
 | **Superadmin** | Akun pertama otomatis Superadmin: kelola semua workspace & user, reset password, ubah role, buka workspace mana pun, buka/tutup pendaftaran publik |
+| **File & Google Drive** | Upload desain/creative dari kalender konten, campaign iklan, influencer, event → otomatis rapi di Drive: Brand / Campaign / jenis file. Status konten otomatis "Desain Selesai" + notifikasi review. Arsip file impor & laporan mingguan juga masuk Drive. Perlu Apps Script (panduan di menu File & Drive): `DRIVE_SCRIPT_URL`, `DRIVE_SCRIPT_SECRET`, `DRIVE_FOLDER_ID` |
 | **Pencarian global** | Ctrl+K: lead, nomor, kontrak, campaign, konten, ulasan, influencer, event |
 | **Pengaturan** | Brand, daftar pilihan dropdown (bisa diubah), user & role (owner/admin/staff), ganti password, log aktivitas, hapus data |
 

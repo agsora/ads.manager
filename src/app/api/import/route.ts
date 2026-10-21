@@ -5,6 +5,8 @@ import { guessResource, parseSheet, parseWalletSummary, readWorkbook, type Parse
 import { deleteMatching, getBrands, insertMany } from "@/lib/repo";
 import { logActivity, q } from "@/lib/db";
 import { activityEvent } from "@/lib/events";
+import { driveEnabled, saveFileRecord, uploadFromServer } from "@/lib/drive";
+import { after } from "next/server";
 
 export const maxDuration = 60;
 
@@ -94,6 +96,19 @@ export const POST = handle(async (req: Request) => {
   const labels = [...new Set(parsed.map((p) => p.resource.label))].join(", ");
   const firstKey = parsed[0].resource.key;
   const LINK: Record<string, string> = { ads: "/ads", content: "/content", leads: "/leads", contacts: "/blast", blast: "/blast", reviews: "/reviews" };
+  // keep the original upload in Drive: Arsip Impor / <module> / <yyyy-mm>
+  if (driveEnabled() && file.size <= 20 * 1024 * 1024) {
+    const bytes = Buffer.from(await file.arrayBuffer());
+    const folder = `Arsip Impor/${parsed[0].resource.label}/${new Date().toISOString().slice(0, 7)}`;
+    after(async () => {
+      try {
+        const up = await uploadFromServer(folder, `${new Date().toISOString().slice(0, 10)} ${file.name}`, file.type || "application/octet-stream", bytes);
+        await saveFileRecord({ orgId: s.org, resource: "import", recordId: null, folderPath: folder, name: file.name, driveId: up.id, url: up.url, folderUrl: up.folderUrl, mime: file.type, size: file.size, by: s.name });
+      } catch (e) {
+        console.error("drive archive failed", e);
+      }
+    });
+  }
   activityEvent(
     s,
     `${s.name} mengimpor ${total} baris ${labels}`,

@@ -49,3 +49,7 @@ db.txt
 
 .vercel
 .env*
+
+# service account keys
+reflected-disk-*.json
+*-service-account*.json
