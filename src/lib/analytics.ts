@@ -1,6 +1,6 @@
 import { listRows } from "./repo";
 import { RESOURCE_MAP, n, type Row } from "./resources";
-import { addDays, diffDays, fmtMoney, fmtNum, fmtPct, monthStart, todayISO } from "./format";
+import { addDays, diffDays, fmtMoney, fmtNum, fmtPct, monthEnd, monthStart, todayISO } from "./format";
 
 export type Level = "critical" | "warning" | "good" | "info";
 export interface Insight {
@@ -49,14 +49,15 @@ function adsKpis(ads: Row[]) {
   const clicks = sum(ads, "clicks");
   const conversations = sum(ads, "conversations");
   const revenue = sum(ads, "revenue");
-  const revSpend = sum(ads.filter((r) => n(r.revenue) > 0), "spend");
   return {
     spend, impressions, reach, clicks, conversations, revenue,
     ctr: div(clicks, impressions),
     cpc: div(spend, clicks),
     cpm: impressions ? (spend / impressions) * 1000 : null,
     costPerConv: div(spend, conversations),
-    roas: div(revenue, revSpend),
+    // ROAS = pendapatan iklan ÷ biaya iklan; ROI = (pendapatan − biaya) ÷ biaya
+    roas: div(revenue, spend),
+    roi: spend && revenue ? (revenue - spend) / spend : null,
     frequency: div(impressions, reach),
     // daily rows from a Meta export belong to one campaign: count distinct campaigns
     campaigns: new Set(ads.map((r) => `${r.brand}|${r.platform}|${r.campaign_name}`)).size,
@@ -163,8 +164,8 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
   const prevTo = addDays(from, -1);
   const prevFrom = addDays(prevTo, -(cmpLen - 1));
 
-  const load = (key: string, f: string, t: string) => listRows(orgId, RESOURCE_MAP[key], { from: f, to: t, brand });
-  const [adsAll, leadsAll, contentAll, reviewsAll, blastAll, inflAll, kpiRows, walletRows, events, followers, openLeads, upcomingContent, contactsAll] =
+  const load = (key: string, f: string, t: string, limit?: number) => listRows(orgId, RESOURCE_MAP[key], { from: f, to: t, brand, limit });
+  const [adsAll, leadsAll, contentAll, reviewsAll, blastAll, inflAll, kpiRows, walletRows, events, followers, openLeads, upcomingContent, contactsAll, statRows, adsHistory] =
     await Promise.all([
       // campaigns may start before the window and still spend in it
       load("ads", addDays(prevFrom, -90), to),
@@ -174,12 +175,15 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
       load("blast", prevFrom, to),
       load("influencers", prevFrom, to),
       load("kpi", monthStart(from), to),
-      load("wallets", addDays(monthStart(from), -1), to),
+      load("wallets", "1900-01-01", to),
       load("events", today, addDays(today, 30)),
       load("followers", addDays(from, -120), to),
       load("leads", addDays(today, -60), today),
       load("content", today, addDays(today, 7)),
       load("contacts", prevFrom, to),
+      load("review_stats", "1900-01-01", to),
+      // the balance carries over month to month, so it needs every campaign since the first top up
+      load("ads", "1900-01-01", to, 20000),
     ]);
 
   const overlapAds = (f: string, t: string) =>
@@ -204,8 +208,17 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
   const blasts = cur(blastAll, "blast_date");
   const infl = cur(inflAll, "post_date");
 
+  const adsK = adsKpis(ads);
+  // when no revenue is typed on campaigns, fall back to deals logged in WA Leads that came from ads
+  const adsLeadDeals = sum(leads.filter((r) => /ads|iklan/i.test(String(r.source ?? "")) && (r.final_status === "Deal" || r.initial_status === "Deal")), "deal_value");
+  const roasFromLeads = !adsK.revenue && adsLeadDeals > 0 && adsK.spend > 0;
+  if (roasFromLeads) {
+    adsK.revenue = adsLeadDeals;
+    adsK.roas = adsLeadDeals / adsK.spend;
+    adsK.roi = (adsLeadDeals - adsK.spend) / adsK.spend;
+  }
   const kpis = {
-    ads: adsKpis(ads),
+    ads: adsK,
     leads: leadKpis(leads),
     content: contentKpis(content),
     reviews: reviewKpis(reviews),
@@ -280,7 +293,8 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
       const latest = [...rs].sort((a, b) => String(b.end_date ?? b.start_date).localeCompare(String(a.end_date ?? a.start_date)))[0];
       return {
         id: latest.id, name: String(latest.campaign_name), brand: latest.brand, platform: latest.platform,
-        status: rs.some((r) => r.status === "Running") ? "Running" : latest.status, objective: latest.objective,
+        status: rs.some((r) => r.status === "Running") || String(latest.end_date ?? latest.start_date ?? "") >= addDays(today, -1) ? "Running" : latest.status === "Running" ? "Done" : latest.status, objective: latest.objective,
+        rawRevenue: rs.reduce((t, r) => t + n(adsAll.find((x) => x.id === r.id)?.revenue), 0), rawLatestRevenue: n(adsAll.find((x) => x.id === latest.id)?.revenue), latestRowId: latest.id,
         ...k, days: rs.length, start_date: starts[0], end_date: ends[ends.length - 1],
       };
     })
@@ -434,21 +448,83 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     (r) => (r.status === "Tertarik" || r.status === "Dibalas") && !leadPhones.has(String(r.phone ?? "").replace(/\D/g, "").replace(/^62/, "0")),
   );
 
-  // ---- wallets (balance per brand+platform for the month of `to`)
+  // ---- wallets: saldo awal bulan berikutnya = saldo akhir bulan lalu (dikurangi belanja iklan nyata)
   const walletMonth = monthStart(to);
-  const wallets = walletRows
-    .filter((w) => String(w.period).slice(0, 7) === walletMonth.slice(0, 7))
-    .map((w) => {
-      const monthEndDay = effTo;
-      const spent = adsAll
-        .filter((r) => r.brand === w.brand && lc(r.platform) === lc(w.platform))
-        .reduce((s, r) => s + spendIn(r, walletMonth, monthEndDay), 0);
-      const available = n(w.opening_balance) + n(w.topup);
+  const addMonth = (m: string) => {
+    const d = new Date(m + "T00:00:00Z");
+    d.setUTCMonth(d.getUTCMonth() + 1);
+    return d.toISOString().slice(0, 10);
+  };
+  interface WalletMonth { id: number | null; brand: string; platform: string; month: string; opening: number; topup: number; planned: number; available: number; spent: number; closing: number; carried: boolean; manual: boolean }
+  const walletChains = new Map<string, Row[]>();
+  for (const w of walletRows) {
+    const k = `${w.brand}|${lc(w.platform)}`;
+    if (!walletChains.has(k)) walletChains.set(k, []);
+    walletChains.get(k)!.push(w);
+  }
+  const walletHistory: WalletMonth[] = [];
+  for (const rows of walletChains.values()) {
+    const byMonth = new Map(rows.map((w) => [String(w.period).slice(0, 7), w]));
+    const first = rows.map((w) => monthStart(String(w.period).slice(0, 10))).sort()[0];
+    let carry = 0;
+    for (let m = first; m <= walletMonth; m = addMonth(m)) {
+      const w = byMonth.get(m.slice(0, 7));
+      const ref = w ?? rows[0];
+      const spent = adsHistory
+        .filter((r) => r.brand === ref.brand && lc(r.platform) === lc(ref.platform))
+        .reduce((sum2, r) => sum2 + spendIn(r, m, monthEnd(m) < effTo ? monthEnd(m) : effTo), 0);
+      const isFirst = m === first;
+      const opening = isFirst ? n(w?.opening_balance) : carry;
+      const topup = n(w?.topup);
+      const available = opening + topup;
       const closing = available - spent;
+      walletHistory.push({ id: w ? Number(w.id) : null, brand: String(ref.brand ?? ""), platform: String(ref.platform ?? ""), month: m, opening, topup, planned: n(w?.planned_topup), available, spent, closing, carried: !isFirst, manual: !!w });
+      carry = closing;
+    }
+  }
+  walletHistory.sort((x, y) => y.month.localeCompare(x.month) || x.brand.localeCompare(y.brand));
+  const wallets = walletHistory
+    .filter((w) => w.month.slice(0, 7) === walletMonth.slice(0, 7))
+    .map((w) => {
       const elapsed = Math.max(1, diffDays(walletMonth, to < today ? to : today) + 1);
-      const burn = spent / elapsed;
-      return { id: w.id, brand: String(w.brand ?? ""), platform: String(w.platform ?? ""), opening: n(w.opening_balance), topup: n(w.topup), planned: n(w.planned_topup), available, spent, closing, burnPerDay: burn, daysLeft: burn > 0 ? closing / burn : null };
+      const burn = w.spent / elapsed;
+      return { ...w, burnPerDay: burn, daysLeft: burn > 0 && w.closing > 0 ? w.closing / burn : w.closing <= 0 ? 0 : null };
     });
+
+  // ---- google business: snapshots (jumlah ulasan + rating per cabang) → perkembangan
+  const statGroups = groupBy(statRows, (r) => `${r.brand ?? ""}|${r.branch ?? ""}`);
+  const reviewGrowth = [...statGroups.entries()].map(([key, rs]) => {
+    const sorted = [...rs].sort((x, y) => String(x.snapshot_date).localeCompare(String(y.snapshot_date)));
+    const inWin = sorted.filter((r) => String(r.snapshot_date) <= to);
+    const last = inWin[inWin.length - 1];
+    const base = [...inWin].reverse().find((r) => String(r.snapshot_date) < from) ?? inWin[0];
+    // reviews logged individually after the last snapshot are added on top
+    const [bBrand, bBranch] = key.split("|");
+    const extra = reviewsAll.filter((r) => String(r.brand ?? "") === bBrand && String(r.branch ?? "") === bBranch && last && String(r.review_date) > String(last.snapshot_date) && String(r.review_date) <= to).length;
+    return {
+      name: bBranch ? `${bBranch}${bBrand ? ` · ${bBrand}` : ""}` : bBrand || "(Kosong)",
+      initial: n(sorted[0]?.total_reviews),
+      initialDate: sorted[0]?.snapshot_date ?? null,
+      start: n(base?.total_reviews),
+      current: n(last?.total_reviews) + extra,
+      growth: n(last?.total_reviews) + extra - n(base?.total_reviews),
+      ratingStart: n(base?.avg_rating) || null,
+      ratingNow: n(last?.avg_rating) || null,
+      ratingChange: n(last?.avg_rating) && n(base?.avg_rating) ? n(last?.avg_rating) - n(base?.avg_rating) : null,
+      snapshots: sorted.length,
+    };
+  });
+  const reviewTrendMap = new Map<string, Record<string, number | string>>();
+  for (const r of [...statRows].sort((x, y) => String(x.snapshot_date).localeCompare(String(y.snapshot_date)))) {
+    const d = String(r.snapshot_date).slice(0, 10);
+    if (d > to) continue;
+    const name = r.branch ? String(r.branch) : String(r.brand ?? "Total");
+    if (!reviewTrendMap.has(d)) reviewTrendMap.set(d, { date: d });
+    reviewTrendMap.get(d)![name] = n(r.total_reviews);
+    reviewTrendMap.get(d)![`${name}__rating`] = n(r.avg_rating);
+  }
+  const reviewTrend = [...reviewTrendMap.values()];
+  const reviewTrendSeries = [...new Set(statRows.map((r) => (r.branch ? String(r.branch) : String(r.brand ?? "Total"))))];
 
   // ---- KPI progress (sum of targets for months in range)
   const kpiInRange = kpiRows.filter((k) => String(k.period).slice(0, 7) >= from.slice(0, 7) && String(k.period).slice(0, 7) <= to.slice(0, 7));
@@ -501,7 +577,7 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
         push({ level: "info", area: "Ads", title: "Realokasi budget antar campaign", detail: `Campaign termurah: ${best.name} (${fmtMoney(best.costPerConv)}/percakapan). Termahal: ${worst.name} (${fmtMoney(worst.costPerConv)}/percakapan).`, action: `Naikkan budget "${best.name}" 20–30% bertahap dan turunkan/optimasi "${worst.name}".` });
     }
     if (A.revenue > 0 && A.roas !== null) {
-      if (A.roas < 1) push({ level: "critical", area: "Ads", title: `ROAS di bawah 1 (${fmtNum(A.roas, 2)}x) — iklan rugi`, detail: `Omzet dari ads ${fmtMoney(A.revenue)} vs biaya ${fmtMoney(A.spend)}.`, action: "Hentikan campaign ber-ROAS terendah, fokus ke produk/penawaran dengan margin tertinggi, perkuat follow-up leads agar closing naik." });
+      if (A.roas < 1) push({ level: "critical", area: "Ads", title: `ROAS di bawah 1 (${fmtNum(A.roas, 2)}x) — iklan rugi`, detail: `Omzet dari ads ${fmtMoney(A.revenue)} ÷ biaya ${fmtMoney(A.spend)}${roasFromLeads ? " (omzet dihitung dari deal WA Leads bersumber Ads)" : ""}.`, action: "Hentikan campaign ber-ROAS terendah, fokus ke produk/penawaran dengan margin tertinggi, perkuat follow-up leads agar closing naik." });
       else if (A.roas < 2) push({ level: "warning", area: "Ads", title: `ROAS tipis (${fmtNum(A.roas, 2)}x)`, detail: "Setelah HPP & operasional, margin dari iklan kemungkinan kecil.", action: "Optimasi offer (bundling/upsell), tingkatkan konversi chat→deal, dan pangkas campaign dengan biaya/percakapan tertinggi." });
       else if (A.roas >= 3) push({ level: "good", area: "Ads", title: `ROAS sehat (${fmtNum(A.roas, 2)}x)`, detail: `Setiap Rp 1 iklan menghasilkan Rp ${fmtNum(A.roas, 1)} omzet.`, action: "Scale budget campaign terbaik 20–30% per 3 hari sambil pantau biaya per percakapan." });
     } else if (A.spend > 0) {
@@ -740,6 +816,11 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     notConverted: notConverted.slice(0, 50).map((r) => ({ id: r.id, name: r.name, phone: r.phone, unit_type: r.unit_type, status: r.status })),
     influencerList,
     wallets,
+    walletHistory,
+    roasFromLeads,
+    reviewGrowth,
+    reviewTrend,
+    reviewTrendSeries,
     kpiProgress,
     events: [...events].sort((x, y) => String(x.event_date).localeCompare(String(y.event_date))),
     upcomingContent: [...upcomingContent].sort((x, y) => String(x.post_date).localeCompare(String(y.post_date))).map((c) => ({ id: c.id, title: c.title, post_date: c.post_date, channel: c.channel, status: c.status, brand: c.brand })),

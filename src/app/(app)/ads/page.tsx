@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Upload } from "lucide-react";
+import { Pencil, Upload } from "lucide-react";
 import { PageHeader } from "@/components/shell";
 import { ResourceTable } from "@/components/resource-table";
 import { ImportDialog } from "@/components/import-dialog";
@@ -9,17 +9,34 @@ import { useAnalytics } from "@/components/use-analytics";
 import { Bars, Card, Kpi, MiniTable } from "@/components/charts";
 import { Chip } from "@/components/cells";
 import { fmtDate, formatValue } from "@/lib/format";
+import { api, useToast } from "@/components/providers";
 
 export default function AdsPage() {
   const { data: a, reload } = useAnalytics();
   const [tab, setTab] = useState<"campaign" | "detail" | "analysis">("campaign");
   const [upload, setUpload] = useState(false);
   const [tick, setTick] = useState(0);
+  const toast = useToast();
   const k = a?.kpis.ads;
   const p = a?.prevKpis.ads;
   const refresh = () => {
     reload();
     setTick((t) => t + 1);
+  };
+
+  const setRevenue = async (c: NonNullable<typeof a>["campaigns"][number]) => {
+    const input = prompt(`Total omzet dari campaign "${c.name}" (Rp, untuk seluruh periodenya):`, String(Math.round(c.rawRevenue || 0)));
+    if (input === null) return;
+    const want = Number(input.replace(/[^0-9.]/g, ""));
+    if (!Number.isFinite(want)) return toast("Angka tidak valid", "err");
+    try {
+      // revenue is stored per daily row: put the difference on the latest row so the campaign total matches
+      await api(`/api/r/ads/${c.latestRowId}`, "PUT", { revenue: Math.max(0, want - (c.rawRevenue - c.rawLatestRevenue)) });
+      toast("Omzet campaign disimpan");
+      refresh();
+    } catch (e) {
+      toast((e as Error).message, "err");
+    }
   };
 
   return (
@@ -31,7 +48,7 @@ export default function AdsPage() {
       </PageHeader>
 
       {k && (
-        <div className="stat-grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-8">
+        <div className="stat-grid grid-cols-2 md:grid-cols-5 2xl:grid-cols-9">
           <Kpi label="Campaign aktif" value={k.campaigns} prev={p?.campaigns} format="number" hint={`${k.running} running`} />
           <Kpi label="Dibelanjakan" value={k.spend} prev={p?.spend} format="money" invert />
           <Kpi label="Impresi" value={k.impressions} prev={p?.impressions} format="number" />
@@ -40,6 +57,7 @@ export default function AdsPage() {
           <Kpi label="CPC" value={k.cpc} prev={p?.cpc} format="money" invert />
           <Kpi label="Percakapan" value={k.conversations} prev={p?.conversations} format="number" />
           <Kpi label="Biaya / percakapan" value={k.costPerConv} prev={p?.costPerConv} format="money" invert />
+          <Kpi label="ROAS" value={k.roas} prev={p?.roas} format="decimal" hint="omzet ÷ biaya iklan" />
         </div>
       )}
 
@@ -67,6 +85,7 @@ export default function AdsPage() {
                     <th className="text-right">CPC</th>
                     <th className="text-right">Percakapan</th>
                     <th className="text-right">Biaya/Perc.</th>
+                    <th className="text-right">Omzet</th>
                     <th className="text-right">ROAS</th>
                   </tr>
                 </thead>
@@ -92,13 +111,19 @@ export default function AdsPage() {
                       <td className="text-right tnum">{formatValue(c.cpc, "money")}</td>
                       <td className="text-right tnum">{formatValue(c.conversations, "number")}</td>
                       <td className="text-right tnum">{formatValue(c.costPerConv, "money")}</td>
-                      <td className="text-right tnum">{formatValue(c.roas, "decimal")}</td>
+                      <td className="text-right tnum">
+                        <button className="inline-flex items-center gap-1 hover:text-[var(--accent-ink)]" onClick={() => setRevenue(c)} title="Isi / ubah omzet campaign">
+                          {c.revenue ? formatValue(c.revenue, "money") : <span className="text-[var(--muted)]">isi</span>}
+                          <Pencil size={11} className="opacity-50" />
+                        </button>
+                      </td>
+                      <td className="text-right tnum">{c.roas ? `${formatValue(c.roas, "decimal")}x` : "–"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               <p className="border-t border-[var(--line)] px-4 py-2.5 text-[12px] text-[var(--muted)]">
-                *Jangkauan dari data harian dijumlahkan, sehingga bisa lebih besar dari jangkauan unik di Meta. Angka dihitung untuk periode filter di atas.
+                ROAS = omzet ÷ biaya iklan (mis. 3x = tiap Rp 1 iklan menghasilkan Rp 3). Omzet diisi di kolom Omzet; jika kosong, dihitung dari deal WA Leads bersumber Ads. *Jangkauan dari data harian dijumlahkan, sehingga bisa lebih besar dari jangkauan unik di Meta. Angka dihitung untuk periode filter di atas.
               </p>
             </div>
           ) : (

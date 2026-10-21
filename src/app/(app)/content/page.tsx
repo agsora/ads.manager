@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BarChart3, CalendarDays, Check, ChevronLeft, ChevronRight, ClipboardList, PieChart, Plus, RotateCcw } from "lucide-react";
+import { BarChart3, CalendarDays, Check, Link2, ChevronLeft, ChevronRight, ClipboardList, PieChart, Plus, RotateCcw } from "lucide-react";
 import { PageHeader } from "@/components/shell";
 import { ResourceTable } from "@/components/resource-table";
 import { api, useFetch, useFilter, useToast } from "@/components/providers";
@@ -42,7 +42,7 @@ export default function ContentPage() {
 }
 
 const PLAN_COLUMNS = ["post_date", "post_time", "title", "brand", "channel", "content_type", "pillar", "pic", "status", "approval_status"];
-const RESULT_COLUMNS = ["post_date", "title", "channel", "status", "actual_date", "reach", "views", "likes", "comments", "saves", "followers"];
+const RESULT_COLUMNS = ["post_date", "title", "channel", "status", "post_link", "actual_date", "reach", "views", "likes", "comments", "saves", "followers"];
 
 function usePlanStats(tick: number) {
   const f = useFilter();
@@ -103,6 +103,7 @@ function Planning() {
 }
 
 function Results() {
+  const toast = useToast();
   const [tick, setTick] = useState(0);
   const { data } = usePlanStats(tick);
   const today = todayISO();
@@ -130,6 +131,23 @@ function Results() {
         allowCreate={false}
         quickFilters={["channel", "status"]}
         computedCols={["result_state", "er", "on_time"]}
+        selectionActions={(ids, done) => (
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={async () => {
+              try {
+                const r = await api<{ updated: number; failed: { title: string; message: string }[] }>("/api/content/metrics", "POST", { ids });
+                toast(`${r.updated} konten diperbarui${r.failed.length ? ` · ${r.failed.length} gagal: ${r.failed[0].message}` : ""}`, r.failed.length && !r.updated ? "err" : "ok");
+                done();
+                setTick((t) => t + 1);
+              } catch (e) {
+                toast((e as Error).message, "err");
+              }
+            }}
+          >
+            <Link2 size={13} /> Tarik metrik dari link
+          </button>
+        )}
         rowFilter={(r) => r.status !== "Cancel" && (r.status === "Posted" || String(r.post_date) <= today)}
         reloadKey={tick}
         onChanged={() => setTick((t) => t + 1)}

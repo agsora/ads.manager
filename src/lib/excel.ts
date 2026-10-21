@@ -144,12 +144,32 @@ export function parseSheet(sheet: Sheet, r: Resource, defaultBrand?: string | nu
   const header = sheet.rows[headerIdx] ?? [];
   const cpcCol = r.key === "ads" ? header.findIndex((h) => /^cpc\b/.test(norm(h))) : -1;
 
+  // Slash dates are ambiguous (10/12/2026): Indonesian files are D/M/Y, Meta exports often M/D/Y.
+  // Decide per file from the values: a part above 12 settles it; if nothing settles it, assume D/M/Y.
+  const dateCols = r.fields.filter((f) => f.type === "date" && bestMap.has(f.key)).map((f) => bestMap.get(f.key)!.col);
+  let dmy = 0;
+  let mdy = 0;
+  for (let i = dataStart; i < sheet.rows.length; i++)
+    for (const c of dateCols) {
+      const cell = sheet.rows[i]?.[c];
+      const m = typeof cell === "string" ? cell.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/) : null;
+      if (!m) continue;
+      if (+m[1] > 12) dmy++;
+      if (+m[2] > 12) mdy++;
+    }
+  const usDates = mdy > dmy;
+  const fixDate = (v: unknown) => {
+    if (!usDates || typeof v !== "string") return v;
+    const m = v.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    return m ? `${m[3].length === 2 ? "20" + m[3] : m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}` : v;
+  };
+
   const out: Record<string, unknown>[] = [];
   let skipped = 0;
   for (let i = dataStart; i < sheet.rows.length; i++) {
     const raw = sheet.rows[i] ?? [];
     const obj: Record<string, unknown> = {};
-    for (const [k, v] of bestMap) obj[k] = raw[v.col];
+    for (const [k, v] of bestMap) obj[k] = r.fields.find((f) => f.key === k)?.type === "date" ? fixDate(raw[v.col]) : raw[v.col];
     const clean = cleanInput(r, obj, true);
     if (cpcCol >= 0) {
       const cpcVal = toNumber(raw[cpcCol]);

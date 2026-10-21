@@ -3,6 +3,7 @@ import { buildAnalytics } from "./analytics";
 import { buildReportWorkbook } from "./report";
 import { appUrl, emailEnabled, renderEmail, sendEmails, type EmailSection } from "./email";
 import { notify, orgUsers, wantsEmail } from "./notify";
+import { refreshContentMetrics } from "./metrics-sync";
 import { addDays, fmtDate, fmtMoney, fmtNum, fmtPct, monthEnd, monthStart, todayISO } from "./format";
 import type { Row } from "./resources";
 
@@ -30,6 +31,13 @@ export async function runDaily(orgId: number, opts: { force?: boolean; weekly?: 
 
   const base = appUrl(opts.req);
   const closed = await q(`UPDATE ad_campaigns SET status = 'Done', updated_at = now() WHERE org_id = $1 AND status = 'Running' AND end_date < $2 RETURNING id`, [orgId, today]);
+
+  // pull fresh numbers from the links of content posted in the last 14 days (max 25 per run)
+  const linked = await q<{ id: number }>(
+    `SELECT id FROM content_plans WHERE org_id = $1 AND status = 'Posted' AND COALESCE(actual_date, post_date) >= $2 AND (post_link IS NOT NULL OR brief_link IS NOT NULL) ORDER BY post_date DESC LIMIT 25`,
+    [orgId, addDays(today, -14)],
+  );
+  const synced = linked.length ? await refreshContentMetrics(orgId, linked.map((l) => l.id)).catch(() => ({ updated: 0, failed: [] })) : { updated: 0, failed: [] };
 
   const content = await q<Row>(`SELECT * FROM content_plans WHERE org_id = $1 AND post_date BETWEEN $2 AND $3 ORDER BY post_date, post_time NULLS LAST`, [orgId, addDays(today, -14), addDays(today, 1)]);
   const live = content.filter((c) => c.status !== "Cancel");
@@ -131,6 +139,6 @@ export async function runDaily(orgId: number, opts: { force?: boolean; weekly?: 
     if (res.sent) await notify({ orgId, category: "weekly", title: "Laporan mingguan terkirim", body: `Dikirim ke ${res.sent} email (owner/admin).`, link: "/reports", skipActor: false, userIds: managers.map((m) => m.id) });
   }
 
-  await logActivity(orgId, "Otomasi", "Otomasi harian", `${closed.length} campaign ditutup · ${alerts} peringatan · ${digestEmails} digest · ${weeklyEmails} laporan mingguan`);
+  await logActivity(orgId, "Otomasi", "Otomasi harian", `${synced.updated} metrik konten diperbarui · ${closed.length} campaign ditutup · ${alerts} peringatan · ${digestEmails} digest · ${weeklyEmails} laporan mingguan`);
   return { orgId, closedCampaigns: closed.length, alerts, digestEmails, weeklyEmails };
 }

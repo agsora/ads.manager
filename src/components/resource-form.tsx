@@ -81,6 +81,22 @@ export function ResourceForm({ resource, row, onClose, onSaved, defaults, groups
   const groups = [...new Set(resource.fields.map((f) => f.group ?? ""))].filter((g) => !onlyGroups || onlyGroups.includes(g));
   const shown = resource.fields.filter((f) => groups.includes(f.group ?? ""));
 
+  const [pulling, setPulling] = useState(false);
+  const link = resource.key === "content" ? vals.post_link || vals.brief_link : "";
+  const pullMetrics = async () => {
+    setPulling(true);
+    try {
+      const r = await api<{ ok: boolean; metrics: Record<string, number>; missing: string[]; message?: string }>("/api/content/metrics", "POST", { url: link });
+      if (!r.ok) throw new Error(r.message ?? "Gagal membaca link");
+      setVals((s) => ({ ...s, ...Object.fromEntries(Object.entries(r.metrics).map(([k, v]) => [k, String(v)])) }));
+      toast(`Terisi: ${Object.keys(r.metrics).join(", ")}${r.missing.length ? ` · tidak tersedia: ${r.missing.join(", ")}` : ""}. Klik Simpan.`);
+    } catch (e) {
+      toast((e as Error).message, "err");
+    } finally {
+      setPulling(false);
+    }
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -103,6 +119,16 @@ export function ResourceForm({ resource, row, onClose, onSaved, defaults, groups
   return (
     <Modal title={title ?? `${row?.id ? "Edit" : "Tambah"} ${resource.singular}`} onClose={onClose} wide={shown.length > 12}>
       <form onSubmit={submit}>
+        {resource.key === "content" && shown.some((f) => f.key === "likes") && (
+          <div className="mb-5 flex flex-wrap items-center gap-3 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] p-3">
+            <div className="min-w-0 flex-1 text-[13px] text-[var(--ink-2)]">
+              {link ? <>Link: <span className="break-all font-medium text-[var(--ink)]">{link}</span></> : "Isi Link Postingan dulu, lalu angka reach/views/like/comment/share/save bisa diambil otomatis."}
+            </div>
+            <button type="button" className="btn btn-sm" disabled={!link || pulling} onClick={pullMetrics}>
+              {pulling ? "Membaca…" : "Ambil dari link"}
+            </button>
+          </div>
+        )}
         {groups.map((g) => (
           <fieldset key={g} className="mb-4">
             {g && <legend className="mb-3 text-[12px] font-bold uppercase tracking-wider text-[var(--muted)]">{g}</legend>}
