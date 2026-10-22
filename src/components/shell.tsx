@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   LayoutDashboard, Lightbulb, FileBarChart, Megaphone, Wallet, CalendarDays, Target, Users, CalendarHeart,
-  MessageCircle, PhoneCall, Send, Star, Sparkles, ArrowUpDown, Settings, LogOut, Menu, X, ShieldCheck, Bell, Store, CalendarRange, ChevronDown, Check,
+  MessageCircle, PhoneCall, Send, Star, Sparkles, ArrowUpDown, Settings, LogOut, Menu, X, ShieldCheck, Bell, FolderOpen, Store, CalendarRange, ChevronDown, Check,
 } from "lucide-react";
 import { PRESETS, useFilter, useMeta } from "./providers";
 import { NotificationBell } from "./notification-bell";
@@ -13,66 +13,110 @@ import { MenuItem, Popover } from "./popover";
 import { fmtDate } from "@/lib/format";
 import { GlobalSearch } from "./global-search";
 
-type Item = { href: string; label: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }> };
+type Icon = React.ComponentType<{ size?: number; strokeWidth?: number }>;
+type Tab = { href: string; label: string; icon: Icon };
+/** A sidebar entry; `tabs` are related pages shown as a tab strip at the top of each of them. */
+type Item = { href: string; label: string; icon: Icon; tabs?: Tab[] };
 const NAV: { section?: string; items: Item[] }[] = [
   {
     items: [
       { href: "/", label: "Ringkasan", icon: LayoutDashboard },
-      { href: "/insights", label: "Insight & Saran", icon: Lightbulb },
+      {
+        href: "/insights",
+        label: "Insight & Target",
+        icon: Lightbulb,
+        tabs: [
+          { href: "/insights", label: "Insight & Saran", icon: Lightbulb },
+          { href: "/kpi", label: "Target KPI", icon: Target },
+        ],
+      },
       { href: "/reports", label: "Laporan", icon: FileBarChart },
-      { href: "/notifications", label: "Notifikasi", icon: Bell },
     ],
   },
   {
-    section: "Iklan",
+    section: "Kanal",
     items: [
-      { href: "/ads", label: "Ads Campaign", icon: Megaphone },
-      { href: "/ads/budget", label: "Saldo & Top Up", icon: Wallet },
-    ],
-  },
-  {
-    section: "Konten",
-    items: [
-      { href: "/content", label: "Content Plan", icon: CalendarDays },
-      { href: "/kpi", label: "Target KPI", icon: Target },
-      { href: "/followers", label: "Followers", icon: Users },
-      { href: "/events", label: "Event & Tanggal", icon: CalendarHeart },
-    ],
-  },
-  {
-    section: "Leads & Blast",
-    items: [
-      { href: "/leads", label: "WA Leads", icon: MessageCircle },
-      { href: "/leads/followup", label: "Follow Up", icon: PhoneCall },
+      {
+        href: "/ads",
+        label: "Iklan",
+        icon: Megaphone,
+        tabs: [
+          { href: "/ads", label: "Ads Campaign", icon: Megaphone },
+          { href: "/ads/budget", label: "Saldo & Top Up", icon: Wallet },
+        ],
+      },
+      {
+        href: "/content",
+        label: "Konten",
+        icon: CalendarDays,
+        tabs: [
+          { href: "/content", label: "Content Plan", icon: CalendarDays },
+          { href: "/followers", label: "Followers", icon: Users },
+          { href: "/events", label: "Event & Tanggal", icon: CalendarHeart },
+        ],
+      },
+      {
+        href: "/leads",
+        label: "WA Leads",
+        icon: MessageCircle,
+        tabs: [
+          { href: "/leads", label: "Daftar Leads", icon: MessageCircle },
+          { href: "/leads/followup", label: "Papan Follow Up", icon: PhoneCall },
+        ],
+      },
       { href: "/blast", label: "WA Blast", icon: Send },
-    ],
-  },
-  {
-    section: "Reputasi",
-    items: [
       { href: "/reviews", label: "Google Business", icon: Star },
       { href: "/influencers", label: "Influencer", icon: Sparkles },
     ],
   },
   {
-    section: "Data",
+    section: "Workspace",
     items: [
-      { href: "/data", label: "Impor / Ekspor", icon: ArrowUpDown },
-      { href: "/settings", label: "Pengaturan", icon: Settings },
+      {
+        href: "/settings",
+        label: "Pengaturan",
+        icon: Settings,
+        tabs: [
+          { href: "/settings", label: "Umum & Tim", icon: Settings },
+          { href: "/data", label: "Impor / Ekspor", icon: ArrowUpDown },
+          { href: "/drive", label: "Google Drive", icon: FolderOpen },
+          { href: "/notifications", label: "Notifikasi", icon: Bell },
+        ],
+      },
     ],
   },
 ];
+
+const matches = (h: string, path: string) => (h === "/" ? path === "/" : path === h || path.startsWith(h + "/"));
+/** Longest matching href wins, so /ads/budget beats /ads. */
+const best = (hrefs: string[], path: string) => hrefs.filter((h) => matches(h, path)).sort((a, b) => b.length - a.length)[0];
+
+/** Tab strip linking the pages grouped under one sidebar entry. */
+function SectionTabs({ item, path }: { item: Item; path: string }) {
+  const tabs = item.tabs!;
+  const on = best(tabs.map((t) => t.href), path);
+  return (
+    <div className="tabs mb-6 no-print" role="tablist">
+      {tabs.map((t) => (
+        <Link key={t.href} href={t.href} role="tab" aria-selected={t.href === on} className="tab" data-on={t.href === on}>
+          <t.icon size={15} /> {t.label}
+        </Link>
+      ))}
+    </div>
+  );
+}
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const { session } = useMeta();
   const [open, setOpen] = useState(false);
   const nav = session?.role === "superadmin" ? [...NAV, { section: "Platform", items: [{ href: "/admin", label: "Superadmin", icon: ShieldCheck }] }] : NAV;
-  // the nav item with the longest href that prefixes the current path wins
-  const current = nav
-    .flatMap((g) => g.items.map((i) => i.href))
-    .filter((h) => (h === "/" ? path === "/" : path === h || path.startsWith(h + "/")))
-    .sort((a, b) => b.length - a.length)[0];
+  // the sidebar entry owning the longest href (its own or one of its tabs) that matches the path
+  const items = nav.flatMap((g) => g.items);
+  const owner = new Map<string, Item>();
+  for (const it of items) for (const h of [it.href, ...(it.tabs ?? []).map((t) => t.href)]) owner.set(h, it);
+  const currentItem = owner.get(best([...owner.keys()], path) ?? "");
+  const current = currentItem?.href;
 
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -147,7 +191,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <GlobalSearch />
           <NotificationBell />
         </header>
-        <main className="page mx-auto max-w-[1440px] px-4 py-7 lg:px-10">{children}</main>
+        <main className="page mx-auto max-w-[1440px] px-4 py-7 lg:px-10">
+          {currentItem?.tabs && (
+            <div>
+              <SectionTabs item={currentItem} path={path} />
+            </div>
+          )}
+          {children}
+        </main>
       </div>
     </div>
   );

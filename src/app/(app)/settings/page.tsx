@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { ChevronRight, FolderOpen, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
+import { Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/shell";
 import { api, useFetch, useMeta, useToast } from "@/components/providers";
 import { Card } from "@/components/charts";
@@ -19,14 +18,6 @@ export default function SettingsPage() {
         <Users admin={admin} />
       </div>
       <OptionsEditor admin={admin} />
-      <Link href="/drive" className="card flex items-center gap-3 px-5 py-4 transition hover:bg-[#fdfcf9]">
-        <FolderOpen size={18} className="text-[var(--muted)]" />
-        <span className="min-w-0 flex-1">
-          <span className="block text-[14px] font-semibold">Koneksi Google Drive</span>
-          <span className="block text-[12.5px] text-[var(--muted)]">Tempat penyimpanan file upload di kalender konten, influencer & event</span>
-        </span>
-        <ChevronRight size={16} className="text-[var(--muted)]" />
-      </Link>
       <div className="grid gap-5 xl:grid-cols-2">
         <Password />
         <Activity />
