@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   LayoutDashboard, Lightbulb, FileBarChart, Megaphone, Wallet, CalendarDays, Target, Users, CalendarHeart,
-  MessageCircle, PhoneCall, Send, Star, Sparkles, ArrowUpDown, Settings, LogOut, Menu, X, ShieldCheck, Bell, FolderOpen, Store, CalendarRange, ChevronDown, Check,
+  MessageCircle, PhoneCall, Send, Star, Sparkles, ArrowUpDown, Settings, LogOut, Menu, X, ShieldCheck, Bell, Store, CalendarRange, ChevronDown, Check,
 } from "lucide-react";
 import { PRESETS, useFilter, useMeta } from "./providers";
 import { NotificationBell } from "./notification-bell";
@@ -57,7 +57,6 @@ const NAV: { section?: string; items: Item[] }[] = [
   {
     section: "Data",
     items: [
-      { href: "/drive", label: "File & Drive", icon: FolderOpen },
       { href: "/data", label: "Impor / Ekspor", icon: ArrowUpDown },
       { href: "/settings", label: "Pengaturan", icon: Settings },
     ],
