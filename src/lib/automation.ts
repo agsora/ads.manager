@@ -68,6 +68,28 @@ export async function runDaily(orgId: number, opts: { force?: boolean; weekly?: 
   if (negative.length) await alert(`${negative.length} ulasan negatif belum dibalas`, negative.slice(0, 3).map((n) => `${n.reviewer ?? "Anonim"} ${n.rating}★`).join(", "), "/reviews");
   if (closed.length) await alert(`${closed.length} campaign otomatis ditandai Done`, "Tanggal berakhirnya sudah lewat.", "/ads");
 
+  // broadcasts scheduled for today/tomorrow that are not sent yet
+  const dueBlasts = await q<Row>(
+    `SELECT campaign_name, blast_date, blast_time, brand FROM wa_blasts WHERE org_id = $1 AND blast_date BETWEEN $2 AND $3 AND COALESCE(status, 'Draft') IN ('Draft', 'Terjadwal') ORDER BY blast_date, blast_time NULLS LAST`,
+    [orgId, today, addDays(today, 1)],
+  );
+  if (dueBlasts.length)
+    await alert(
+      `${dueBlasts.length} broadcast WhatsApp akan dikirim`,
+      dueBlasts.slice(0, 3).map((b) => `${b.campaign_name} (${String(b.blast_date) === today ? "hari ini" : "besok"}${b.blast_time ? ` ${String(b.blast_time).slice(0, 5)}` : ""})`).join(", "),
+      "/blast/schedule",
+    );
+  // promo preparation steps that start today: teaser content H-7, ads H-5, blast H-2
+  const promoSteps = [
+    { lead: 7, label: "siapkan konten teaser" },
+    { lead: 5, label: "mulai tayang iklan" },
+    { lead: 2, label: "kirim blast WhatsApp" },
+  ];
+  for (const st of promoSteps) {
+    const evs = await q<Row>(`SELECT title FROM marketing_events WHERE org_id = $1 AND event_date = $2`, [orgId, addDays(today, st.lead)]);
+    if (evs.length) await alert(`H-${st.lead}: ${st.label}`, evs.slice(0, 3).map((e) => String(e.title)).join(", "), "/promo");
+  }
+
   // ---- digest email
   const users = await orgUsers(orgId);
   let digestEmails = 0;

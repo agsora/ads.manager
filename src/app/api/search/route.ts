@@ -43,7 +43,7 @@ export const GET = handle(async (req: Request) => {
     ...ads.map((r) => ({ type: "Campaign", title: r.campaign_name, sub: [r.brand, r.platform].filter(Boolean).join(" · "), href: "/ads" })),
     ...reviews.map((r) => ({ type: "Ulasan", title: `${r.reviewer ?? "Anonim"} · ${r.rating}★`, sub: String(r.comment ?? "").slice(0, 80), href: "/reviews" })),
     ...infl.map((r) => ({ type: "Influencer", title: r.influencer, sub: r.platform ?? "", href: "/influencers" })),
-    ...events.map((r) => ({ type: "Event", title: r.title, sub: d(r.event_date), href: "/events" })),
+    ...events.map((r) => ({ type: "Event", title: r.title, sub: d(r.event_date), href: "/promo" })),
   ];
   return NextResponse.json({ hits });
 });

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   LayoutDashboard, Lightbulb, FileBarChart, Megaphone, Wallet, CalendarDays, Target, Users, CalendarHeart,
-  MessageCircle, PhoneCall, Send, Star, Sparkles, ArrowUpDown, Settings, LogOut, Menu, X, ShieldCheck, Bell, FolderOpen, Store, CalendarRange, ChevronDown, Check,
+  MessageCircle, PhoneCall, Send, Star, Sparkles, ArrowUpDown, Settings, LogOut, Menu, X, ShieldCheck, Bell, FolderOpen, Filter, Layers, ClipboardList, CalendarClock, Eye, Store, CalendarRange, ChevronDown, Check,
 } from "lucide-react";
 import { PRESETS, useFilter, useMeta } from "./providers";
 import { NotificationBell } from "./notification-bell";
@@ -23,10 +23,11 @@ const NAV: { section?: string; items: Item[] }[] = [
       { href: "/", label: "Ringkasan", icon: LayoutDashboard },
       {
         href: "/insights",
-        label: "Insight & Target",
+        label: "Insight",
         icon: Lightbulb,
         tabs: [
           { href: "/insights", label: "Insight & Saran", icon: Lightbulb },
+          { href: "/funnel", label: "Funnel & Atribusi", icon: Filter },
           { href: "/kpi", label: "Target KPI", icon: Target },
         ],
       },
@@ -43,6 +44,7 @@ const NAV: { section?: string; items: Item[] }[] = [
         tabs: [
           { href: "/ads", label: "Ads Campaign", icon: Megaphone },
           { href: "/ads/budget", label: "Saldo & Top Up", icon: Wallet },
+          { href: "/creatives", label: "Library Kreatif", icon: Layers },
         ],
       },
       {
@@ -51,22 +53,32 @@ const NAV: { section?: string; items: Item[] }[] = [
         icon: CalendarDays,
         tabs: [
           { href: "/content", label: "Content Plan", icon: CalendarDays },
+          { href: "/promo", label: "Kalender Promo", icon: CalendarHeart },
+          { href: "/snippets", label: "Bank Caption", icon: ClipboardList },
           { href: "/followers", label: "Followers", icon: Users },
-          { href: "/events", label: "Event & Tanggal", icon: CalendarHeart },
         ],
       },
       {
         href: "/leads",
-        label: "WA Leads",
+        label: "WhatsApp",
         icon: MessageCircle,
         tabs: [
-          { href: "/leads", label: "Daftar Leads", icon: MessageCircle },
+          { href: "/leads", label: "WA Leads", icon: MessageCircle },
           { href: "/leads/followup", label: "Papan Follow Up", icon: PhoneCall },
+          { href: "/blast", label: "WA Blast", icon: Send },
+          { href: "/blast/schedule", label: "Jadwal Broadcast", icon: CalendarClock },
         ],
       },
-      { href: "/blast", label: "WA Blast", icon: Send },
-      { href: "/reviews", label: "Google Business", icon: Star },
-      { href: "/influencers", label: "Influencer", icon: Sparkles },
+      {
+        href: "/reviews",
+        label: "Reputasi & Pasar",
+        icon: Star,
+        tabs: [
+          { href: "/reviews", label: "Google Business", icon: Star },
+          { href: "/influencers", label: "Influencer", icon: Sparkles },
+          { href: "/competitors", label: "Kompetitor", icon: Eye },
+        ],
+      },
     ],
   },
   {
