@@ -10,14 +10,16 @@ export const GET = handle(async (req: Request) => {
   const secret = process.env.CRON_SECRET;
   if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) throw new HttpError(401, "Unauthorized");
   const orgs = await q<{ id: number }>(`SELECT DISTINCT org_id AS id FROM users`);
-  const results = [];
-  for (const o of orgs) {
-    try {
-      results.push(await runDaily(o.id, { req }));
-    } catch (e) {
-      results.push({ orgId: o.id, error: (e as Error).message });
-    }
-  }
+  // workspaces run side by side: each one may wait ~20s on the AI advice, and all share one 60s function
+  const results = await Promise.all(
+    orgs.map(async (o) => {
+      try {
+        return await runDaily(o.id, { req });
+      } catch (e) {
+        return { orgId: o.id, error: (e as Error).message };
+      }
+    }),
+  );
   return NextResponse.json({ ok: true, results });
 });
 

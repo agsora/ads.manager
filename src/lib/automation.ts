@@ -118,6 +118,9 @@ export async function runDaily(orgId: number, opts: { force?: boolean; weekly?: 
     if (a.followUps.length) sections.push({ title: `Follow up jatuh tempo (${a.followUps.length})`, items: a.followUps.slice(0, 10).map((f) => `${f.segment ?? "-"} · ${f.name} · ${f.age} hari · FU${f.stage > 3 ? "✓" : f.stage}`) });
     if (lowWallets.length) sections.push({ title: "Saldo iklan menipis", items: lowWallets.map((w) => `${w.brand} · ${w.platform}: ${fmtMoney(w.closing)}`) });
     if (negative.length) sections.push({ title: "Ulasan negatif belum dibalas", items: negative.map((n) => `${n.reviewer ?? "Anonim"} (${n.rating}★) — ${String(n.comment ?? "").slice(0, 80)}`) });
+    const advToday = await lastAdvice(orgId);
+    if (advToday && advToday.at.slice(0, 10) === today)
+      sections.push({ title: "Saran AI hari ini", items: [advToday.advice.ringkasan, ...advToday.advice.saran.slice(0, 3).map((x) => `[${x.prioritas}] ${x.judul} — ${x.langkah[0] ?? ""}`)] });
     if (critical.length) sections.push({ title: "Insight kritis", items: critical.map((i) => `${i.title} → ${i.action}`) });
     sections.push({
       title: "Bulan ini sejauh ini",

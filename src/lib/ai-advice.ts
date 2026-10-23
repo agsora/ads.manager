@@ -150,12 +150,12 @@ Format jawaban: tulis dalam bahasa Indonesia dengan format berikut, tanpa tabel.
 ${user}`;
 }
 
-const GEMINI_BASE = process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com/v1beta";
+export const GEMINI_BASE = process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com/v1beta";
 const GEMINI_PREFERRED = "gemini-3.5-flash"; // measured: answers this request in roughly 10 seconds
 let geminiModelsCache: string[] | null = null;
 
 /** Models to try, best first. GEMINI_MODEL wins; otherwise the preferred stable model, then newer/older plain "flash" models. */
-async function geminiCandidates(key: string): Promise<string[]> {
+export async function geminiCandidates(key: string): Promise<string[]> {
   if (process.env.GEMINI_MODEL) return [process.env.GEMINI_MODEL];
   if (geminiModelsCache) return geminiModelsCache;
   const r = await fetch(`${GEMINI_BASE}/models?pageSize=200`, { headers: { "x-goog-api-key": key }, signal: AbortSignal.timeout(15_000) });
