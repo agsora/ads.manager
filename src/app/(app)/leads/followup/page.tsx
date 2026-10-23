@@ -25,10 +25,13 @@ export default function FollowUpBoard() {
   const today = todayISO();
   const fillTemplate = (t: string, r: Row) =>
     t.replaceAll("{nama}", String(r.name ?? "Bapak/Ibu")).replaceAll("{brand}", String(r.brand ?? "kami")).replaceAll("{kebutuhan}", String(r.need ?? "kebutuhan Anda"));
+  // "Balasan WhatsApp" entries from the Bank Caption join the built-in templates (same placeholders)
+  const { data: snippets } = useFetch<{ rows: Row[] }>("/api/r/snippets");
   const templatesFor = (r: Row, ghost: boolean) => {
     const seg = String(r.segment ?? "").toLowerCase();
     const key = ghost ? "wa_template_ghost" : seg === "hot" ? "wa_template_hot" : seg === "warm" ? "wa_template_warm" : "wa_template_cold";
-    return options[key] ?? [];
+    const own = (snippets?.rows ?? []).filter((x) => x.kind === "Balasan WhatsApp" && (!x.brand || x.brand === r.brand)).map((x) => String(x.body ?? ""));
+    return [...(options[key] ?? []), ...own];
   };
   const bq = f.brand ? `&brand=${encodeURIComponent(f.brand)}` : "";
   const { data, reload } = useFetch<{ rows: Row[] }>(`/api/r/leads?from=${addDays(today, -90)}&to=${today}${bq}`);

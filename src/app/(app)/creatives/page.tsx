@@ -3,12 +3,13 @@
 import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/shell";
 import { ResourceTable } from "@/components/resource-table";
-import { useFetch } from "@/components/providers";
+import { api, useFetch, useToast } from "@/components/providers";
 import { Card, Empty } from "@/components/charts";
 import { fmtMoney, fmtPct } from "@/lib/format";
 import { n, type Row } from "@/lib/resources";
 
 export default function CreativesPage() {
+  const toast = useToast();
   const [tick, setTick] = useState(0);
   const { data } = useFetch<{ rows: Row[] }>(`/api/r/creatives?t=${tick}`);
 
@@ -35,7 +36,7 @@ export default function CreativesPage() {
       <PageHeader
         eyebrow="Iklan"
         title="Library Kreatif"
-        desc="Simpan setiap desain/video iklan beserta hasilnya. Dari sini terlihat kreatif mana yang murah mendapat leads (layak diulang) dan mana yang boros (layak dihentikan)."
+        desc="Simpan setiap desain/video iklan beserta hasilnya. Isi kolom Campaign, pilih barisnya, lalu klik Tarik hasil dari campaign: biaya, impresi, dan klik diambil dari Ads Campaign, leads dan deal dari WA Leads berkode sama. Dari sini terlihat kreatif mana yang murah mendapat leads (layak diulang) dan mana yang boros (layak dihentikan)."
       />
       {ranked.length > 0 && (
         <div className="grid gap-5 md:grid-cols-2">
@@ -59,7 +60,26 @@ export default function CreativesPage() {
           </Card>
         </div>
       )}
-      <ResourceTable resourceKey="creatives" ignoreDate quickFilters={["format", "verdict"]} onChanged={() => setTick((t) => t + 1)} searchPlaceholder="Cari nama kreatif, campaign…" />
+      <ResourceTable
+        resourceKey="creatives"
+        selectionActions={(ids, done) => (
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={async () => {
+              try {
+                const r = await api<{ updated: number; skipped: string[] }>("/api/creatives/pull", "POST", { ids });
+                toast(`${r.updated} kreatif diperbarui dari Ads Campaign & WA Leads${r.skipped.length ? ` · ${r.skipped.length} dilewati (isi kolom Campaign dulu)` : ""}`);
+                done();
+                setTick((t) => t + 1);
+              } catch (e) {
+                toast((e as Error).message, "err");
+              }
+            }}
+          >
+            Tarik hasil dari campaign
+          </button>
+        )}
+        ignoreDate quickFilters={["format", "verdict"]} onChanged={() => setTick((t) => t + 1)} searchPlaceholder="Cari nama kreatif, campaign…" />
     </div>
   );
 }

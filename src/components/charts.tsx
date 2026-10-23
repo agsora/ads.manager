@@ -172,26 +172,31 @@ export function BarList({ items, format = "number", color = "var(--s1)", sub }: 
 
 export function Funnel({ steps }: { steps: { name: string; value: number }[] }) {
   const max = Math.max(1, ...steps.map((s) => s.value));
+  // impressions dwarf every later step, so bar widths use a cube-root scale to keep small steps visible
+  const width = (v: number) => (v > 0 ? Math.max(3, Math.cbrt(v / max) * 100) : 0);
   return (
-    <div className="space-y-1.5">
-      {steps.map((s, i) => {
-        const prev = i > 0 ? steps[i - 1].value : null;
-        const rate = prev ? s.value / prev : null;
-        return (
-          <div key={s.name} className="grid grid-cols-[110px_1fr_auto] items-center gap-3 text-[13px]">
-            <span className="font-medium text-[var(--ink-2)]">{s.name}</span>
-            <div className="h-7 rounded-md bg-[var(--track)]">
-              <div className="flex h-7 items-center rounded-md px-2 text-[12px] font-semibold text-white" style={{ width: `${Math.max(2, (s.value / max) * 100)}%`, background: i < 3 ? "var(--s1)" : "var(--accent-ink)" }}>
-                {s.value / max > 0.18 ? fmtCompact(s.value) : ""}
+    <div>
+      <ol className="space-y-3.5">
+        {steps.map((s, i) => {
+          const prev = i > 0 ? steps[i - 1].value : null;
+          const rate = prev ? s.value / prev : null;
+          return (
+            <li key={s.name} className="min-w-0">
+              <div className="mb-1 flex items-baseline justify-between gap-3 text-[13px]">
+                <span className="min-w-0 truncate font-medium text-[var(--ink-2)]">{s.name}</span>
+                <span className="shrink-0 tnum">
+                  <b className="text-[14px]">{fmtNum(s.value)}</b>
+                  {rate !== null && <span className="ml-2 rounded-full bg-[var(--surface-2)] px-1.5 py-0.5 text-[11px] text-[var(--muted)]">{fmtPct(rate, 1)}<span className="hidden sm:inline"> dari tahap sebelumnya</span></span>}
+                </span>
               </div>
-            </div>
-            <span className="w-24 text-right tnum">
-              <b>{fmtNum(s.value)}</b>
-              {rate !== null && <span className="ml-1 text-[11.5px] text-[var(--muted)]">{fmtPct(rate, 1)}</span>}
-            </span>
-          </div>
-        );
-      })}
+              <div className="h-3 overflow-hidden rounded-full bg-[var(--track)]">
+                <div className="h-3 rounded-full" style={{ width: `${width(s.value)}%`, background: i < 3 ? "var(--s1)" : "var(--accent-ink)", transition: "width .6s cubic-bezier(.2,.8,.2,1)" }} />
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="mt-3 text-[11.5px] text-[var(--muted)]">Lebar batang diskalakan agar tahap kecil tetap terlihat; angka dan persentase adalah nilai sebenarnya.</p>
     </div>
   );
 }

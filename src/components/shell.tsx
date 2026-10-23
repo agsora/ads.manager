@@ -241,8 +241,8 @@ function GlobalFilter() {
         button={(open) => (
           <button className={`pill ${open ? "pill-on" : ""}`}>
             <Store size={14} className="text-[var(--muted)]" />
-            <span className="max-w-[84px] truncate sm:max-w-[120px]">{f.brand || "Semua brand"}</span>
-            <ChevronDown size={13} className="text-[var(--muted)]" />
+            <span className="max-w-[84px] truncate sm:max-w-[120px]">{f.brand || (<><span className="sm:hidden">Semua</span><span className="hidden sm:inline">Semua brand</span></>)}</span>
+            <ChevronDown size={13} className="hidden text-[var(--muted)] sm:block" />
           </button>
         )}
       >
@@ -268,7 +268,7 @@ function GlobalFilter() {
             <span className="truncate sm:hidden">{label ?? range}</span>
             <span className="hidden sm:inline">{label ?? "Custom"}</span>
             <span className="hidden truncate text-[var(--muted)] sm:ml-0.5 sm:inline">{range}</span>
-            <ChevronDown size={13} className="text-[var(--muted)]" />
+            <ChevronDown size={13} className="hidden text-[var(--muted)] sm:block" />
           </button>
         )}
       >

@@ -165,7 +165,7 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
   const prevFrom = addDays(prevTo, -(cmpLen - 1));
 
   const load = (key: string, f: string, t: string, limit?: number) => listRows(orgId, RESOURCE_MAP[key], { from: f, to: t, brand, limit });
-  const [adsAll, leadsAll, contentAll, reviewsAll, blastAll, inflAll, kpiRows, walletRows, events, followers, openLeads, upcomingContent, contactsAll, statRows, adsHistory] =
+  const [adsAll, leadsAll, contentAll, reviewsAll, blastAll, inflAll, kpiRows, walletRows, events, followers, openLeads, upcomingContent, contactsAll, statRows, adsHistory, blastHistory, inflHistory] =
     await Promise.all([
       // campaigns may start before the window and still spend in it
       load("ads", addDays(prevFrom, -90), to),
@@ -184,6 +184,9 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
       load("review_stats", "1900-01-01", to),
       // the balance carries over month to month, so it needs every campaign since the first top up
       load("ads", "1900-01-01", to, 20000),
+      // blast and influencer costs can be paid from the same top-ups, so they also draw down a wallet
+      load("blast", "1900-01-01", to, 20000),
+      load("influencers", "1900-01-01", to, 20000),
     ]);
 
   const overlapAds = (f: string, t: string) =>
@@ -479,7 +482,7 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     d.setUTCMonth(d.getUTCMonth() + 1);
     return d.toISOString().slice(0, 10);
   };
-  interface WalletMonth { id: number | null; brand: string; platform: string; month: string; opening: number; topup: number; planned: number; available: number; spent: number; closing: number; carried: boolean; manual: boolean }
+  interface WalletMonth { kind: "ads" | "blast" | "influencer"; id: number | null; brand: string; platform: string; month: string; opening: number; topup: number; planned: number; available: number; spent: number; closing: number; carried: boolean; manual: boolean }
   const walletChains = new Map<string, Row[]>();
   for (const w of walletRows) {
     const k = `${w.brand}|${lc(w.platform)}`;
@@ -494,15 +497,21 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     for (let m = first; m <= walletMonth; m = addMonth(m)) {
       const w = byMonth.get(m.slice(0, 7));
       const ref = w ?? rows[0];
-      const spent = adsHistory
-        .filter((r) => r.brand === ref.brand && lc(r.platform) === lc(ref.platform))
-        .reduce((sum2, r) => sum2 + spendIn(r, m, monthEnd(m) < effTo ? monthEnd(m) : effTo), 0);
+      const wEnd = monthEnd(m) < effTo ? monthEnd(m) : effTo;
+      const kind: WalletMonth["kind"] = /blast|whatsapp|wa/.test(lc(ref.platform)) ? "blast" : /influencer|kol|endorse/.test(lc(ref.platform)) ? "influencer" : "ads";
+      const sameBrand = (r: Row) => !ref.brand || !r.brand || r.brand === ref.brand;
+      const spent =
+        kind === "blast"
+          ? blastHistory.filter((r) => sameBrand(r) && inRange(r.blast_date, m, wEnd)).reduce((t, r) => t + n(r.cost), 0)
+          : kind === "influencer"
+            ? inflHistory.filter((r) => sameBrand(r) && inRange(r.post_date, m, wEnd)).reduce((t, r) => t + n(r.fee), 0)
+            : adsHistory.filter((r) => r.brand === ref.brand && lc(r.platform) === lc(ref.platform)).reduce((sum2, r) => sum2 + spendIn(r, m, wEnd), 0);
       const isFirst = m === first;
       const opening = isFirst ? n(w?.opening_balance) : carry;
       const topup = n(w?.topup);
       const available = opening + topup;
       const closing = available - spent;
-      walletHistory.push({ id: w ? Number(w.id) : null, brand: String(ref.brand ?? ""), platform: String(ref.platform ?? ""), month: m, opening, topup, planned: n(w?.planned_topup), available, spent, closing, carried: !isFirst, manual: !!w });
+      walletHistory.push({ kind, id: w ? Number(w.id) : null, brand: String(ref.brand ?? ""), platform: String(ref.platform ?? ""), month: m, opening, topup, planned: n(w?.planned_topup), available, spent, closing, carried: !isFirst, manual: !!w });
       carry = closing;
     }
   }
@@ -793,6 +802,12 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
   }
 
   // GENERAL
+  const noBudget = events.filter((e) => !n(e.planned_budget) && String(e.event_date) <= addDays(today, 14));
+  if (noBudget.length)
+    push({ level: "warning", area: "Budget", title: `${noBudget.length} event dalam 14 hari belum punya rencana budget`, detail: noBudget.slice(0, 4).map((e) => `${e.title} (${e.event_date})`).join(", "), action: "Isi rencana budget iklan & target leads di Kalender Promo agar belanja iklan dan blast terarah dan saldo cukup." });
+  const lateBlasts = blastHistory.filter((b) => (!b.status || b.status === "Draft" || b.status === "Terjadwal") && String(b.blast_date) < today && String(b.blast_date) >= addDays(today, -30));
+  if (lateBlasts.length)
+    push({ level: "warning", area: "WA Blast", title: `${lateBlasts.length} blast terjadwal sudah lewat tanggal tapi belum ditandai terkirim`, detail: lateBlasts.slice(0, 3).map((b) => `${b.campaign_name} (${b.blast_date})`).join(", "), action: "Buka Jadwal Broadcast: tandai Terkirim dan isi hasilnya, atau jadwalkan ulang. Biaya blast ikut memotong saldo bila Sumber Dana-nya WhatsApp Blast." });
   if (events.length)
     push({ level: "info", area: "Umum", title: `${events.length} event/tanggal penting dalam 30 hari`, detail: events.slice(0, 4).map((e) => `${e.title} (${e.event_date})`).join(", "), action: "Siapkan konten teaser H-7, campaign iklan H-5, dan blast H-2 untuk setiap event." });
   const paidLeads = leads.filter((r) => /ads|iklan/i.test(String(r.source ?? ""))).length;

@@ -35,7 +35,7 @@ function WalletCard({ w }: { w: Wallets[number] }) {
       <dl className="mt-4 space-y-2 border-t border-[var(--grid)] pt-4 text-[13.5px]">
         <Row label="Saldo awal" value={fmtMoney(w.opening)} hint={w.carried ? "terbawa" : undefined} />
         <Row label="Top up" value={w.topup ? `+ ${fmtMoney(w.topup)}` : "–"} />
-        <Row label="Belanja iklan" value={w.spent ? `− ${fmtMoney(w.spent)}` : "–"} />
+        <Row label={w.kind === "blast" ? "Biaya blast" : w.kind === "influencer" ? "Fee influencer" : "Belanja iklan"} value={w.spent ? `− ${fmtMoney(w.spent)}` : "–"} hint={w.kind === "ads" ? undefined : "dari laporan " + (w.kind === "blast" ? "WA Blast" : "Influencer")} />
         <Row label="Belanja per hari" value={fmtMoney(w.burnPerDay)} />
         {w.planned > 0 && <Row label="Rencana top up" value={fmtMoney(w.planned)} />}
       </dl>
@@ -136,7 +136,7 @@ export default function BudgetPage() {
   const totalNow = wallets.reduce((s, w) => s + w.closing, 0);
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Iklan" title="Saldo & Top Up Iklan" desc="Saldo terbawa antar bulan: saldo akhir = saldo awal + top up − belanja iklan nyata (dari data campaign), dan menjadi saldo awal bulan berikutnya. Saldo awal cukup diisi sekali di bulan pertama; setelah itu catat top up saja." />
+      <PageHeader eyebrow="Iklan" title="Saldo & Top Up Iklan" desc="Saldo terbawa antar bulan: saldo akhir = saldo awal + top up − pemakaian nyata (belanja Ads Campaign, biaya WA Blast, atau fee Influencer sesuai Sumber Dana), dan menjadi saldo awal bulan berikutnya. Saldo awal cukup diisi sekali di bulan pertama; setelah itu catat top up saja." />
 
       <section>
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
@@ -158,7 +158,7 @@ export default function BudgetPage() {
             <Empty text="Belum ada data saldo — tambahkan saldo awal & top up di bagian bawah" />
           </div>
         )}
-        <p className="mt-3 text-[12px] text-[var(--muted)]">Belanja iklan diambil dari Ads Campaign per brand & platform; belanja yang melintas dua bulan dibagi proporsional per hari.</p>
+        <p className="mt-3 text-[12px] text-[var(--muted)]">Pemakaian diambil otomatis: Meta/TikTok/Google dari Ads Campaign, “WhatsApp Blast” dari laporan WA Blast, “Influencer” dari fee Influencer (per brand). Belanja yang melintas dua bulan dibagi proporsional per hari.</p>
       </section>
 
       {wallets.length > 0 && <Simulator wallets={wallets} />}
@@ -174,7 +174,7 @@ export default function BudgetPage() {
                   <th>Platform</th>
                   <th className="num">Saldo awal</th>
                   <th className="num">Top up</th>
-                  <th className="num">Belanja iklan</th>
+                  <th className="num">Pemakaian</th>
                   <th className="num">Saldo akhir</th>
                 </tr>
               </thead>

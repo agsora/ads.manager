@@ -49,7 +49,7 @@ export default function SnippetsPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow="Konten" title="Bank Caption & Template" desc="Simpan caption, hashtag, CTA, dan balasan WhatsApp yang sudah terbukti bagus. Klik Salin, tempel di mana saja — yang paling sering dipakai naik ke atas.">
+      <PageHeader eyebrow="Konten" title="Bank Caption & Template" desc="Simpan caption, hashtag, CTA, dan balasan WhatsApp yang sudah terbukti bagus. Klik Salin, tempel di mana saja — yang paling sering dipakai naik ke atas. Jenis Balasan WhatsApp juga otomatis muncul sebagai pilihan di Papan Follow Up.">
         <button className="btn btn-primary" onClick={() => setEditing(null)}>
           <Plus size={15} /> Template baru
         </button>
