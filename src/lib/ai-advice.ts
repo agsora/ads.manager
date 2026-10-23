@@ -118,17 +118,39 @@ export async function lastAdvice(orgId: number): Promise<StoredAdvice | null> {
   }
 }
 
-export async function generateAdvice(opts: { orgId: number; from: string; to: string; brand: string | null; focus: string; previousTitles: string[] }): Promise<StoredAdvice> {
-  if (!aiConfigured()) throw new HttpError(503, "Fitur AI belum diaktifkan: ANTHROPIC_API_KEY belum dipasang di server.");
-  const used = await usedToday(opts.orgId);
-  if (used >= DAILY_LIMIT) throw new HttpError(429, `Batas ${DAILY_LIMIT} permintaan AI per hari sudah tercapai. Coba lagi besok.`);
-
+/** The instruction block shared by the API call and the copy-paste prompt: lens, previous titles to avoid, data. */
+export async function buildUserPrompt(opts: { orgId: number; from: string; to: string; brand: string | null; focus: string; previousTitles: string[] }) {
   const ctx = await buildContext(opts.orgId, opts.from, opts.to, opts.brand);
   if (process.env.AI_DEBUG) console.log("[ai] context chars:", JSON.stringify(ctx).length);
   // pick two random lenses each time so repeated requests don't converge on the same answer
   const angles = [...ANGLES].sort(() => Math.random() - 0.5).slice(0, 2);
   const lens = FOCUS_HINT[opts.focus] ?? `Sudut pandang untuk kali ini: ${angles[0]}; dan ${angles[1]}.`;
   const avoid = opts.previousTitles.length ? `\n\nSaran yang sudah pernah ditampilkan (jangan diulang, cari hal lain):\n${opts.previousTitles.map((t) => `- ${t}`).join("\n")}` : "";
+  return `${lens}${avoid}
+
+Data periode (JSON):
+${JSON.stringify(ctx)}`;
+}
+
+/** Plain-text prompt for pasting into the Claude app (no API key; uses the person's own subscription). */
+export async function buildPastePrompt(opts: { orgId: number; from: string; to: string; brand: string | null; focus: string }) {
+  const user = await buildUserPrompt({ ...opts, previousTitles: [] });
+  return `${SYSTEM}
+
+Format jawaban: tulis dalam bahasa Indonesia dengan format berikut, tanpa tabel.
+1. "Ringkasan" 2-3 kalimat.
+2. 4 sampai 6 saran bernomor, urut dari prioritas tertinggi. Setiap saran berisi: Judul, Area, Prioritas (tinggi/sedang/rendah), Temuan (sebut angka dari data), Langkah (3-5 butir), Penanggung jawab, Angka yang dipantau, Perkiraan dampak.
+3. "Data yang akan membuat saran lebih tepat" (0-3 butir).
+
+${user}`;
+}
+
+export async function generateAdvice(opts: { orgId: number; from: string; to: string; brand: string | null; focus: string; previousTitles: string[] }): Promise<StoredAdvice> {
+  if (!aiConfigured()) throw new HttpError(503, "Fitur AI belum diaktifkan: ANTHROPIC_API_KEY belum dipasang di server.");
+  const used = await usedToday(opts.orgId);
+  if (used >= DAILY_LIMIT) throw new HttpError(429, `Batas ${DAILY_LIMIT} permintaan AI per hari sudah tercapai. Coba lagi besok.`);
+
+  const prompt = await buildUserPrompt(opts);
 
   const client = new Anthropic({ timeout: 55_000, maxRetries: 1 });
   let response;
@@ -142,7 +164,7 @@ export async function generateAdvice(opts: { orgId: number; from: string; to: st
       messages: [
         {
           role: "user",
-          content: `${lens}${avoid}\n\nData periode (JSON):\n${JSON.stringify(ctx)}`,
+          content: prompt,
         },
       ],
     });
