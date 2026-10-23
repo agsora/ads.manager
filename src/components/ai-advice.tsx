@@ -1,15 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Copy, ExternalLink, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { ExternalLink, Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { api, useFilter, useToast } from "./providers";
 import { fmtDate } from "@/lib/format";
 import type { Advice, StoredAdvice } from "@/lib/ai-advice";
 
 interface Status {
   configured: boolean;
-  provider: "claude" | "gemini" | null;
-  model: string;
   used: number;
   limit: number;
   last: StoredAdvice | null;
@@ -36,26 +34,12 @@ export function AiAdvice() {
   const [st, setSt] = useState<Status | null>(null);
   const [busy, setBusy] = useState(false);
   const [focus, setFocus] = useState<string>("auto");
-  const [copying, setCopying] = useState(false);
 
   useEffect(() => {
     api<Status>("/api/ai/advice", "GET")
       .then(setSt)
       .catch(() => setSt(null));
   }, []);
-
-  const copyForClaude = async () => {
-    setCopying(true);
-    try {
-      const r = await api<{ prompt: string }>("/api/ai/advice", "PUT", { from: f.from, to: f.to, brand: f.brand || null, focus });
-      await navigator.clipboard.writeText(r.prompt);
-      toast("Ringkasan disalin. Buka Claude, tempel, lalu kirim.");
-    } catch (e) {
-      toast((e as Error).message || "Gagal menyalin", "err");
-    } finally {
-      setCopying(false);
-    }
-  };
 
   const generate = async () => {
     setBusy(true);
@@ -96,19 +80,13 @@ export function AiAdvice() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select className="input !h-9 !w-auto !text-[13px]" value={focus} onChange={(e) => setFocus(e.target.value)} aria-label="Fokus saran" disabled={busy || copying}>
+          <select className="input !h-9 !w-auto !text-[13px]" value={focus} onChange={(e) => setFocus(e.target.value)} aria-label="Fokus saran" disabled={busy}>
             {FOCUS.map(([k, l]) => (
               <option key={k} value={k}>
                 {l}
               </option>
             ))}
           </select>
-          {!st?.configured && (
-            <button className="btn" onClick={copyForClaude} disabled={copying || busy}>
-              {copying ? <Loader2 size={15} className="animate-spin" /> : <Copy size={15} />}
-              Salin untuk Claude
-            </button>
-          )}
           {st?.configured && (
             <button className="btn btn-primary" onClick={generate} disabled={busy}>
               {busy ? <Loader2 size={15} className="animate-spin" /> : advice ? <RefreshCw size={15} /> : <Sparkles size={15} />}
@@ -124,7 +102,7 @@ export function AiAdvice() {
           <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--accent-ink)] underline">
             Google AI Studio <ExternalLink size={12} />
           </a>
-          , lalu memasangnya di Vercel (<b>Settings → Environment Variables</b>) dengan nama <code>GEMINI_API_KEY</code> dan deploy ulang. Setelah itu saran muncul sendiri tiap pagi, tanpa salin-tempel. Alternatif: kunci berbayar Claude (<code>ANTHROPIC_API_KEY</code>) untuk kualitas lebih tinggi.
+          , lalu memasangnya di Vercel (<b>Settings → Environment Variables</b>) dengan nama <code>GEMINI_API_KEY</code> dan deploy ulang. Setelah itu saran muncul sendiri tiap pagi.
         </div>
       )}
 
@@ -185,7 +163,7 @@ export function AiAdvice() {
           <p className="text-[12px] text-[var(--muted)]">
             Dibuat {new Date(last!.at).toLocaleString("id-ID")} untuk periode {fmtDate(last!.period.from)} – {fmtDate(last!.period.to)}
             {last!.period.brand ? ` · ${last!.period.brand}` : ""}
-            {samePeriod ? "" : " (berbeda dari filter sekarang, klik Buat ulang untuk memperbarui)"} · {st!.provider === "gemini" ? "Gemini" : "Claude"} · {st!.used}/{st!.limit} permintaan hari ini. Saran AI adalah masukan, periksa angkanya sebelum bertindak.
+            {samePeriod ? "" : " (berbeda dari filter sekarang, klik Buat ulang untuk memperbarui)"} · Gemini · {st!.used}/{st!.limit} permintaan hari ini. Saran AI adalah masukan, periksa angkanya sebelum bertindak.
           </p>
         </div>
       )}

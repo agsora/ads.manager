@@ -1,12 +1,9 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { buildAnalytics } from "./analytics";
 import { getSetting, setSetting } from "./db";
 import { HttpError } from "./auth";
 import { todayISO } from "./format";
 
-export const MODEL = process.env.AI_MODEL || "claude-opus-5-5";
 export const DAILY_LIMIT = 30;
 
 export const AREAS = ["Iklan", "Leads & Akad", "Konten", "Blast & Remarketing", "Cabang & CS", "Budget & Saldo", "Reputasi", "Kepatuhan"] as const;
@@ -101,14 +98,7 @@ export async function buildContext(orgId: number, from: string, to: string, bran
   };
 }
 
-export type Provider = "claude" | "gemini";
-/** Claude when a paid key exists, otherwise Gemini's free tier when its key exists. */
-export function provider(): Provider | null {
-  if (process.env.ANTHROPIC_API_KEY) return "claude";
-  if (process.env.GEMINI_API_KEY) return "gemini";
-  return null;
-}
-export const aiConfigured = () => provider() !== null;
+export const aiConfigured = () => !!process.env.GEMINI_API_KEY;
 
 export async function usedToday(orgId: number) {
   return Number((await getSetting(`ai:count:${orgId}:${todayISO()}`)) ?? 0) || 0;
@@ -123,7 +113,7 @@ export async function lastAdvice(orgId: number): Promise<StoredAdvice | null> {
   }
 }
 
-/** The instruction block shared by the API call and the copy-paste prompt: lens, previous titles to avoid, data. */
+/** The instruction block for the model: lens, previous titles to avoid, data. */
 export async function buildUserPrompt(opts: { orgId: number; from: string; to: string; brand: string | null; focus: string; previousTitles: string[] }) {
   const ctx = await buildContext(opts.orgId, opts.from, opts.to, opts.brand);
   if (process.env.AI_DEBUG) console.log("[ai] context chars:", JSON.stringify(ctx).length);
@@ -137,19 +127,6 @@ Data periode (JSON):
 ${JSON.stringify(ctx)}`;
 }
 
-/** Plain-text prompt for pasting into the Claude app (no API key; uses the person's own subscription). */
-export async function buildPastePrompt(opts: { orgId: number; from: string; to: string; brand: string | null; focus: string }) {
-  const user = await buildUserPrompt({ ...opts, previousTitles: [] });
-  return `${SYSTEM}
-
-Format jawaban: tulis dalam bahasa Indonesia dengan format berikut, tanpa tabel.
-1. "Ringkasan" 2-3 kalimat.
-2. 4 sampai 6 saran bernomor, urut dari prioritas tertinggi. Setiap saran berisi: Judul, Area, Prioritas (tinggi/sedang/rendah), Temuan (sebut angka dari data), Langkah (3-5 butir), Penanggung jawab, Angka yang dipantau, Perkiraan dampak.
-3. "Data yang akan membuat saran lebih tepat" (0-3 butir).
-
-${user}`;
-}
-
 export const GEMINI_BASE = process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com/v1beta";
 const GEMINI_PREFERRED = "gemini-3.5-flash"; // measured: answers this request in roughly 10 seconds
 let geminiModelsCache: string[] | null = null;
@@ -161,14 +138,17 @@ export async function geminiCandidates(key: string): Promise<string[]> {
   const r = await fetch(`${GEMINI_BASE}/models?pageSize=200`, { headers: { "x-goog-api-key": key }, signal: AbortSignal.timeout(15_000) });
   if (!r.ok) throw new HttpError(r.status === 400 || r.status === 403 ? 503 : 502, r.status === 400 || r.status === 403 ? "GEMINI_API_KEY tidak valid atau belum diizinkan." : "Layanan AI sedang bermasalah. Coba lagi sebentar.");
   const j = (await r.json()) as { models?: { name: string; supportedGenerationMethods?: string[] }[] };
-  // plain versioned "gemini-<n>-flash" only: "-latest" aliases can hang, and old versions may be closed to new accounts
-  const names = (j.models ?? [])
+  // plain versioned flash / flash-lite only: "-latest" aliases can hang, and old versions may be closed to new accounts
+  const ver = (n: string) => parseFloat(n.split("-")[1]);
+  const all = (j.models ?? [])
     .filter((m) => (m.supportedGenerationMethods ?? []).includes("generateContent"))
-    .map((m) => m.name.replace(/^models\//, ""))
-    .filter((n) => /^gemini-\d+(\.\d+)?-flash$/.test(n))
-    .sort((x, y) => parseFloat(y.split("-")[1]) - parseFloat(x.split("-")[1]));
+    .map((m) => m.name.replace(/^models\//, ""));
+  const full = all.filter((n) => /^gemini-\d+(\.\d+)?-flash$/.test(n)).sort((x, y) => ver(y) - ver(x));
+  const lite = all.filter((n) => /^gemini-\d+(\.\d+)?-flash-lite$/.test(n)).sort((x, y) => ver(y) - ver(x));
+  // the full model first, then lite ones: they answer faster when the free tier is overloaded ("high demand" 503)
+  const names = [...(full.includes(GEMINI_PREFERRED) ? [GEMINI_PREFERRED] : full.slice(0, 1)), ...lite.slice(0, 2), ...full.filter((n) => n !== GEMINI_PREFERRED).slice(0, 1)];
   if (!names.length) throw new HttpError(502, "Tidak ada model Gemini yang cocok. Atur GEMINI_MODEL di server.");
-  geminiModelsCache = names.includes(GEMINI_PREFERRED) ? [GEMINI_PREFERRED, ...names.filter((n) => n !== GEMINI_PREFERRED)] : names;
+  geminiModelsCache = [...new Set(names)];
   return geminiModelsCache;
 }
 
@@ -176,7 +156,8 @@ type GeminiReply = { candidates?: { content?: { parts?: { text?: string }[] } }[
 
 async function callGemini(prompt: string): Promise<{ advice: Advice; model: string }> {
   const key = process.env.GEMINI_API_KEY!;
-  const models = (await geminiCandidates(key)).slice(0, 2);
+  const models = (await geminiCandidates(key)).slice(0, 3);
+  const started = Date.now();
   const example = JSON.stringify({
     ringkasan: "…",
     saran: [{ judul: "…", area: AREAS[0], prioritas: "tinggi", temuan: "…", langkah: ["…", "…", "…"], pic: "…", metrik: "…", dampak: "…" }],
@@ -199,18 +180,16 @@ async function callGemini(prompt: string): Promise<{ advice: Advice; model: stri
   let lastStatus = 0;
   let timedOut = false;
   for (const model of models) {
+    const left = 56_000 - (Date.now() - started);
+    if (left < 5_000) break;
     try {
-      let res = await call(model, true, 28_000);
-      if (res.status === 400) res = await call(model, false, 28_000); // this model does not accept the thinking option
-      if (res.status === 503) {
-        // the free tier sometimes answers "high demand": one short pause and another try
-        await new Promise((r) => setTimeout(r, 1500));
-        res = await call(model, true, 25_000);
-      }
+      const ms = Math.min(22_000, left);
+      let res = await call(model, true, ms);
+      if (res.status === 400) res = await call(model, false, ms); // this model does not accept the thinking option
+      // 503 "high demand" on the free tier: do not wait, the next (lighter) model usually answers right away
       if (process.env.AI_DEBUG) console.log("[ai] gemini", model, res.status);
       lastStatus = res.status;
       if (res.status === 401 || res.status === 403 || res.status === 400) throw new HttpError(503, "GEMINI_API_KEY tidak valid atau belum diizinkan.");
-      if (res.status === 429) throw new HttpError(429, "Batas gratis Gemini sedang habis. Coba lagi beberapa menit lagi atau besok.");
       if (!res.ok) {
         console.error("gemini", model, res.status, (await res.text()).slice(0, 200));
         continue; // 5xx: try the next model
@@ -230,46 +209,19 @@ async function callGemini(prompt: string): Promise<{ advice: Advice; model: stri
       else console.error("gemini", model, e instanceof Error ? e.message : e);
     }
   }
+  if (lastStatus === 429) throw new HttpError(429, "Jatah gratis Gemini per menit sedang habis. Tunggu sekitar satu menit lalu coba lagi.");
   if (timedOut) throw new HttpError(504, "Layanan AI terlalu lama merespons. Coba lagi.");
   if (lastStatus === 503) throw new HttpError(503, "Layanan Gemini sedang ramai. Coba lagi dalam beberapa menit.");
   throw new HttpError(502, "Layanan AI sedang bermasalah atau jawabannya tidak bisa dibaca. Coba buat ulang.");
 }
 
-async function callClaude(prompt: string): Promise<{ advice: Advice; model: string }> {
-  const client = new Anthropic({ timeout: 55_000, maxRetries: 1 });
-  let response;
-  try {
-    response = await client.messages.parse({
-      model: MODEL,
-      max_tokens: 8000,
-      thinking: { type: "adaptive" },
-      output_config: { effort: "medium", format: zodOutputFormat(AdviceSchema) },
-      system: SYSTEM,
-      messages: [{ role: "user", content: prompt }],
-    });
-  } catch (e) {
-    if (e instanceof Anthropic.AuthenticationError) throw new HttpError(503, "ANTHROPIC_API_KEY tidak valid. Periksa kunci API di pengaturan server.");
-    if (e instanceof Anthropic.RateLimitError) throw new HttpError(429, "Layanan AI sedang sibuk. Coba lagi sebentar.");
-    if (e instanceof Anthropic.APIConnectionTimeoutError) throw new HttpError(504, "Layanan AI terlalu lama merespons. Coba lagi.");
-    if (e instanceof Anthropic.APIError) {
-      console.error("anthropic", e.status, e.message);
-      throw new HttpError(502, "Layanan AI sedang bermasalah. Coba lagi sebentar.");
-    }
-    throw e;
-  }
-  if (response.stop_reason === "refusal") throw new HttpError(422, "AI menolak memproses permintaan ini. Coba ubah filter periode atau brand.");
-  if (!response.parsed_output) throw new HttpError(502, "Jawaban AI tidak bisa dibaca. Coba buat ulang.");
-  return { advice: response.parsed_output, model: MODEL };
-}
-
 export async function generateAdvice(opts: { orgId: number; from: string; to: string; brand: string | null; focus: string; previousTitles: string[] }): Promise<StoredAdvice> {
-  const prov = provider();
-  if (!prov) throw new HttpError(503, "Fitur AI belum diaktifkan: belum ada kunci API (GEMINI_API_KEY gratis atau ANTHROPIC_API_KEY) di server.");
+  if (!aiConfigured()) throw new HttpError(503, "Fitur AI belum diaktifkan: GEMINI_API_KEY belum dipasang di server.");
   const used = await usedToday(opts.orgId);
   if (used >= DAILY_LIMIT) throw new HttpError(429, `Batas ${DAILY_LIMIT} permintaan AI per hari sudah tercapai. Coba lagi besok.`);
 
   const prompt = await buildUserPrompt(opts);
-  const { advice, model } = prov === "claude" ? await callClaude(prompt) : await callGemini(prompt);
+  const { advice, model } = await callGemini(prompt);
 
   await setSetting(`ai:count:${opts.orgId}:${todayISO()}`, String(used + 1));
   const stored: StoredAdvice = { at: new Date().toISOString(), model, focus: opts.focus, period: { from: opts.from, to: opts.to, brand: opts.brand }, advice };

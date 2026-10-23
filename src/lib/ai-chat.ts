@@ -213,7 +213,7 @@ export async function chat(orgId: number, history: ChatTurn[]): Promise<{ reply:
   if (used >= CHAT_DAILY_LIMIT) throw new HttpError(429, `Batas ${CHAT_DAILY_LIMIT} pesan AI per hari sudah tercapai. Coba lagi besok.`);
 
   const pii = await allowPII(orgId);
-  const models = (await geminiCandidates(key)).slice(0, 2);
+  const models = (await geminiCandidates(key)).slice(0, 3);
   const contents: Content[] = history.slice(-12).map((t) => ({ role: t.role, parts: [{ text: t.text.slice(0, 4000) }] }));
   if (!contents.length || contents[contents.length - 1].role !== "user") throw new HttpError(400, "Pesan kosong");
 
@@ -221,11 +221,13 @@ export async function chat(orgId: number, history: ChatTurn[]): Promise<{ reply:
   const steps: string[] = [];
   let modelIdx = 0;
   for (let step = 0; step < MAX_STEPS; step++) {
-    const remaining = BUDGET_MS - (Date.now() - started);
-    if (remaining < 6000) return { reply: "Pertanyaannya butuh waktu lebih lama dari batas yang saya punya. Coba persempit, misalnya satu cabang atau satu periode.", steps };
+    const remainingAtStart = BUDGET_MS - (Date.now() - started);
+    if (remainingAtStart < 6000) return { reply: "Pertanyaannya butuh waktu lebih lama dari batas yang saya punya. Coba persempit, misalnya satu cabang atau satu periode.", steps };
     let res: Response | null = null;
     for (; modelIdx < models.length; modelIdx++) {
       try {
+        const remaining = BUDGET_MS - (Date.now() - started);
+        if (remaining < 4000) break;
         const body = JSON.stringify({
           systemInstruction: { parts: [{ text: systemText(pii) }] },
           contents,
@@ -233,7 +235,7 @@ export async function chat(orgId: number, history: ChatTurn[]): Promise<{ reply:
           generationConfig: { temperature: 0.7, maxOutputTokens: 4000, thinkingConfig: { thinkingLevel: "low" } },
         });
         const call = (b: string) =>
-          fetch(`${GEMINI_BASE}/models/${models[modelIdx]}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, signal: AbortSignal.timeout(Math.min(30_000, remaining)), body: b });
+          fetch(`${GEMINI_BASE}/models/${models[modelIdx]}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, signal: AbortSignal.timeout(Math.min(20_000, remaining)), body: b });
         res = await call(body);
         if (res.status === 400) {
           // maybe this model rejects the thinking option: retry once without it
@@ -242,28 +244,15 @@ export async function chat(orgId: number, history: ChatTurn[]): Promise<{ reply:
           const retry = await call(JSON.stringify(j));
           if (retry.ok) res = retry;
         }
-        if (res.status === 503) {
-          await new Promise((r) => setTimeout(r, 1200));
-          res = await call(body);
-        }
-        if (res.status === 429) {
-          // free tier is limited per minute: wait the delay Google asks for when it is short, then try once more
-          const txt = await res.text();
-          const wait = Number(/"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/.exec(txt)?.[1] ?? NaN);
-          if (Number.isFinite(wait) && wait <= 25 && BUDGET_MS - (Date.now() - started) > (wait + 8) * 1000) {
-            await new Promise((r) => setTimeout(r, wait * 1000 + 300));
-            res = await call(body);
-          } else {
-            throw new HttpError(429, "Jatah gratis Gemini per menit sedang habis. Tunggu sekitar satu menit lalu kirim lagi.");
-          }
-        }
-        if (res.ok || res.status === 429 || res.status === 401 || res.status === 403 || res.status === 400) break;
+        // 503 "high demand" (free tier): skip straight to the next, lighter model instead of waiting
+        // 429 (free tier per-minute limit) is per model: the next, lighter model usually still has room
+        if (res.ok || res.status === 401 || res.status === 403 || res.status === 400) break;
       } catch {
         res = null; // timeout or network: try the next model
       }
     }
     if (!res) throw new HttpError(504, "Layanan AI terlalu lama merespons. Coba lagi.");
-    if (res.status === 429) throw new HttpError(429, "Jatah gratis Gemini sedang habis. Tunggu satu menit atau coba lagi besok.");
+    if (res.status === 429) throw new HttpError(429, "Jatah gratis Gemini per menit sedang habis. Tunggu sekitar satu menit lalu kirim lagi.");
     if (res.status === 401 || res.status === 403) throw new HttpError(503, "GEMINI_API_KEY tidak valid atau belum diizinkan.");
     if (!res.ok) {
       console.error("gemini chat", res.status, (await res.text()).slice(0, 300));
