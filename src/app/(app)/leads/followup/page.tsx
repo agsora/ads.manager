@@ -7,6 +7,7 @@ import { api, useFetch, useFilter, useMeta, useToast } from "@/components/provid
 import { ResourceForm } from "@/components/resource-form";
 import { Chip } from "@/components/cells";
 import { RESOURCE_MAP, type Row } from "@/lib/resources";
+import { normPhone } from "@/lib/phone";
 import { addDays, diffDays, fmtDate, todayISO } from "@/lib/format";
 
 const COLS = [
@@ -26,6 +27,8 @@ export default function FollowUpBoard() {
   const fillTemplate = (t: string, r: Row) =>
     t.replaceAll("{nama}", String(r.name ?? "Bapak/Ibu")).replaceAll("{brand}", String(r.brand ?? "kami")).replaceAll("{kebutuhan}", String(r.need ?? "kebutuhan Anda"));
   // "Balasan WhatsApp" entries from the Bank Caption join the built-in templates (same placeholders)
+  const { data: stopData } = useFetch<{ rows: Row[] }>("/api/r/optouts");
+  const stopSet = useMemo(() => new Set((stopData?.rows ?? []).map((o) => normPhone(o.phone))), [stopData]);
   const { data: snippets } = useFetch<{ rows: Row[] }>("/api/r/snippets");
   const templatesFor = (r: Row, ghost: boolean) => {
     const seg = String(r.segment ?? "").toLowerCase();
@@ -85,7 +88,8 @@ export default function FollowUpBoard() {
               </div>
               <div className="space-y-2.5">
                 {items.slice(0, 60).map(({ r, age, due }) => {
-                  const wa = String(r.phone ?? "").replace(/\D/g, "").replace(/^0/, "62");
+                  const stopped = stopSet.has(normPhone(r.phone));
+                  const wa = stopped ? "" : String(r.phone ?? "").replace(/\D/g, "").replace(/^0/, "62");
                   return (
                     <div key={r.id} className={`rounded-xl border bg-white p-3 ${due ? "border-[#e2b7a5]" : "border-[var(--line)]"}`}>
                       <div className="flex items-center gap-2">
@@ -102,6 +106,7 @@ export default function FollowUpBoard() {
                       {r.need ? <div className="mt-1.5 line-clamp-2 text-[12.5px]">{String(r.need)}</div> : null}
                       {r.followup_1 ? <div className="mt-1.5 line-clamp-2 text-[12px] text-[var(--muted)]">Terakhir: {String(r.followup_3 ?? r.followup_2 ?? r.followup_1)}</div> : null}
                       <div className="mt-2.5 flex flex-wrap gap-1.5">
+                        {stopped && <span className="chip !border-[#e4b7ab] !bg-[#fbefec] !text-[var(--critical-ink)]">Jangan dihubungi</span>}
                         {wa && (
                           <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="btn btn-sm !h-7 !px-2 !text-[12px] text-[var(--good-ink)]">
                             <MessageCircle size={13} /> WA

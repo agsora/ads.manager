@@ -309,6 +309,32 @@ export const RESOURCES: Resource[] = [
     ],
   },
   {
+    key: "optouts",
+    table: "optouts",
+    label: "Daftar Jangan Dihubungi",
+    singular: "Nomor Stop",
+    description: "Nomor yang meminta berhenti, salah nomor, atau pernah mengeluh. Otomatis dikecualikan dari ekspor blast dan remarketing.",
+    dateField: "added_date",
+    titleField: "phone",
+    importKeys: ["phone"],
+    sheetHints: ["stop", "optout", "opt-out", "dnc", "jangan dihubungi"],
+    defaultSort: "added_date",
+    upsertKeys: ["phone"],
+    fields: [
+      { key: "added_date", label: "Tanggal Dicatat", type: "date", required: true },
+      { key: "phone", label: "No. WhatsApp", type: "phone", required: true, aliases: ["nomor", "no hp", "hp", "no wa"] },
+      { key: "name", label: "Nama", type: "text" },
+      { key: "reason", label: "Alasan", type: "select", options: "optout_reason" },
+      { key: "source", label: "Asal Catatan", type: "text", aliases: ["sumber"] },
+      { key: "notes", label: "Catatan", type: "longtext", hideInTable: true },
+    ],
+    derive: (r) => {
+      const d = String(r.phone ?? "").replace(/\D/g, "");
+      if (d) r.phone = d.startsWith("62") ? "0" + d.slice(2) : d.startsWith("8") ? "0" + d : d;
+      return r;
+    },
+  },
+  {
     key: "snippets",
     table: "snippets",
     label: "Bank Caption & Template",
@@ -652,6 +678,7 @@ export const DEFAULT_OPTIONS: Record<string, { label: string; values: string[] }
     ],
   },
   wallet_source: { label: "Sumber Dana Saldo", values: ["Meta", "TikTok", "Google Ads", "YouTube", "WhatsApp Blast", "Influencer", "Lainnya"] },
+  optout_reason: { label: "Alasan Stop", values: ["Minta berhenti", "Salah nomor", "Keluhan / marah", "Nomor tidak aktif", "Bukan nasabah", "Lainnya"] },
   creative_format: { label: "Format Kreatif", values: ["Gambar Tunggal", "Carousel", "Video Pendek", "Video Panjang", "Story", "UGC / Testimoni"] },
   creative_verdict: { label: "Keputusan Kreatif", values: ["Uji coba", "Pertahankan", "Skala (naikkan budget)", "Ulangi dengan variasi", "Hentikan"] },
   snippet_kind: { label: "Jenis Template", values: ["Caption", "Hashtag", "CTA", "Balasan WhatsApp", "Script Video", "Lainnya"] },

@@ -6,6 +6,7 @@ import { ResourceTable } from "@/components/resource-table";
 import { useAnalytics } from "@/components/use-analytics";
 import { BarList, Card, Kpi, KpiSkeleton, MiniTable, SEGMENT_COLORS, SplitBar } from "@/components/charts";
 import { WaLinkBuilder } from "@/components/wa-link-builder";
+import { StopButton } from "@/components/stop-button";
 
 export default function LeadsPage() {
   const { data: a, reload } = useAnalytics();
@@ -32,7 +33,7 @@ export default function LeadsPage() {
         </div>
       )}
       <WaLinkBuilder />
-      <ResourceTable resourceKey="leads" quickFilters={["branch", "pipeline_stage", "source", "segment", "final_status"]} computedCols={["reply_minutes", "age_days", "next_action"]} onChanged={reload} />
+      <ResourceTable resourceKey="leads" quickFilters={["branch", "pipeline_stage", "source", "segment", "final_status"]} computedCols={["reply_minutes", "age_days", "next_action"]} onChanged={reload} selectionActions={(ids, done) => <StopButton resource="leads" ids={ids} done={() => (done(), reload())} />} />
       {a && a.kpis.leads.leads > 0 && (
         <div className="grid gap-5 lg:grid-cols-3">
           <Card title="Sumber Trafik" subtitle="Leads · biaya per lead (CPL)">
@@ -52,6 +53,14 @@ export default function LeadsPage() {
               <MiniTable
                 cols={[{ key: "ref", label: "Kode" }, { key: "leads", label: "Leads", format: "number" }, { key: "hot", label: "HOT", format: "number" }, { key: "deals", label: "Deal", format: "number" }, { key: "dealValue", label: "Nilai deal", format: "money" }, { key: "spend", label: "Belanja iklan", format: "money" }, { key: "cpl", label: "Biaya/lead", format: "money" }, { key: "cpa", label: "Biaya/deal", format: "money" }, { key: "roas", label: "ROAS", format: "decimal" }]}
                 rows={a.attribution}
+              />
+            </Card>
+          )}
+          {a.duplicates.numbers > 0 && (
+            <Card title="Nomor dobel" subtitle={`${a.duplicates.numbers} nomor masuk lebih dari sekali · ${a.duplicates.extra} chat berlebih · ${a.duplicates.uniqueLeads} nomor unik dari ${a.kpis.leads.leads} leads`} className="lg:col-span-3">
+              <MiniTable
+                cols={[{ key: "phone", label: "Nomor" }, { key: "name", label: "Nama" }, { key: "count", label: "Masuk (x)", format: "number" }, { key: "first", label: "Pertama", format: "date" }, { key: "last", label: "Terakhir", format: "date" }, { key: "sources", label: "Sumber" }, { key: "brands", label: "Brand" }]}
+                rows={a.duplicates.groups.map((g) => ({ ...g, first: g.first ? String(g.first) : null, last: g.last ? String(g.last) : null }))}
               />
             </Card>
           )}

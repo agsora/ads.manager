@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { COMPLIANCE_FIELDS, ComplianceHint, PhoneHint } from "./field-hints";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import type { Field, Resource, Row } from "@/lib/resources";
@@ -195,6 +196,8 @@ export function ResourceForm({ resource, row, onClose, onSaved, defaults, groups
                       {f.label} {f.required && <span className="text-[var(--critical)]">*</span>}
                     </label>
                     <FieldInput f={f} value={vals[f.key]} onChange={(v) => setVals((s) => ({ ...s, [f.key]: v }))} />
+                    {COMPLIANCE_FIELDS.has(f.key) && f.type === "longtext" && resource.key !== "competitors" && <ComplianceHint text={vals[f.key]} />}
+                    {f.key === "phone" && (resource.key === "leads" || resource.key === "contacts") && <PhoneHint value={vals[f.key]} resource={resource.key} selfId={row?.id ? Number(row.id) : undefined} />}
                   </div>
                 ))}
             </div>

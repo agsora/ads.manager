@@ -1,5 +1,7 @@
 import { listRows } from "./repo";
 import { RESOURCE_MAP, n, type Row } from "./resources";
+import { normPhone } from "./phone";
+import { checkCompliance } from "./compliance";
 import { addDays, diffDays, fmtMoney, fmtNum, fmtPct, monthEnd, monthStart, todayISO } from "./format";
 
 export type Level = "critical" | "warning" | "good" | "info";
@@ -165,7 +167,7 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
   const prevFrom = addDays(prevTo, -(cmpLen - 1));
 
   const load = (key: string, f: string, t: string, limit?: number) => listRows(orgId, RESOURCE_MAP[key], { from: f, to: t, brand, limit });
-  const [adsAll, leadsAll, contentAll, reviewsAll, blastAll, inflAll, kpiRows, walletRows, events, followers, openLeads, upcomingContent, contactsAll, statRows, adsHistory, blastHistory, inflHistory] =
+  const [adsAll, leadsAll, contentAll, reviewsAll, blastAll, inflAll, kpiRows, walletRows, events, followers, openLeads, upcomingContent, contactsAll, statRows, adsHistory, blastHistory, inflHistory, optoutRows] =
     await Promise.all([
       // campaigns may start before the window and still spend in it
       load("ads", addDays(prevFrom, -90), to),
@@ -187,7 +189,9 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
       // blast and influencer costs can be paid from the same top-ups, so they also draw down a wallet
       load("blast", "1900-01-01", to, 20000),
       load("influencers", "1900-01-01", to, 20000),
+      listRows(orgId, RESOURCE_MAP.optouts, { limit: 20000 }),
     ]);
+  const stopSet = new Set(optoutRows.map((o) => normPhone(o.phone)).filter(Boolean));
 
   const overlapAds = (f: string, t: string) =>
     adsAll
@@ -430,6 +434,16 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     byPic: [...groupBy(leads, (r) => String(r.pic ?? "").trim() || "(Tanpa PIC)").entries()].map(([name, rs]) => ({ name, ...finGroup(rs) })).sort((x, y) => y.leads - x.leads),
   };
 
+  // ---- nomor dobel: the same number entering again (other ad, other CS) inflates the lead count and cost per lead
+  const dupGroups = [...groupBy(leadsAll.filter((r) => normPhone(r.phone)), (r) => normPhone(r.phone)).entries()]
+    .filter(([, rs]) => rs.length > 1 && rs.some((r) => inRange(r.chat_date, from, to)))
+    .map(([phone, rs]) => {
+      const sorted = [...rs].sort((x, y) => String(x.chat_date).localeCompare(String(y.chat_date)));
+      return { phone, count: rs.length, name: String(sorted[0].name ?? ""), sources: [...new Set(sorted.map((r) => String(r.source ?? "–")))].join(", "), first: sorted[0].chat_date, last: sorted[sorted.length - 1].chat_date, brands: [...new Set(sorted.map((r) => String(r.brand ?? "")))].join(", ") };
+    })
+    .sort((x, y) => y.count - x.count);
+  const duplicates = { groups: dupGroups.slice(0, 50), numbers: dupGroups.length, extra: dupGroups.reduce((t, g) => t + g.count - 1, 0), uniqueLeads: new Set(leads.map((r) => normPhone(r.phone) || `id${r.id}`)).size };
+
   // ---- content breakdowns
   const posted = content.filter((r) => r.status === "Posted");
   const erOf = (r: Row) => (n(r.followers) ? (n(r.likes) + n(r.comments) + n(r.saves)) / n(r.followers) : null);
@@ -508,8 +522,9 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     const interested = rows.filter((r) => r.status === "Tertarik" || r.status === "Deal").length;
     return {
       contacts: rows.length,
-      ready: rows.filter((r) => lc(r.blast) !== "no").length,
-      pending: rows.filter((r) => lc(r.blast) !== "no" && (!r.status || r.status === "Belum dikirim")).length,
+      ready: rows.filter((r) => lc(r.blast) !== "no" && !stopSet.has(normPhone(r.phone))).length,
+      pending: rows.filter((r) => lc(r.blast) !== "no" && !stopSet.has(normPhone(r.phone)) && (!r.status || r.status === "Belum dikirim")).length,
+      stopped: rows.filter((r) => stopSet.has(normPhone(r.phone))).length,
       sent,
       responded,
       interested,
@@ -863,6 +878,11 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
   }
 
   // GENERAL
+  if (duplicates.extra >= 3 && leads.length)
+    push({ level: "info", area: "Leads", title: `${duplicates.extra} chat berasal dari nomor yang sudah pernah masuk`, detail: `${leads.length} leads tercatat, hanya ${duplicates.uniqueLeads} nomor unik. Biaya per lead sebenarnya sekitar ${fmtMoney(kpis.ads.spend && duplicates.uniqueLeads ? kpis.ads.spend / duplicates.uniqueLeads : 0)}.`, action: "Buka WA Leads → kartu Nomor Dobel. Gabungkan data yang sama dan pastikan satu nasabah ditangani satu CS." });
+  const flagged = contentAll.filter((c) => c.status !== "Cancel" && c.caption && checkCompliance(String(c.caption)).issues.some((i) => i.level === "high"));
+  if (flagged.length)
+    push({ level: "warning", area: "Konten", title: `${flagged.length} caption memuat kata yang berisiko melanggar aturan promosi pembiayaan`, detail: flagged.slice(0, 3).map((c) => String(c.title)).join(", "), action: "Buka Content Plan, edit caption yang ditandai, dan ikuti saran kata pengganti sebelum tayang (contoh: hindari “pasti cair”, “tanpa survei”, “bunga 0%”)." });
   const sla = financing.sla;
   if (sla.measured >= 5 && sla.avg !== null && sla.avg > 15)
     push({ level: sla.avg > 60 ? "critical" : "warning", area: "Leads", title: `Respons chat pertama lambat: rata-rata ${Math.round(sla.avg)} menit`, detail: `${Math.round((sla.within5 ?? 0) * 100)}% dibalas dalam 5 menit; ${sla.over60} lead menunggu lebih dari 1 jam.`, action: "Atur jadwal piket CS dan balasan otomatis di luar jam kerja. Lead yang dibalas dalam 5 menit jauh lebih mungkin lanjut survei." });
@@ -921,6 +941,8 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     followUps: followUps.slice(0, 50),
     funnel,
     financing,
+    duplicates,
+    stopCount: stopSet.size,
     contentByChannel,
     contentByPillar,
     contentByType,

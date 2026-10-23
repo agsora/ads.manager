@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   LayoutDashboard, Lightbulb, FileBarChart, Megaphone, Wallet, CalendarDays, Target, Users, CalendarHeart,
-  MessageCircle, PhoneCall, Send, Star, Sparkles, ArrowUpDown, Settings, LogOut, Menu, X, ShieldCheck, Bell, Gauge, FolderOpen, Filter, Layers, ClipboardList, CalendarClock, Eye, Store, CalendarRange, ChevronDown, Check,
+  MessageCircle, PhoneCall, Send, Star, Sparkles, ArrowUpDown, Settings, LogOut, Menu, X, ShieldCheck, Bell, Gauge, Calculator, Repeat, Ban, FolderOpen, Filter, Layers, ClipboardList, CalendarClock, Eye, Store, CalendarRange, ChevronDown, Check,
 } from "lucide-react";
 import { PRESETS, useFilter, useMeta } from "./providers";
 import { NotificationBell } from "./notification-bell";
@@ -65,9 +65,19 @@ const NAV: { section?: string; items: Item[] }[] = [
         tabs: [
           { href: "/leads", label: "WA Leads", icon: MessageCircle },
           { href: "/leads/followup", label: "Papan Follow Up", icon: PhoneCall },
+          { href: "/performance", label: "Cabang & Respons", icon: Gauge },
+          { href: "/simulasi", label: "Simulasi Cicilan", icon: Calculator },
+        ],
+      },
+      {
+        href: "/blast",
+        label: "Blast",
+        icon: Send,
+        tabs: [
           { href: "/blast", label: "WA Blast", icon: Send },
           { href: "/blast/schedule", label: "Jadwal Broadcast", icon: CalendarClock },
-          { href: "/performance", label: "Cabang & Respons", icon: Gauge },
+          { href: "/remarketing", label: "Remarketing", icon: Repeat },
+          { href: "/optouts", label: "Jangan Dihubungi", icon: Ban },
         ],
       },
       {

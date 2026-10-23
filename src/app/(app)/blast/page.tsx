@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { ChevronDown, Download, Send, Upload, UserPlus } from "lucide-react";
 import { MenuItem, Popover } from "@/components/popover";
+import { StopButton } from "@/components/stop-button";
+import { ComplianceHint } from "@/components/field-hints";
+import { normPhone } from "@/lib/phone";
 import { PageHeader } from "@/components/shell";
 import { ResourceTable } from "@/components/resource-table";
 import { ImportDialog } from "@/components/import-dialog";
@@ -153,6 +156,7 @@ function Contacts() {
             <button className="btn btn-sm btn-primary" onClick={() => convert(ids, done)}>
               <UserPlus size={13} /> Jadikan leads
             </button>
+            <StopButton resource="contacts" ids={ids} done={() => (done(), refresh())} />
           </>
         )}
       />
@@ -185,7 +189,11 @@ function ExportForBlast({ onClose, onDone }: { onClose: () => void; onDone: () =
     try {
       const qs = new URLSearchParams({ from: f.from, to: f.to, ...(f.brand ? { brand: f.brand } : {}) });
       const { rows } = await api<{ rows: Row[] }>(`/api/r/contacts?${qs}`, "GET");
-      const list = rows.filter((r) => String(r.blast ?? "yes").toLowerCase() !== "no" && (!onlyPending || !r.status || r.status === "Belum dikirim"));
+      const { rows: stops } = await api<{ rows: Row[] }>("/api/r/optouts", "GET");
+      const stopSet = new Set(stops.map((o) => normPhone(o.phone)));
+      const eligible = rows.filter((r) => String(r.blast ?? "yes").toLowerCase() !== "no" && (!onlyPending || !r.status || r.status === "Belum dikirim"));
+      const list = eligible.filter((r) => !stopSet.has(normPhone(r.phone)));
+      const skippedStop = eligible.length - list.length;
       if (!list.length) throw new Error("Tidak ada kontak yang cocok di periode/filter ini");
       const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
       const lines = [
@@ -199,7 +207,7 @@ function ExportForBlast({ onClose, onDone }: { onClose: () => void; onDone: () =
       a.click();
       URL.revokeObjectURL(a.href);
       if (mark) await api("/api/r/contacts/bulk", "POST", { ids: list.map((r) => r.id), data: { status: "Terkirim", batch, blast_date: todayISO() } });
-      toast(`${list.length} kontak diekspor${mark ? " & ditandai Terkirim" : ""}`);
+      toast(`${list.length} kontak diekspor${mark ? " & ditandai Terkirim" : ""}${skippedStop ? ` · ${skippedStop} nomor di Daftar Jangan Dihubungi dilewati` : ""}`);
       onDone();
       onClose();
     } catch (e) {
@@ -217,6 +225,7 @@ function ExportForBlast({ onClose, onDone }: { onClose: () => void; onDone: () =
           <label className="label">Template pesan</label>
           <textarea className="input" rows={7} value={template} onChange={(e) => setTemplate(e.target.value)} />
           <p className="mt-1.5 text-[12px] text-[var(--muted)]">Variabel: {"{nama} {tipe} {tahun} {plafon} {kontrak}"}</p>
+          <ComplianceHint text={template} />
         </div>
         <div>
           <div className="label">Pratinjau</div>
