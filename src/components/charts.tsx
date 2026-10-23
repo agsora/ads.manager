@@ -325,7 +325,7 @@ export function Score({ label, value }: { label: string; value: number | null })
   const tone = value === null ? "#d6d2c4" : value >= 70 ? "var(--good)" : value >= 45 ? "var(--warning)" : "var(--critical)";
   const word = value === null ? "Belum ada data" : value >= 70 ? "Sehat" : value >= 45 ? "Cukup" : "Perlu perbaikan";
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex min-w-0 items-center gap-3">
       <div className="relative h-12 w-12 shrink-0">
         <svg viewBox="0 0 36 36" className="h-12 w-12 -rotate-90">
           <circle cx="18" cy="18" r="15.5" fill="none" stroke="#eeebe3" strokeWidth="3.5" />
@@ -333,9 +333,9 @@ export function Score({ label, value }: { label: string; value: number | null })
         </svg>
         <span className="serif absolute inset-0 grid place-items-center text-[16px] tnum">{value ?? "–"}</span>
       </div>
-      <div>
-        <div className="text-[13px] font-semibold">{label}</div>
-        <div className="text-[12px] text-[var(--muted)]">{word}</div>
+      <div className="min-w-0">
+        <div className="truncate text-[13px] font-semibold">{label}</div>
+        <div className="truncate text-[12px] text-[var(--muted)]">{word}</div>
       </div>
     </div>
   );

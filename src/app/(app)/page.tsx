@@ -224,8 +224,8 @@ export default function Dashboard() {
         </Card>
         <Card title="Konten" subtitle={`${k.content.posted} tayang dari ${k.content.planned} rencana`} action={<Link href="/content" className="text-[13px] font-semibold text-[var(--accent)]">Kalender</Link>}>
           <div className="grid grid-cols-3 gap-2 text-center">
-            <Stat label="Completion" value={fmtPct(k.content.completionRate, 0)} />
-            <Stat label="On-time" value={fmtPct(k.content.onTimeRate, 0)} />
+            <Stat label="Terlaksana" value={fmtPct(k.content.completionRate, 0)} />
+            <Stat label="Tepat waktu" value={fmtPct(k.content.onTimeRate, 0)} />
             <Stat label="Rata ER" value={fmtPct(k.content.avgER, 2)} />
           </div>
           <div className="mt-4 text-[12.5px] font-semibold text-[var(--ink-2)]">7 hari ke depan</div>
@@ -303,9 +303,9 @@ function greeting() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg bg-[var(--surface-2)] px-2 py-2.5">
-      <div className="text-[16px] font-bold tnum">{value}</div>
-      <div className="text-[11.5px] text-[var(--muted)]">{label}</div>
+    <div className="min-w-0 rounded-lg bg-[var(--surface-2)] px-2 py-2.5">
+      <div className="serif truncate text-[20px] leading-tight tnum">{value}</div>
+      <div className="truncate text-[11.5px] text-[var(--muted)]">{label}</div>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { Download, Printer } from "lucide-react";
 import { PageHeader } from "@/components/shell";
 import { useFilter } from "@/components/providers";
 import { useAnalytics } from "@/components/use-analytics";
-import { Card, InsightItem, PageSkeleton, Score } from "@/components/charts";
+import { Card, InsightItem, PageSkeleton, ScoreRing, scoreTone, scoreWord } from "@/components/charts";
 import { fmtDate } from "@/lib/format";
 import type { Insight } from "@/lib/analytics";
 
@@ -60,18 +60,52 @@ export default function InsightsPage() {
 
       <div className="grid gap-5 lg:grid-cols-3">
         <Card title="Kesehatan Marketing">
-          <div className="grid grid-cols-2 gap-5">
-            <Score label="Keseluruhan" value={a.scores.overall} />
-            <Score label="Iklan" value={a.scores.ads} />
-            <Score label="Leads & Closing" value={a.scores.leads} />
-            <Score label="Konten" value={a.scores.content} />
-            <Score label="Reputasi" value={a.scores.reputation} />
+          <div className="flex items-center gap-4">
+            <ScoreRing value={a.scores.overall} size={96} />
+            <div className="min-w-0">
+              <div className="eyebrow">Keseluruhan</div>
+              <div className="serif text-[22px] leading-tight">{scoreWord(a.scores.overall)}</div>
+            </div>
           </div>
-          <div className="mt-5 grid grid-cols-4 gap-2 text-center text-[12px]">
-            <div className="rounded-lg border border-[var(--line)] p-2"><div className="serif text-[22px] text-[var(--critical-ink)]">{count("critical")}</div>Kritis</div>
-            <div className="rounded-lg border border-[var(--line)] p-2"><div className="serif text-[22px] text-[var(--warning-ink)]">{count("warning")}</div>Perhatian</div>
-            <div className="rounded-lg border border-[var(--line)] p-2"><div className="serif text-[22px] text-[var(--ink-2)]">{count("info")}</div>Saran</div>
-            <div className="rounded-lg border border-[var(--line)] p-2"><div className="serif text-[22px] text-[var(--good-ink)]">{count("good")}</div>Bagus</div>
+          <ul className="mt-5 space-y-3.5">
+            {(
+              [
+                ["Iklan", a.scores.ads],
+                ["Leads & Closing", a.scores.leads],
+                ["Konten", a.scores.content],
+                ["Reputasi", a.scores.reputation],
+              ] as [string, number | null][]
+            ).map(([label, v]) => (
+              <li key={label}>
+                <div className="mb-1 flex items-baseline justify-between gap-3 text-[13px]">
+                  <span className="min-w-0 truncate font-medium">{label}</span>
+                  <span className="shrink-0 text-[var(--muted)]">
+                    <b className="serif mr-1.5 text-[16px] text-[var(--ink)] tnum">{v ?? "–"}</b>
+                    {scoreWord(v)}
+                  </span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-[var(--track)]">
+                  <div className="h-1.5 rounded-full" style={{ width: `${v ?? 0}%`, background: scoreTone(v), transition: "width .8s cubic-bezier(.2,.8,.2,1)" }} />
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-5 grid grid-cols-2 gap-2 border-t border-[var(--line)] pt-4 text-[12.5px] sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
+            {(
+              [
+                ["critical", "Kritis", "var(--critical-ink)"],
+                ["warning", "Perhatian", "var(--warning-ink)"],
+                ["info", "Saran", "var(--ink-2)"],
+                ["good", "Bagus", "var(--good-ink)"],
+              ] as const
+            ).map(([k, label, color]) => (
+              <div key={k} className="min-w-0 rounded-lg border border-[var(--line)] px-2 py-2 text-center">
+                <div className="serif text-[22px] leading-none tnum" style={{ color }}>
+                  {count(k)}
+                </div>
+                <div className="mt-1 truncate text-[var(--muted)]">{label}</div>
+              </div>
+            ))}
           </div>
         </Card>
         <Card title="Rencana Aksi" subtitle="Centang setelah dikerjakan (tersimpan di browser ini)" className="lg:col-span-2">
