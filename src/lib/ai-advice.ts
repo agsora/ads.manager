@@ -151,73 +151,88 @@ ${user}`;
 }
 
 const GEMINI_BASE = process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com/v1beta";
-let geminiModelCache: string | null = null;
+const GEMINI_PREFERRED = "gemini-3.5-flash"; // measured: answers this request in roughly 10 seconds
+let geminiModelsCache: string[] | null = null;
 
-/** GEMINI_MODEL wins; otherwise ask the API which models exist and take the newest plain "flash" one. */
-async function geminiModel(key: string): Promise<string> {
-  if (process.env.GEMINI_MODEL) return process.env.GEMINI_MODEL;
-  if (geminiModelCache) return geminiModelCache;
+/** Models to try, best first. GEMINI_MODEL wins; otherwise the preferred stable model, then newer/older plain "flash" models. */
+async function geminiCandidates(key: string): Promise<string[]> {
+  if (process.env.GEMINI_MODEL) return [process.env.GEMINI_MODEL];
+  if (geminiModelsCache) return geminiModelsCache;
   const r = await fetch(`${GEMINI_BASE}/models?pageSize=200`, { headers: { "x-goog-api-key": key }, signal: AbortSignal.timeout(15_000) });
   if (!r.ok) throw new HttpError(r.status === 400 || r.status === 403 ? 503 : 502, r.status === 400 || r.status === 403 ? "GEMINI_API_KEY tidak valid atau belum diizinkan." : "Layanan AI sedang bermasalah. Coba lagi sebentar.");
   const j = (await r.json()) as { models?: { name: string; supportedGenerationMethods?: string[] }[] };
+  // plain versioned "gemini-<n>-flash" only: "-latest" aliases can hang, and old versions may be closed to new accounts
   const names = (j.models ?? [])
-    .filter((m) => (m.supportedGenerationMethods ?? []).includes("generateContent") && /flash/i.test(m.name) && !/lite|image|tts|live|audio|embedding|exp|preview|thinking|8b/i.test(m.name))
+    .filter((m) => (m.supportedGenerationMethods ?? []).includes("generateContent"))
     .map((m) => m.name.replace(/^models\//, ""))
-    .sort()
-    .reverse();
+    .filter((n) => /^gemini-\d+(\.\d+)?-flash$/.test(n))
+    .sort((x, y) => parseFloat(y.split("-")[1]) - parseFloat(x.split("-")[1]));
   if (!names.length) throw new HttpError(502, "Tidak ada model Gemini yang cocok. Atur GEMINI_MODEL di server.");
-  geminiModelCache = names[0];
-  return names[0];
+  geminiModelsCache = names.includes(GEMINI_PREFERRED) ? [GEMINI_PREFERRED, ...names.filter((n) => n !== GEMINI_PREFERRED)] : names;
+  return geminiModelsCache;
 }
+
+type GeminiReply = { candidates?: { content?: { parts?: { text?: string }[] } }[]; promptFeedback?: { blockReason?: string } };
 
 async function callGemini(prompt: string): Promise<{ advice: Advice; model: string }> {
   const key = process.env.GEMINI_API_KEY!;
-  const model = await geminiModel(key);
+  const models = (await geminiCandidates(key)).slice(0, 2);
   const example = JSON.stringify({
     ringkasan: "…",
     saran: [{ judul: "…", area: AREAS[0], prioritas: "tinggi", temuan: "…", langkah: ["…", "…", "…"], pic: "…", metrik: "…", dampak: "…" }],
     pertanyaan: ["…"],
   });
-  let res: Response;
-  try {
-    res = await fetch(`${GEMINI_BASE}/models/${model}:generateContent`, {
+  const userText = `${prompt}\n\nJawab HANYA dengan JSON yang persis berbentuk seperti contoh ini (area harus salah satu dari: ${AREAS.join(", ")}; prioritas: tinggi, sedang, atau rendah; 4 sampai 6 saran):\n${example}`;
+  const call = (model: string, withThinking: boolean, ms: number) =>
+    fetch(`${GEMINI_BASE}/models/${model}:generateContent`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-      signal: AbortSignal.timeout(55_000),
+      signal: AbortSignal.timeout(ms),
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM }] },
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: `${prompt}
-
-Jawab HANYA dengan JSON yang persis berbentuk seperti contoh ini (area harus salah satu dari: ${AREAS.join(", ")}; prioritas: tinggi, sedang, atau rendah; 4 sampai 6 saran):
-${example}` }],
-          },
-        ],
-        generationConfig: { responseMimeType: "application/json", temperature: 1, maxOutputTokens: 8000 },
+        contents: [{ role: "user", parts: [{ text: userText }] }],
+        // low thinking keeps the answer within seconds; the advice is shaped by the data, not by long reasoning
+        generationConfig: { responseMimeType: "application/json", temperature: 1, maxOutputTokens: 8000, ...(withThinking ? { thinkingConfig: { thinkingLevel: "low" } } : {}) },
       }),
     });
-  } catch (e) {
-    if (e instanceof Error && e.name === "TimeoutError") throw new HttpError(504, "Layanan AI terlalu lama merespons. Coba lagi.");
-    throw new HttpError(502, "Tidak bisa menghubungi layanan AI. Coba lagi sebentar.");
+
+  let lastStatus = 0;
+  let timedOut = false;
+  for (const model of models) {
+    try {
+      let res = await call(model, true, 28_000);
+      if (res.status === 400) res = await call(model, false, 28_000); // this model does not accept the thinking option
+      if (res.status === 503) {
+        // the free tier sometimes answers "high demand": one short pause and another try
+        await new Promise((r) => setTimeout(r, 1500));
+        res = await call(model, true, 25_000);
+      }
+      if (process.env.AI_DEBUG) console.log("[ai] gemini", model, res.status);
+      lastStatus = res.status;
+      if (res.status === 401 || res.status === 403 || res.status === 400) throw new HttpError(503, "GEMINI_API_KEY tidak valid atau belum diizinkan.");
+      if (res.status === 429) throw new HttpError(429, "Batas gratis Gemini sedang habis. Coba lagi beberapa menit lagi atau besok.");
+      if (!res.ok) {
+        console.error("gemini", model, res.status, (await res.text()).slice(0, 200));
+        continue; // 5xx: try the next model
+      }
+      const j = (await res.json()) as GeminiReply;
+      if (j.promptFeedback?.blockReason) throw new HttpError(422, "AI menolak memproses permintaan ini. Coba ubah filter periode atau brand.");
+      const text = (j.candidates?.[0]?.content?.parts ?? []).map((x) => x.text ?? "").join("").trim();
+      try {
+        const parsed = AdviceSchema.safeParse(JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, "")));
+        if (parsed.success) return { advice: parsed.data, model };
+      } catch {
+        /* unreadable: try the next model */
+      }
+    } catch (e) {
+      if (e instanceof HttpError) throw e;
+      if (e instanceof Error && e.name === "TimeoutError") timedOut = true;
+      else console.error("gemini", model, e instanceof Error ? e.message : e);
+    }
   }
-  if (res.status === 429) throw new HttpError(429, "Batas gratis Gemini sedang habis. Coba lagi beberapa menit lagi atau besok.");
-  if (res.status === 400 || res.status === 401 || res.status === 403) throw new HttpError(503, "GEMINI_API_KEY tidak valid atau belum diizinkan.");
-  if (!res.ok) {
-    console.error("gemini", res.status, (await res.text()).slice(0, 300));
-    throw new HttpError(502, "Layanan AI sedang bermasalah. Coba lagi sebentar.");
-  }
-  const j = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[]; promptFeedback?: { blockReason?: string } };
-  if (j.promptFeedback?.blockReason) throw new HttpError(422, "AI menolak memproses permintaan ini. Coba ubah filter periode atau brand.");
-  const text = (j.candidates?.[0]?.content?.parts ?? []).map((x) => x.text ?? "").join("").trim();
-  try {
-    const parsed = AdviceSchema.safeParse(JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, "")));
-    if (parsed.success) return { advice: parsed.data, model };
-  } catch {
-    /* fall through */
-  }
-  throw new HttpError(502, "Jawaban AI tidak bisa dibaca. Coba buat ulang.");
+  if (timedOut) throw new HttpError(504, "Layanan AI terlalu lama merespons. Coba lagi.");
+  if (lastStatus === 503) throw new HttpError(503, "Layanan Gemini sedang ramai. Coba lagi dalam beberapa menit.");
+  throw new HttpError(502, "Layanan AI sedang bermasalah atau jawabannya tidak bisa dibaca. Coba buat ulang.");
 }
 
 async function callClaude(prompt: string): Promise<{ advice: Advice; model: string }> {

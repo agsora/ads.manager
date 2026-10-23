@@ -53,3 +53,7 @@ db.txt
 # service account keys
 reflected-disk-*.json
 *-service-account*.json
+
+# local secrets
+api key.txt
+*.key.txt
