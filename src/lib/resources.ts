@@ -370,6 +370,9 @@ export const RESOURCES: Resource[] = [
       { key: "brand", label: "Brand", type: "brand", required: true },
       { key: "name", label: "Nama", type: "text", aliases: ["nama / identitas", "nama"] },
       { key: "phone", label: "No. WhatsApp", type: "phone", aliases: ["nomor whatsapp", "no wa", "whatsapp"] },
+      { key: "branch", label: "Cabang", type: "select", options: "branch", aliases: ["cabang", "kantor"] },
+      { key: "chat_time", label: "Jam Chat Masuk", type: "time", hideInTable: true, aliases: ["jam chat", "jam masuk"] },
+      { key: "first_reply_time", label: "Jam Dibalas Pertama", type: "time", hideInTable: true, aliases: ["jam dibalas", "jam balas"] },
       { key: "customer_type", label: "Jenis Pelanggan", type: "select", options: "customer_type" },
       { key: "source", label: "Sumber Trafik", type: "select", options: "lead_source" },
       { key: "campaign_ref", label: "Kode Campaign / Blast", type: "text", suggest: "campaigns", aliases: ["campaign", "kode campaign", "ref"] },
@@ -381,8 +384,9 @@ export const RESOURCES: Resource[] = [
       { key: "followup_1", label: "Follow Up 1 (3-7 hr)", type: "longtext", hideInTable: true, aliases: ["follow up 1 (3-7 hari)", "follow up 1"] },
       { key: "followup_2", label: "Follow Up 2 (7-14 hr)", type: "longtext", hideInTable: true, aliases: ["follow up 2 (7-14 hari)", "follow up 2"] },
       { key: "followup_3", label: "Follow Up 3 (14-30 hr)", type: "longtext", hideInTable: true, aliases: ["follow up 3 (14-30 hari)", "follow up 3"] },
+      { key: "pipeline_stage", label: "Tahap Pembiayaan", type: "select", options: "pipeline_stage", aliases: ["tahap", "tahapan", "stage"] },
       { key: "final_status", label: "Status Akhir", type: "select", options: "final_status" },
-      { key: "deal_value", label: "Nilai Deal", type: "money", aliases: ["nilai transaksi", "omzet"] },
+      { key: "deal_value", label: "Nilai Deal / Pencairan", type: "money", aliases: ["nilai transaksi", "omzet", "nilai pencairan", "pencairan"] },
       { key: "pic", label: "PIC/CS", type: "text", hideInTable: true },
     ],
     derive: (r) => {
@@ -394,6 +398,21 @@ export const RESOURCES: Resource[] = [
       return r;
     },
     computed: [
+      {
+        key: "reply_minutes",
+        label: "Respons (menit)",
+        format: "number",
+        fn: (r) => {
+          const mins = (t: unknown) => {
+            const m = String(t ?? "").match(/^(\d{1,2}):(\d{2})/);
+            return m ? +m[1] * 60 + +m[2] : null;
+          };
+          const a = mins(r.chat_time);
+          const b = mins(r.first_reply_time);
+          if (a === null || b === null) return null;
+          return b >= a ? b - a : b + 1440 - a; // replied after midnight
+        },
+      },
       { key: "age_days", label: "Umur (hari)", format: "number", fn: (r) => daysBetween(r.chat_date, new Date().toISOString().slice(0, 10)) },
       {
         key: "next_action",
@@ -611,6 +630,7 @@ export const DEFAULT_OPTIONS: Record<string, { label: string; values: string[] }
     ],
   },
   lead_segment: { label: "Segmentasi Prospek", values: ["HOT", "WARM", "COLD"] },
+  pipeline_stage: { label: "Tahap Pembiayaan", values: ["Lead", "Survei", "Approve", "Akad (Cair)", "Ditolak / Batal"] },
   initial_status: { label: "Status Awal", values: ["Follow Up", "Deal", "Pending", "Cancel"] },
   final_status: { label: "Status Akhir", values: ["Follow-up", "Pending", "Deal", "Cancel", "Ghosting"] },
   blast_tool: { label: "Tools Blast", values: ["Scooter", "WATI", "Qontak", "WA Business", "Lainnya"] },

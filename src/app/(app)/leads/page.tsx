@@ -32,7 +32,7 @@ export default function LeadsPage() {
         </div>
       )}
       <WaLinkBuilder />
-      <ResourceTable resourceKey="leads" quickFilters={["source", "segment", "final_status"]} computedCols={["age_days", "next_action"]} onChanged={reload} />
+      <ResourceTable resourceKey="leads" quickFilters={["branch", "pipeline_stage", "source", "segment", "final_status"]} computedCols={["reply_minutes", "age_days", "next_action"]} onChanged={reload} />
       {a && a.kpis.leads.leads > 0 && (
         <div className="grid gap-5 lg:grid-cols-3">
           <Card title="Sumber Trafik" subtitle="Leads · biaya per lead (CPL)">

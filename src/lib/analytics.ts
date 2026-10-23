@@ -67,7 +67,7 @@ function adsKpis(ads: Row[]) {
 
 function leadKpis(leads: Row[]) {
   const total = leads.length;
-  const deals = leads.filter((r) => r.final_status === "Deal" || r.initial_status === "Deal").length;
+  const deals = leads.filter((r) => r.final_status === "Deal" || r.initial_status === "Deal" || /akad/i.test(String(r.pipeline_stage ?? ""))).length;
   const hot = leads.filter((r) => lc(r.segment) === "hot").length;
   const warm = leads.filter((r) => lc(r.segment) === "warm").length;
   const cold = leads.filter((r) => lc(r.segment) === "cold").length;
@@ -368,6 +368,67 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     { name: "Total Leads", value: kpis.leads.leads },
     { name: "Deal", value: kpis.leads.deals },
   ];
+
+  // ---- pembiayaan: lead → survei → approve → akad, per cabang & per CS, plus kecepatan respons chat
+  const stageRank = (r: Row) => {
+    const st = String(r.pipeline_stage ?? "");
+    if (/akad|cair/i.test(st) || r.final_status === "Deal" || r.initial_status === "Deal") return 3;
+    if (/approve/i.test(st)) return 2;
+    if (/survei/i.test(st)) return 1;
+    return 0;
+  };
+  const replyMin = (r: Row) => {
+    const t = (v: unknown) => {
+      const m = String(v ?? "").match(/^(\d{1,2}):(\d{2})/);
+      return m ? +m[1] * 60 + +m[2] : null;
+    };
+    const a = t(r.chat_time);
+    const b = t(r.first_reply_time);
+    return a === null || b === null ? null : b >= a ? b - a : b + 1440 - a;
+  };
+  const finGroup = (rs: Row[]) => {
+    const survey = rs.filter((r) => stageRank(r) >= 1).length;
+    const approve = rs.filter((r) => stageRank(r) >= 2).length;
+    const akadRows = rs.filter((r) => stageRank(r) >= 3);
+    const mins = rs.map(replyMin).filter((x): x is number => x !== null);
+    return {
+      leads: rs.length,
+      hot: rs.filter((r) => lc(r.segment) === "hot").length,
+      survey,
+      approve,
+      akad: akadRows.length,
+      akadRate: div(akadRows.length, rs.length),
+      disbursed: sum(akadRows, "deal_value"),
+      replyMeasured: mins.length,
+      avgReply: mins.length ? mins.reduce((x, y) => x + y, 0) / mins.length : null,
+      within5: mins.length ? mins.filter((x) => x <= 5).length / mins.length : null,
+    };
+  };
+  const finAll = finGroup(leads);
+  const sortedMins = leads.map(replyMin).filter((x): x is number => x !== null).sort((x, y) => x - y);
+  const financing = {
+    funnel: [
+      { name: "Lead masuk", value: finAll.leads },
+      { name: "Survei", value: finAll.survey },
+      { name: "Approve", value: finAll.approve },
+      { name: "Akad (cair)", value: finAll.akad },
+    ],
+    disbursed: finAll.disbursed,
+    costPerSurvey: div(totalCost, finAll.survey),
+    costPerAkad: div(totalCost, finAll.akad),
+    avgTicket: div(finAll.disbursed, finAll.akad),
+    tracked: leads.some((r) => r.pipeline_stage),
+    sla: {
+      measured: sortedMins.length,
+      avg: finAll.avgReply,
+      median: sortedMins.length ? sortedMins[Math.floor(sortedMins.length / 2)] : null,
+      within5: finAll.within5,
+      within30: sortedMins.length ? sortedMins.filter((x) => x <= 30).length / sortedMins.length : null,
+      over60: sortedMins.filter((x) => x > 60).length,
+    },
+    byBranch: [...groupBy(leads, (r) => String(r.branch ?? "").trim() || "(Tanpa cabang)").entries()].map(([name, rs]) => ({ name, ...finGroup(rs) })).sort((x, y) => y.leads - x.leads),
+    byPic: [...groupBy(leads, (r) => String(r.pic ?? "").trim() || "(Tanpa PIC)").entries()].map(([name, rs]) => ({ name, ...finGroup(rs) })).sort((x, y) => y.leads - x.leads),
+  };
 
   // ---- content breakdowns
   const posted = content.filter((r) => r.status === "Posted");
@@ -802,6 +863,16 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
   }
 
   // GENERAL
+  const sla = financing.sla;
+  if (sla.measured >= 5 && sla.avg !== null && sla.avg > 15)
+    push({ level: sla.avg > 60 ? "critical" : "warning", area: "Leads", title: `Respons chat pertama lambat: rata-rata ${Math.round(sla.avg)} menit`, detail: `${Math.round((sla.within5 ?? 0) * 100)}% dibalas dalam 5 menit; ${sla.over60} lead menunggu lebih dari 1 jam.`, action: "Atur jadwal piket CS dan balasan otomatis di luar jam kerja. Lead yang dibalas dalam 5 menit jauh lebih mungkin lanjut survei." });
+  if (financing.tracked && financing.funnel[1].value >= 5) {
+    const [, survey, approve, akad] = financing.funnel;
+    if (approve.value && akad.value / approve.value < 0.5)
+      push({ level: "warning", area: "Leads", title: `Hanya ${Math.round((akad.value / approve.value) * 100)}% yang sudah approve berlanjut ke akad`, detail: `${approve.value} approve, ${akad.value} akad.`, action: "Hubungi nasabah yang sudah approve tapi belum akad: cek hambatan jadwal, dokumen, atau perubahan keputusan." });
+    else if (survey.value && approve.value / survey.value < 0.4)
+      push({ level: "info", area: "Leads", title: `Hanya ${Math.round((approve.value / survey.value) * 100)}% hasil survei yang approve`, detail: `${survey.value} survei, ${approve.value} approve.`, action: "Perketat penyaringan lead sebelum survei (plafon, jenis unit, kelengkapan dokumen) agar waktu tim survei tidak terbuang." });
+  }
   const noBudget = events.filter((e) => !n(e.planned_budget) && String(e.event_date) <= addDays(today, 14));
   if (noBudget.length)
     push({ level: "warning", area: "Budget", title: `${noBudget.length} event dalam 14 hari belum punya rencana budget`, detail: noBudget.slice(0, 4).map((e) => `${e.title} (${e.event_date})`).join(", "), action: "Isi rencana budget iklan & target leads di Kalender Promo agar belanja iklan dan blast terarah dan saldo cukup." });
@@ -849,6 +920,7 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     leadsByBrand,
     followUps: followUps.slice(0, 50),
     funnel,
+    financing,
     contentByChannel,
     contentByPillar,
     contentByType,

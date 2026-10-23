@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   LayoutDashboard, Lightbulb, FileBarChart, Megaphone, Wallet, CalendarDays, Target, Users, CalendarHeart,
-  MessageCircle, PhoneCall, Send, Star, Sparkles, ArrowUpDown, Settings, LogOut, Menu, X, ShieldCheck, Bell, FolderOpen, Filter, Layers, ClipboardList, CalendarClock, Eye, Store, CalendarRange, ChevronDown, Check,
+  MessageCircle, PhoneCall, Send, Star, Sparkles, ArrowUpDown, Settings, LogOut, Menu, X, ShieldCheck, Bell, Gauge, FolderOpen, Filter, Layers, ClipboardList, CalendarClock, Eye, Store, CalendarRange, ChevronDown, Check,
 } from "lucide-react";
 import { PRESETS, useFilter, useMeta } from "./providers";
 import { NotificationBell } from "./notification-bell";
@@ -67,6 +67,7 @@ const NAV: { section?: string; items: Item[] }[] = [
           { href: "/leads/followup", label: "Papan Follow Up", icon: PhoneCall },
           { href: "/blast", label: "WA Blast", icon: Send },
           { href: "/blast/schedule", label: "Jadwal Broadcast", icon: CalendarClock },
+          { href: "/performance", label: "Cabang & Respons", icon: Gauge },
         ],
       },
       {

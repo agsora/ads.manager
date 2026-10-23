@@ -25,6 +25,23 @@ export default function FunnelPage() {
         title="Funnel & Atribusi"
         desc="Dari impresi iklan sampai deal: di tahap mana calon pelanggan paling banyak hilang, dan campaign mana yang benar-benar menghasilkan deal (bukan hanya klik)."
       />
+      <Card title="Funnel pembiayaan" subtitle="Lead masuk sampai akad (cair). Isi Tahap Pembiayaan dan Nilai Pencairan di WA Leads agar terhitung.">
+        {a.financing.tracked ? (
+          <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
+            <Funnel steps={a.financing.funnel} />
+            <dl className="space-y-3 text-[14px]">
+              <Row label="Biaya per survei" value={fmtMoney(a.financing.costPerSurvey)} />
+              <Row label="Biaya per akad" value={fmtMoney(a.financing.costPerAkad)} strong />
+              <Row label="Nilai pencairan" value={fmtMoney(a.financing.disbursed)} />
+              <Row label="Rata-rata per akad" value={fmtMoney(a.financing.avgTicket)} />
+              <p className="border-t border-[var(--line)] pt-3 text-[12px] leading-relaxed text-[var(--muted)]">Biaya = belanja iklan + blast + influencer pada periode ini.</p>
+            </dl>
+          </div>
+        ) : (
+          <Empty text="Belum ada lead yang diberi Tahap Pembiayaan — ubah lewat Edit di WA Leads" />
+        )}
+      </Card>
+
       <div className="stat-grid">
         <Stat label="Biaya per Lead" value={fmtMoney(k.ads.spend && k.leads.leads ? k.ads.spend / k.leads.leads : null)} hint="Total biaya iklan ÷ semua leads" />
         <Stat label="Biaya per Deal" value={fmtMoney(k.ads.spend && k.leads.deals ? k.ads.spend / k.leads.deals : null)} hint="Total biaya iklan ÷ deal" />
@@ -104,6 +121,15 @@ function Stat({ label, value, hint }: { label: string; value: string; hint: stri
       <div className="text-[12.5px] text-[var(--ink-2)]">{label}</div>
       <div className="serif mt-1 text-[26px] leading-tight tnum">{value}</div>
       <div className="mt-1 text-[12px] text-[var(--muted)]">{hint}</div>
+    </div>
+  );
+}
+
+function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <dt className="text-[var(--ink-2)]">{label}</dt>
+      <dd className={`tnum ${strong ? "serif text-[22px]" : "font-semibold"}`}>{value}</dd>
     </div>
   );
 }
