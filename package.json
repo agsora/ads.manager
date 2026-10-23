@@ -10,6 +10,7 @@
     "db:migrate": "tsx scripts/migrate.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.1.0",
     "@neondatabase/serverless": "^1.2.0",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",

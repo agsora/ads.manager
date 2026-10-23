@@ -5,6 +5,7 @@ import { Download, Printer } from "lucide-react";
 import { PageHeader } from "@/components/shell";
 import { useFilter } from "@/components/providers";
 import { useAnalytics } from "@/components/use-analytics";
+import { AiAdvice } from "@/components/ai-advice";
 import { Card, InsightItem, PageSkeleton, ScoreRing, scoreTone, scoreWord } from "@/components/charts";
 import { fmtDate } from "@/lib/format";
 import type { Insight } from "@/lib/analytics";
@@ -133,6 +134,11 @@ export default function InsightsPage() {
         </Card>
       </div>
 
+      <div className="no-print">
+        <AiAdvice />
+      </div>
+
+      <div className="serif mt-2 text-[20px]">Saran dari aturan tetap</div>
       <div className="flex flex-wrap gap-2 no-print">
         {LEVELS.map((l) => (
           <button key={l.key} className={`btn btn-sm ${level === l.key ? "btn-primary" : ""}`} onClick={() => setLevel(l.key)}>
