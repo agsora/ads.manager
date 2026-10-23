@@ -307,12 +307,28 @@ function GlobalFilter() {
 }
 
 export function PageHeader({ title, desc, eyebrow, children }: { title: string; desc?: string; eyebrow?: string; children?: React.ReactNode }) {
+  const [more, setMore] = useState(false);
+  const long = (desc?.length ?? 0) > 150;
   return (
     <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
       <div className="max-w-3xl">
         {eyebrow && <div className="eyebrow mb-2">{eyebrow}</div>}
         <h1 className="serif text-[32px] font-normal leading-[1.1] tracking-[-0.01em]">{title}</h1>
-        {desc && <p className="mt-2 text-[14px] leading-relaxed text-[var(--ink-2)]">{desc}</p>}
+        {desc && (
+          <p className={`mt-2 text-[14px] leading-relaxed text-[var(--ink-2)] ${long && !more ? "line-clamp-2" : ""}`}>
+            {desc}
+            {long && more && (
+              <button className="ml-1.5 text-[13px] font-semibold text-[var(--accent-ink)]" onClick={() => setMore(false)}>
+                Ringkas
+              </button>
+            )}
+          </p>
+        )}
+        {long && !more && (
+          <button className="mt-0.5 text-[13px] font-semibold text-[var(--accent-ink)]" onClick={() => setMore(true)}>
+            Selengkapnya
+          </button>
+        )}
       </div>
       {children && <div className="flex flex-wrap items-center gap-2 no-print">{children}</div>}
     </div>

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Download, Send, Upload, UserPlus } from "lucide-react";
+import { ChevronDown, Download, Send, Upload, UserPlus } from "lucide-react";
+import { MenuItem, Popover } from "@/components/popover";
 import { PageHeader } from "@/components/shell";
 import { ResourceTable } from "@/components/resource-table";
 import { ImportDialog } from "@/components/import-dialog";
@@ -19,7 +20,7 @@ export default function BlastPage() {
   const [tab, setTab] = useState<"contacts" | "campaigns">("contacts");
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Leads & Blast" title="WA Blast" desc="Kelola daftar kontak blast (nomor kontrak, nama, nomor resmi 62…, harga pasar, plafon, pinjaman, rekomendasi, tipe unit, tahun), ekspor siap kirim dengan pesan personal, catat hasilnya, lalu jadikan leads." />
+      <PageHeader eyebrow="WhatsApp" title="WA Blast" desc="Kelola daftar kontak blast (nomor kontrak, nama, nomor resmi 62…, harga pasar, plafon, pinjaman, rekomendasi, tipe unit, tahun), ekspor siap kirim dengan pesan personal, catat hasilnya, lalu jadikan leads." />
       <div className="tabs">
         <button className="tab" data-on={tab === "contacts"} onClick={() => setTab("contacts")}>Kontak blast</button>
         <button className="tab" data-on={tab === "campaigns"} onClick={() => setTab("campaigns")}>Laporan kampanye blast</button>
@@ -69,9 +70,23 @@ function Contacts() {
         <button className="btn" onClick={() => setExporting(true)}>
           <Send size={15} /> Ekspor untuk blast
         </button>
-        <a className="btn" href="/api/template?resource=contacts">
-          <Download size={15} /> Template kontak
-        </a>
+        <Popover
+          label="Menu lainnya"
+          width={220}
+          button={(open) => (
+            <button className={`btn ${open ? "!border-[var(--ink)]" : ""}`}>
+              Lainnya <ChevronDown size={14} className="text-[var(--muted)]" />
+            </button>
+          )}
+        >
+          {(close) => (
+            <div className="p-1.5">
+              <MenuItem icon={<Download size={14} />} href="/api/template?resource=contacts" onClick={close}>
+                Unduh template kontak
+              </MenuItem>
+            </div>
+          )}
+        </Popover>
       </div>
 
       {k && (
