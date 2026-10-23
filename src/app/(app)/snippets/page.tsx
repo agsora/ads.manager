@@ -12,7 +12,7 @@ const r = RESOURCE_MAP.snippets;
 
 export default function SnippetsPage() {
   const toast = useToast();
-  const { options } = useMeta();
+  const { options, session } = useMeta();
   const [tick, setTick] = useState(0);
   const { data, loading } = useFetch<{ rows: Row[] }>(`/api/r/snippets?t=${tick}`);
   const [kind, setKind] = useState("");
@@ -104,9 +104,11 @@ export default function SnippetsPage() {
                 <button className="btn btn-sm btn-ghost" onClick={() => setEditing(row)} aria-label="Edit">
                   <Pencil size={14} />
                 </button>
-                <button className="btn btn-sm btn-ghost" onClick={() => remove(row)} aria-label="Hapus">
-                  <Trash2 size={14} />
-                </button>
+                {session?.role !== "staff" && (
+                  <button className="btn btn-sm btn-ghost" onClick={() => remove(row)} aria-label="Hapus">
+                    <Trash2 size={14} />
+                  </button>
+                )}
                 <span className="ml-auto text-[12px] text-[var(--muted)]">Dipakai {Number(row.uses ?? 0)}×</span>
               </div>
             </article>

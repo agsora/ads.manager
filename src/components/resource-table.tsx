@@ -43,7 +43,8 @@ export interface ResourceTableProps {
 export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ignoreDate, rowFilter, defaults, onChanged, toolbar, selectionActions, importPlatform, reloadKey = 0, columns, formGroups, formTitle, allowCreate = true, searchPlaceholder }: ResourceTableProps) {
   const r = RESOURCE_MAP[resourceKey];
   const f = useFilter();
-  const { options } = useMeta();
+  const { options, session } = useMeta();
+  const canDelete = session?.role !== "staff"; // staff enter and edit data; removal is for owner/admin
   const toast = useToast();
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -170,7 +171,7 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
               setSel(new Set());
               refresh();
             })}
-          {sel.size > 0 && (
+          {sel.size > 0 && canDelete && (
             <button className="btn btn-sm btn-danger" onClick={bulkDelete}>
               <Trash2 size={14} /> Hapus {sel.size}
             </button>
@@ -293,9 +294,11 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
                     <button className="btn btn-sm btn-ghost !px-1.5" onClick={() => setEditing(row)} aria-label="Edit">
                       <Pencil size={14} />
                     </button>
-                    <button className="btn btn-sm btn-ghost btn-danger !px-1.5" onClick={() => delOne(row)} aria-label="Hapus">
-                      <Trash2 size={14} />
-                    </button>
+                    {canDelete && (
+                      <button className="btn btn-sm btn-ghost btn-danger !px-1.5" onClick={() => delOne(row)} aria-label="Hapus">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>

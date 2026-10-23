@@ -29,7 +29,7 @@ export const PUT = handle(async (req: Request, ctx: Ctx) => {
 });
 
 export const DELETE = handle(async (req: Request, ctx: Ctx) => {
-  const s = await requireSession();
+  const s = await requireSession(["owner", "admin"]); // staff can enter and edit data, not remove it
   const p = await ctx.params;
   const r = getResource(p.resource);
   if (!r) throw new HttpError(404, "Modul tidak ditemukan");

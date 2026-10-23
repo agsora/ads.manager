@@ -67,9 +67,17 @@ export async function deleteMatching(orgId: number, r: Resource, rows: Record<st
   return deleted;
 }
 
+/** Fields where a negative amount is legitimate (an overdrawn opening balance). */
+const MAY_BE_NEGATIVE = new Set(["opening_balance"]);
+
 export function validate(r: Resource, data: Record<string, unknown>): string | null {
   for (const f of r.fields) {
-    if (f.required && (data[f.key] === null || data[f.key] === undefined || data[f.key] === "")) return `${f.label} wajib diisi`;
+    const v = data[f.key];
+    if (f.required && (v === null || v === undefined || v === "")) return `${f.label} wajib diisi`;
+    if (typeof v === "number" && ["number", "money", "percent", "rating"].includes(f.type)) {
+      if (Math.abs(v) > 1e13) return `${f.label} terlalu besar`;
+      if (v < 0 && !MAY_BE_NEGATIVE.has(f.key)) return `${f.label} tidak boleh negatif`;
+    }
   }
   return null;
 }

@@ -288,7 +288,9 @@ export async function toBuffer(wb: ExcelJS.Workbook) {
 export function toCSV(r: Resource, rows: Row[]) {
   const comp = r.computed ?? [];
   const esc = (v: unknown) => {
-    const s = v === null || v === undefined ? "" : String(v);
+    let s = v === null || v === undefined ? "" : String(v);
+    // spreadsheet formula injection: a text cell starting with = or @ (or +/- followed by a non-number) would run when opened
+    if (typeof v === "string" && /^([=@]|[+\-]\s*[^0-9\s().+-])/.test(s)) s = "'" + s;
     return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const head = [...r.fields.map((f) => f.label), ...comp.map((c) => c.label)];

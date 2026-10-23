@@ -10,7 +10,8 @@ const ID_MONTHS: Record<string, number> = {
 const pad = (x: number) => String(x).padStart(2, "0");
 const iso = (y: number, m: number, d: number) => {
   if (y < 100) y += 2000;
-  if (m < 1 || m > 12 || d < 1 || d > 31 || y < 1900 || y > 2200) return null;
+  if (m < 1 || m > 12 || d < 1 || y < 1900 || y > 2200) return null;
+  if (d > new Date(Date.UTC(y, m, 0)).getUTCDate()) return null; // 31 Feb, 31 Apr …
   return `${y}-${pad(m)}-${pad(d)}`;
 };
 
@@ -63,7 +64,8 @@ function toTime(v: unknown): string | null {
     return `${pad(Math.floor(mins / 60))}:${pad(mins % 60)}`;
   }
   const m = String(v).match(/(\d{1,2})[:.](\d{2})/);
-  return m ? `${pad(+m[1])}:${m[2]}` : String(v).trim() || null;
+  if (!m) return null;
+  return +m[1] > 23 || +m[2] > 59 ? null : `${pad(+m[1])}:${m[2]}`;
 }
 
 function cellText(v: unknown): string | null {
@@ -105,7 +107,10 @@ export function coerce(f: Field, v: unknown, fromImport = false): unknown {
       if (!fromImport || raw || Math.abs(x) > 1) return x / 100;
       return x;
     }
-    default:
-      return cellText(v);
+    default: {
+      // keep one oversized paste from bloating the database
+      const t = cellText(v);
+      return t === null ? null : t.slice(0, f.type === "longtext" ? 20000 : 2000);
+    }
   }
 }

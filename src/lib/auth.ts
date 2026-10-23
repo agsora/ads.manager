@@ -62,7 +62,12 @@ export function handle<A extends unknown[]>(fn: (...args: A) => Promise<Response
     } catch (e) {
       if (e instanceof HttpError) return NextResponse.json({ error: e.message }, { status: e.status });
       console.error(e);
-      return NextResponse.json({ error: e instanceof Error ? e.message : "Server error" }, { status: 500 });
+      const code = (e as { code?: string }).code;
+      // malformed input is the caller's mistake, not a server failure; never echo raw database errors
+      if (e instanceof SyntaxError) return NextResponse.json({ error: "Format data tidak valid" }, { status: 400 });
+      if (e instanceof RangeError || ["22007", "22008", "22P02", "22003", "22001", "23502"].includes(code ?? ""))
+        return NextResponse.json({ error: "Ada isian yang tidak valid (tanggal, angka, atau terlalu panjang). Periksa kembali." }, { status: 400 });
+      return NextResponse.json({ error: "Terjadi kesalahan pada server. Coba lagi sebentar." }, { status: 500 });
     }
   };
 }

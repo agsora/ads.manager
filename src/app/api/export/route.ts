@@ -11,6 +11,7 @@ export const GET = handle(async (req: Request) => {
   const s = await requireSession();
   const u = new URL(req.url);
   const key = u.searchParams.get("resource") || "all";
+  if (key === "all" && s.role === "staff") throw new HttpError(403, "Backup seluruh data hanya untuk owner/admin");
   const format = u.searchParams.get("format") || "xlsx";
   const filter = { from: u.searchParams.get("from"), to: u.searchParams.get("to"), brand: u.searchParams.get("brand"), limit: 20000 };
   const stamp = todayISO();

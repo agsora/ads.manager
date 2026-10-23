@@ -1,7 +1,7 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { RESOURCES, type FieldType } from "./resources";
 
-const SCHEMA_VERSION = "13";
+const SCHEMA_VERSION = "14";
 
 // Keep DATE/TIMESTAMP as raw strings (no timezone shifting) and NUMERIC/INT8 as numbers.
 const RAW = (v: string) => v;
@@ -49,6 +49,8 @@ const colType = (t: FieldType) => {
 export function schemaStatements(): string[] {
   const s: string[] = [
     `CREATE TABLE IF NOT EXISTS app_meta (key text PRIMARY KEY, value text)`,
+    `CREATE TABLE IF NOT EXISTS login_failures (id serial PRIMARY KEY, email text NOT NULL, ip text, at timestamptz DEFAULT now())`,
+    `CREATE INDEX IF NOT EXISTS login_failures_email_at ON login_failures (email, at DESC)`,
     `CREATE TABLE IF NOT EXISTS organizations (id serial PRIMARY KEY, name text NOT NULL, created_at timestamptz DEFAULT now())`,
     `CREATE TABLE IF NOT EXISTS users (
       id serial PRIMARY KEY,
