@@ -8,6 +8,7 @@ import type { Advice, StoredAdvice } from "@/lib/ai-advice";
 
 interface Status {
   configured: boolean;
+  provider: "claude" | "gemini" | null;
   model: string;
   used: number;
   limit: number;
@@ -91,7 +92,7 @@ export function AiAdvice() {
             </h3>
           </div>
           <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-[var(--muted)]">
-            Claude membaca ringkasan angka periode ini dan memberi saran yang berbeda tiap kali dibuat. Saran dari aturan tetap di bawah tetap ada. Hanya angka ringkasan yang dipakai, tanpa nama atau nomor nasabah.
+            AI membaca ringkasan angka periode ini dan memberi saran yang berbeda tiap kali dibuat, dan diperbarui otomatis setiap pagi. Saran dari aturan tetap di bawah tetap ada. Hanya angka ringkasan yang dikirim, tanpa nama atau nomor nasabah.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -102,10 +103,12 @@ export function AiAdvice() {
               </option>
             ))}
           </select>
-          <button className={`btn ${st?.configured ? "" : "btn-primary"}`} onClick={copyForClaude} disabled={copying || busy}>
-            {copying ? <Loader2 size={15} className="animate-spin" /> : <Copy size={15} />}
-            Salin untuk Claude
-          </button>
+          {!st?.configured && (
+            <button className="btn" onClick={copyForClaude} disabled={copying || busy}>
+              {copying ? <Loader2 size={15} className="animate-spin" /> : <Copy size={15} />}
+              Salin untuk Claude
+            </button>
+          )}
           {st?.configured && (
             <button className="btn btn-primary" onClick={generate} disabled={busy}>
               {busy ? <Loader2 size={15} className="animate-spin" /> : advice ? <RefreshCw size={15} /> : <Sparkles size={15} />}
@@ -117,11 +120,11 @@ export function AiAdvice() {
 
       {st && !st.configured && (
         <div className="mt-4 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] p-4 text-[13px] leading-relaxed text-[var(--ink-2)]">
-          <b>Cara gratis memakai langganan Claude Anda:</b> klik <b>Salin untuk Claude</b>, lalu buka{" "}
-          <a href="https://claude.ai/new" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--accent-ink)] underline">
-            Claude <ExternalLink size={12} />
-          </a>{" "}
-          (aplikasi atau situs), tempel, dan kirim. Jawaban muncul di sana; klik <b>Salin untuk Claude</b> lagi untuk jawaban dari sudut pandang berbeda. Tombol <b>Buat saran AI</b> langsung di halaman ini baru aktif bila admin memasang kunci API berbayar (<code>ANTHROPIC_API_KEY</code>).
+          <b>Aktifkan saran AI otomatis (gratis):</b> admin membuat kunci gratis di{" "}
+          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--accent-ink)] underline">
+            Google AI Studio <ExternalLink size={12} />
+          </a>
+          , lalu memasangnya di Vercel (<b>Settings → Environment Variables</b>) dengan nama <code>GEMINI_API_KEY</code> dan deploy ulang. Setelah itu saran muncul sendiri tiap pagi, tanpa salin-tempel. Alternatif: kunci berbayar Claude (<code>ANTHROPIC_API_KEY</code>) untuk kualitas lebih tinggi.
         </div>
       )}
 
@@ -182,7 +185,7 @@ export function AiAdvice() {
           <p className="text-[12px] text-[var(--muted)]">
             Dibuat {new Date(last!.at).toLocaleString("id-ID")} untuk periode {fmtDate(last!.period.from)} – {fmtDate(last!.period.to)}
             {last!.period.brand ? ` · ${last!.period.brand}` : ""}
-            {samePeriod ? "" : " (berbeda dari filter sekarang, klik Buat ulang untuk memperbarui)"} · {st!.used}/{st!.limit} permintaan hari ini. Saran AI adalah masukan, periksa angkanya sebelum bertindak.
+            {samePeriod ? "" : " (berbeda dari filter sekarang, klik Buat ulang untuk memperbarui)"} · {st!.provider === "gemini" ? "Gemini" : "Claude"} · {st!.used}/{st!.limit} permintaan hari ini. Saran AI adalah masukan, periksa angkanya sebelum bertindak.
           </p>
         </div>
       )}

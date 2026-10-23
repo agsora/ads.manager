@@ -4,6 +4,7 @@ import { buildReportWorkbook } from "./report";
 import { appUrl, emailEnabled, renderEmail, sendEmails, type EmailSection } from "./email";
 import { notify, orgUsers, wantsEmail } from "./notify";
 import { refreshContentMetrics } from "./metrics-sync";
+import { aiConfigured, generateAdvice, lastAdvice } from "./ai-advice";
 import { driveEnabled, saveFileRecord, uploadFromServer } from "./drive";
 import { addDays, fmtDate, fmtMoney, fmtNum, fmtPct, monthEnd, monthStart, todayISO } from "./format";
 import type { Row } from "./resources";
@@ -68,6 +69,18 @@ export async function runDaily(orgId: number, opts: { force?: boolean; weekly?: 
   if (negative.length) await alert(`${negative.length} ulasan negatif belum dibalas`, negative.slice(0, 3).map((n) => `${n.reviewer ?? "Anonim"} ${n.rating}★`).join(", "), "/reviews");
   if (closed.length) await alert(`${closed.length} campaign otomatis ditandai Done`, "Tanggal berakhirnya sudah lewat.", "/ads");
 
+  // fresh AI advice every morning (only when an AI key is configured), so nobody has to click anything
+  if (aiConfigured()) {
+    try {
+      const prev = await lastAdvice(orgId);
+      if (!prev || prev.at.slice(0, 10) !== today) {
+        const out = await generateAdvice({ orgId, from: monthStart(today), to: monthEnd(today), brand: null, focus: "auto", previousTitles: prev?.advice.saran.map((x) => x.judul) ?? [] });
+        await alert("Saran AI hari ini sudah siap", out.advice.ringkasan.slice(0, 160), "/insights");
+      }
+    } catch (e) {
+      console.error("daily ai advice", e instanceof Error ? e.message : e);
+    }
+  }
   // broadcasts scheduled for today/tomorrow that are not sent yet
   const dueBlasts = await q<Row>(
     `SELECT campaign_name, blast_date, blast_time, brand FROM wa_blasts WHERE org_id = $1 AND blast_date BETWEEN $2 AND $3 AND COALESCE(status, 'Draft') IN ('Draft', 'Terjadwal') ORDER BY blast_date, blast_time NULLS LAST`,

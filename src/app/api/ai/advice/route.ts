@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { handle, HttpError, requireSession } from "@/lib/auth";
-import { aiConfigured, buildPastePrompt, DAILY_LIMIT, generateAdvice, lastAdvice, MODEL, usedToday } from "@/lib/ai-advice";
+import { aiConfigured, buildPastePrompt, DAILY_LIMIT, generateAdvice, lastAdvice, MODEL, provider, usedToday } from "@/lib/ai-advice";
 import { logActivity } from "@/lib/db";
 import { monthEnd, monthStart, todayISO } from "@/lib/format";
 
@@ -11,7 +11,7 @@ const isDate = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(new Date(d
 /** GET → is AI on, usage today, and the last advice generated for this workspace. */
 export const GET = handle(async () => {
   const s = await requireSession();
-  return NextResponse.json({ configured: aiConfigured(), model: MODEL, used: await usedToday(s.org), limit: DAILY_LIMIT, last: await lastAdvice(s.org) });
+  return NextResponse.json({ configured: aiConfigured(), provider: provider(), model: provider() === "claude" ? MODEL : "Gemini", used: await usedToday(s.org), limit: DAILY_LIMIT, last: await lastAdvice(s.org) });
 });
 
 /** PUT { from, to, brand, focus } → a ready-to-paste prompt for the Claude app (free path, no API call, no daily limit). */
