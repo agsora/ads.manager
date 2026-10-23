@@ -57,17 +57,17 @@ export function Kpi({ label, value, prev, format, invert, hint, spark }: { label
   const delta = prev && value !== null && value !== undefined && Number.isFinite(prev) && prev !== 0 ? value / prev - 1 : null;
   const good = delta !== null && (invert ? delta < 0 : delta > 0);
   return (
-    <div className="px-4 py-4">
+    <div className="relative min-w-0 overflow-hidden px-4 py-4">
       <div className="text-[12.5px] text-[var(--ink-2)]">{label}</div>
-      <div className="mt-1 flex items-end justify-between gap-2">
+      <div className="mt-1">
         <div className="serif whitespace-nowrap text-[26px] leading-tight tracking-[-0.01em]">{value === null || value === undefined ? "–" : format === "money" ? fmtMoneyCompact(value) : formatValue(value, format)}</div>
-        {spark && (
-          <div className="mb-1.5 hidden opacity-90 min-[420px]:block">
-            <Sparkline data={spark} width={64} height={24} />
-          </div>
-        )}
       </div>
-      <div className="mt-1.5 flex items-center gap-1.5 text-[12px]">
+      {spark && (
+        <div className="pointer-events-none absolute bottom-3.5 right-3 opacity-80">
+          <Sparkline data={spark} width={52} height={22} />
+        </div>
+      )}
+      <div className={`mt-1.5 flex flex-wrap items-center gap-x-1.5 text-[12px] ${spark ? "pr-14" : ""}`}>
         {delta !== null ? (
           <span className={`inline-flex items-center gap-0.5 font-semibold ${Math.abs(delta) < 0.005 ? "text-[var(--muted)]" : good ? "text-[var(--good-ink)]" : "text-[var(--critical-ink)]"}`}>
             {delta >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}

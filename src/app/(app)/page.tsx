@@ -70,13 +70,13 @@ export default function Dashboard() {
             <div className="min-w-0">
               <div className="eyebrow">Kesehatan marketing</div>
               <div className="serif mt-1 text-[24px] leading-tight">{scoreWord(a.scores.overall)}</div>
-              <Link href="/insights" className="mt-2 inline-flex items-center gap-1 text-[13px] text-[var(--ink-2)] hover:text-[var(--accent-ink)]">
+              <Link href="/insights" className="mt-2 flex items-start gap-1 text-[13px] leading-snug text-[var(--ink-2)] hover:text-[var(--accent-ink)]">
                 {(() => {
                   const crit = a.insights.filter((i) => i.level === "critical").length;
                   const warn = a.insights.filter((i) => i.level === "warning").length;
                   return crit + warn ? `${crit} kritis · ${warn} perlu perhatian` : "Tidak ada masalah mendesak";
                 })()}
-                <ArrowRight size={13} />
+                <ArrowRight size={13} className="mt-[3px] shrink-0" />
               </Link>
             </div>
           </div>
