@@ -106,6 +106,7 @@ export async function runDaily(orgId: number, opts: { force?: boolean; weekly?: 
   // ---- digest email
   const users = await orgUsers(orgId);
   let digestEmails = 0;
+  let emailProblem = "";
   if (emailEnabled()) {
     const line = (c: Row) => `${c.post_time ? `${c.post_time} · ` : ""}${c.title} — ${c.channel ?? "-"}${c.brand ? ` · ${c.brand}` : ""} [${c.status ?? "-"}]`;
     const sections: EmailSection[] = [
@@ -140,6 +141,7 @@ export async function runDaily(orgId: number, opts: { force?: boolean; weekly?: 
     });
     const res = await sendEmails(users.filter((u) => wantsEmail(u, "digest")).map((u) => ({ to: u.email, subject: `Ringkasan harian ${fmtDate(today)} — Ads Manager`, html })));
     digestEmails = res.sent;
+    if (res.error) emailProblem = res.error;
   }
 
   // ---- weekly report (Monday)
@@ -190,6 +192,6 @@ export async function runDaily(orgId: number, opts: { force?: boolean; weekly?: 
     if (res.sent) await notify({ orgId, category: "weekly", title: "Laporan mingguan terkirim", body: `Dikirim ke ${res.sent} email (owner/admin).`, link: "/reports", skipActor: false, userIds: managers.map((m) => m.id) });
   }
 
-  await logActivity(orgId, "Otomasi", "Otomasi harian", `${synced.updated} metrik konten diperbarui · ${closed.length} campaign ditutup · ${alerts} peringatan · ${digestEmails} digest · ${weeklyEmails} laporan mingguan`);
+  await logActivity(orgId, "Otomasi", "Otomasi harian", `${synced.updated} metrik konten diperbarui · ${closed.length} campaign ditutup · ${alerts} peringatan · ${digestEmails} digest · ${weeklyEmails} laporan mingguan${emailProblem ? ` · email ditolak: ${emailProblem.replace(/\s+/g, " ").slice(0, 160)}` : ""}`);
   return { orgId, closedCampaigns: closed.length, alerts, digestEmails, weeklyEmails };
 }
