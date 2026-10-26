@@ -14,11 +14,11 @@ const GRID = "#eeebe3";
 
 export function Card({ title, subtitle, action, children, className = "" }: { title?: string; subtitle?: string; action?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
-    <section className={`card min-w-0 p-5 ${className}`}>
+    <section className={`card min-w-0 p-4 ${className}`}>
       {(title || action) && (
-        <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            {title && <h3 className="serif text-[18px] font-medium leading-snug">{title}</h3>}
+            {title && <h3 className="serif text-[16px] font-medium leading-snug">{title}</h3>}
             {subtitle && <p className="mt-0.5 text-[12.5px] text-[var(--muted)]">{subtitle}</p>}
           </div>
           {action}
@@ -57,10 +57,10 @@ export function Kpi({ label, value, prev, format, invert, hint, spark }: { label
   const delta = prev && value !== null && value !== undefined && Number.isFinite(prev) && prev !== 0 ? value / prev - 1 : null;
   const good = delta !== null && (invert ? delta < 0 : delta > 0);
   return (
-    <div className="relative min-w-0 overflow-hidden px-4 py-4">
+    <div className="relative min-w-0 overflow-hidden px-3.5 py-3">
       <div className="text-[12.5px] text-[var(--ink-2)]">{label}</div>
       <div className="mt-1">
-        <div className="serif whitespace-nowrap text-[26px] leading-tight tracking-[-0.01em]">{value === null || value === undefined ? "–" : format === "money" ? fmtMoneyCompact(value) : formatValue(value, format)}</div>
+        <div className="serif whitespace-nowrap text-[22px] leading-tight tracking-[-0.01em]">{value === null || value === undefined ? "–" : format === "money" ? fmtMoneyCompact(value) : formatValue(value, format)}</div>
       </div>
       {spark && (
         <div className="pointer-events-none absolute bottom-3.5 right-3 opacity-80">
@@ -290,7 +290,7 @@ export function KpiSkeleton({ n = 8 }: { n?: number }) {
   return (
     <div className="stat-grid">
       {Array.from({ length: n }).map((_, i) => (
-        <div key={i} className="px-4 py-4">
+        <div key={i} className="px-3.5 py-3">
           <div className="skel h-3 w-24" />
           <div className="skel mt-3 h-7 w-28" />
           <div className="skel mt-3 h-3 w-20" />
@@ -302,16 +302,16 @@ export function KpiSkeleton({ n = 8 }: { n?: number }) {
 
 export function PageSkeleton({ kpis = 8, cards = 2 }: { kpis?: number; cards?: number }) {
   return (
-    <div className="space-y-6" aria-busy="true" aria-label="Memuat">
+    <div className="space-y-4" aria-busy="true" aria-label="Memuat">
       <div>
         <div className="skel h-3 w-24" />
         <div className="skel mt-3 h-9 w-72" />
         <div className="skel mt-3 h-4 w-[min(520px,90%)]" />
       </div>
       <KpiSkeleton n={kpis} />
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         {Array.from({ length: cards }).map((_, i) => (
-          <div key={i} className="card p-5">
+          <div key={i} className="card p-4">
             <div className="skel h-5 w-40" />
             <div className="skel mt-5 h-40 w-full" />
           </div>
@@ -344,7 +344,7 @@ export function Score({ label, value }: { label: string; value: number | null })
 export function MiniTable({ cols, rows, empty }: { cols: { key: string; label: string; format?: string; align?: "right" }[]; rows: Record<string, unknown>[]; empty?: string }) {
   if (!rows.length) return <Empty text={empty} />;
   return (
-    <div className="-mx-5 overflow-x-auto">
+    <div className="-mx-4 overflow-x-auto">
       <table className="data">
         <thead>
           <tr>

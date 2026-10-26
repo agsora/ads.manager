@@ -47,7 +47,7 @@ export default function ContentPage() {
     { key: "analytics", label: "Analitik", icon: PieChart },
   ] as const;
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader eyebrow="Konten" title="Content Plan" desc="Planning = apa yang akan diposting (jadwal, channel, pilar, PIC, caption, approval). Hasil = performa setelah tayang (tanggal aktual, reach, like, comment, saved, followers → engagement rate). Setiap rencana baru, perubahan, dan approval dikirim sebagai notifikasi & email ke tim." />
       <div className="tabs">
         {tabs.map((t) => (
@@ -110,7 +110,7 @@ function Planning({ onDetail, bump = 0 }: { onDetail?: (row: Row) => void; bump?
     }
   };
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="stat-grid">
         <Kpi label="Rencana di periode" value={rows.length} format="number" />
         <Kpi label="7 hari ke depan" value={count((r) => String(r.post_date) >= today && String(r.post_date) <= addDays(today, 6))} format="number" />
@@ -156,7 +156,7 @@ function Results({ openId, onOpened, onDetail, bump = 0 }: { openId?: number | n
   const filled = posted.filter((r) => Number(r.likes) || Number(r.reach) || Number(r.views));
   const ers = filled.filter((r) => Number(r.followers)).map((r) => (Number(r.likes ?? 0) + Number(r.comments ?? 0) + Number(r.saves ?? 0)) / Number(r.followers));
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="stat-grid">
         <Kpi label="Sudah jatuh tempo" value={due.length} format="number" />
         <Kpi label="Sudah tayang" value={posted.length} format="number" hint={due.length ? `${Math.round((posted.length / due.length) * 100)}% dari jadwal` : ""} />
@@ -366,7 +366,7 @@ function ContentAnalytics() {
   const k = a.kpis.content;
   const p = a.prevKpis.content;
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="stat-grid">
         <Kpi label="Direncanakan" value={k.planned} prev={p.planned} format="number" />
         <Kpi label="Tayang" value={k.posted} prev={p.posted} format="number" />
@@ -375,7 +375,7 @@ function ContentAnalytics() {
         <Kpi label="Rata-rata ER" value={k.avgER} prev={p.avgER} format="percent" />
         <Kpi label="Total Reach" value={k.reach} prev={p.reach} format="number" />
       </div>
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Proporsi Posting per Channel">
           <SplitBar parts={a.contentByChannel.map((c) => ({ name: c.name, value: c.posted }))} />
           <div className="mt-5">

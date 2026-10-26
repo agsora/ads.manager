@@ -81,10 +81,10 @@ export default function SimulasiPage() {
   const toggle = (m: number) => setTenors((t) => (t.includes(m) ? t.filter((x) => x !== m) : [...t, m]));
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader eyebrow="WhatsApp" title="Simulasi Cicilan" desc="Hitung perkiraan angsuran untuk calon nasabah dan bagikan lewat WhatsApp dengan kode campaign. Isi bunga dan biaya sesuai ketentuan produk yang berlaku; hasilnya hanya perkiraan dan selalu disertai keterangan bahwa keputusan mengikuti analisis kredit." />
 
-      <div className="grid gap-5 lg:grid-cols-[2fr_3fr]">
+      <div className="grid gap-4 lg:grid-cols-[2fr_3fr]">
         <Card title="Parameter">
           <div className="space-y-4">
             <div>
@@ -116,7 +116,7 @@ export default function SimulasiPage() {
 
         <Card title="Hasil perkiraan" subtitle="Bunga efektif dihitung dari dana yang benar-benar diterima, supaya sama dengan yang diwajibkan untuk diinformasikan">
           {rate > 0 ? (
-            <div className="-mx-5 overflow-x-auto">
+            <div className="-mx-4 overflow-x-auto">
               <table className="data">
                 <thead>
                   <tr>

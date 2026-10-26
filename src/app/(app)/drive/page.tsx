@@ -62,7 +62,7 @@ function DriveInner() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader eyebrow="Data" title="File & Google Drive" desc="Semua file kerja (desain konten, creative iklan, materi influencer, laporan, arsip impor) otomatis tersimpan rapi di Google Drive: Brand → Campaign → jenis file. Upload dilakukan dari tiap menu (kalender konten, campaign iklan, dll).">
         {c?.rootUrl && (
           <a className="btn" href={c.rootUrl} target="_blank" rel="noreferrer">
@@ -166,7 +166,7 @@ function DriveInner() {
               </div>
             }
           >
-            <div className="-mx-5 overflow-x-auto">
+            <div className="-mx-4 overflow-x-auto">
               <table className="data">
                 <thead>
                   <tr>
@@ -210,7 +210,7 @@ function DriveInner() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="px-4 py-4">
+    <div className="px-3.5 py-3">
       <div className="text-[12.5px] text-[var(--ink-2)]">{label}</div>
       <div className="serif mt-1 whitespace-nowrap text-[26px] leading-tight">{value}</div>
     </div>

@@ -12,9 +12,9 @@ export default function DataPage() {
   const f = useFilter();
   const [imp, setImp] = useState<string | null>(null);
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader eyebrow="Data" title="Impor / Ekspor Data" desc="Pindahkan data dari/ke Excel. Dikenali otomatis: file ekspor Meta Ads Manager (CSV/Excel), daftar kontak blast (nomor kontrak, nama, noresmi, plafon, tipe unit…), dan workbook 'WEBSITE MARKETING REPORT'." />
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Impor Workbook Lengkap" subtitle="Satu file Excel berisi banyak sheet — tiap sheet dipetakan ke modul yang sesuai">
           <ul className="mb-4 list-disc space-y-1 pl-5 text-[13px] text-[var(--ink-2)]">
             <li>Brand diambil dari kolom Brand, nama sheet (mis. &quot;WA Leads - CMD Finance&quot;), atau brand default.</li>
@@ -38,7 +38,7 @@ export default function DataPage() {
         </Card>
       </div>
       <Card title="Per Modul">
-        <div className="-mx-5 overflow-x-auto">
+        <div className="-mx-4 overflow-x-auto">
           <table className="data">
             <thead>
               <tr>

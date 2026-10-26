@@ -71,7 +71,7 @@ export default function RemarketingPage() {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader eyebrow="Blast" title="Remarketing Nasabah" desc="Kelompok nasabah dari Kontak Blast yang paling layak dihubungi lagi. Nomor di Daftar Jangan Dihubungi dan nomor yang baru dikirim dalam 30 hari otomatis dikecualikan, supaya nasabah tidak merasa diteror." />
 
       <Card title="Pesan" subtitle="Variabel: {nama} {tipe} {tahun} {plafon} {kontrak}">

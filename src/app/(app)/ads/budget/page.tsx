@@ -135,7 +135,7 @@ export default function BudgetPage() {
   const wallets = a?.wallets ?? [];
   const totalNow = wallets.reduce((s, w) => s + w.closing, 0);
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader eyebrow="Iklan" title="Saldo & Top Up Iklan" desc="Saldo terbawa antar bulan: saldo akhir = saldo awal + top up − pemakaian nyata (belanja Ads Campaign, biaya WA Blast, atau fee Influencer sesuai Sumber Dana), dan menjadi saldo awal bulan berikutnya. Saldo awal cukup diisi sekali di bulan pertama; setelah itu catat top up saja." />
 
       <section>
@@ -165,7 +165,7 @@ export default function BudgetPage() {
 
       {history.length > 0 && (
         <Card title="Riwayat saldo per bulan" subtitle="Bagaimana saldo terbawa dari bulan ke bulan">
-          <div className="-mx-5 overflow-x-auto">
+          <div className="-mx-4 overflow-x-auto">
             <table className="data">
               <thead>
                 <tr>

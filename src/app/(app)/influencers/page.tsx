@@ -9,7 +9,7 @@ export default function InfluencersPage() {
   const { data: a, reload } = useAnalytics();
   const k = a?.kpis.influencer;
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader eyebrow="Reputasi" title="Influencer & Endorsement" desc="Catat kerjasama KOL/influencer: fee, views, engagement, leads & omzet. Biaya per engagement dan ROI dihitung otomatis untuk menentukan siapa yang layak dilanjutkan." />
       {!k && <KpiSkeleton />}
       {k && (

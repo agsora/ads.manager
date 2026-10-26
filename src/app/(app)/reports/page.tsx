@@ -26,7 +26,7 @@ export default function ReportsPage() {
   const { data: a } = useAnalytics();
   const [tab, setTab] = useState<Key>("exec");
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader eyebrow="Laporan" title="Laporan" desc="Laporan siap kirim ke atasan/klien. Pilih jenis laporan, atur periode & brand di bagian atas, lalu cetak (Simpan sebagai PDF) atau unduh Excel lengkap (semua laporan dalam satu file).">
         <a className="btn btn-primary" href={`/api/report?${f.qs}`}>
           <Download size={15} /> Unduh Excel Lengkap
@@ -45,10 +45,10 @@ export default function ReportsPage() {
       {!a ? (
         <PageSkeleton kpis={4} cards={2} />
       ) : (
-        <div className="space-y-5">
-          <div className="card p-5">
+        <div className="space-y-4">
+          <div className="card p-4">
             <div className="eyebrow">Laporan digital marketing</div>
-            <div className="serif mt-1 text-[26px]">{REPORTS.find((r) => r.key === tab)?.label}</div>
+            <div className="serif mt-0.5 text-[22px]">{REPORTS.find((r) => r.key === tab)?.label}</div>
             <div className="text-[13px] text-[var(--ink-2)]">
               Periode {fmtDate(a.period.from)} – {fmtDate(a.period.to)} · pembanding {fmtDate(a.period.prevFrom)} – {fmtDate(a.period.prevTo)} · {a.brand ?? "Semua brand"}
             </div>
@@ -69,7 +69,7 @@ export default function ReportsPage() {
 
 function Compare({ rows }: { rows: { label: string; cur: number | null; prev: number | null; format: string; invert?: boolean }[] }) {
   return (
-    <div className="-mx-5 overflow-x-auto">
+    <div className="-mx-4 overflow-x-auto">
       <table className="data">
         <thead>
           <tr>
@@ -142,7 +142,7 @@ function Exec({ a }: { a: Analytics }) {
           ]}
         />
       </Card>
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Yang Perlu Diperbaiki">
           <div className="space-y-2.5">{crit.length ? crit.map((i, n) => <InsightItem key={n} i={i} />) : <p className="text-[13px] text-[var(--ink-2)]">Tidak ada.</p>}</div>
         </Card>
@@ -160,7 +160,7 @@ function AdsReport({ a }: { a: Analytics }) {
       <Card title="Tren Belanja Iklan">
         <TrendLines data={a.trend} series={[{ key: "spend", label: "Belanja" }]} format="money" area />
       </Card>
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Per Platform">
           <MiniTable cols={[{ key: "name", label: "Platform" }, { key: "spend", label: "Spend", format: "money" }, { key: "impressions", label: "Impresi", format: "number" }, { key: "ctr", label: "CTR", format: "percent" }, { key: "cpc", label: "CPC", format: "money" }, { key: "costPerConv", label: "Biaya/Perc.", format: "money" }, { key: "roas", label: "ROAS", format: "decimal" }]} rows={a.byPlatform} />
         </Card>
@@ -185,7 +185,7 @@ function AdsReport({ a }: { a: Analytics }) {
 function LeadsReport({ a }: { a: Analytics }) {
   return (
     <>
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Funnel">
           <Funnel steps={a.funnel} />
         </Card>
@@ -216,7 +216,7 @@ function LeadsReport({ a }: { a: Analytics }) {
 function ContentReport({ a }: { a: Analytics }) {
   return (
     <>
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Per Channel">
           <MiniTable cols={[{ key: "name", label: "Channel" }, { key: "planned", label: "Rencana", format: "number" }, { key: "posted", label: "Tayang", format: "number" }, { key: "avgER", label: "Rata ER", format: "percent" }, { key: "reach", label: "Reach", format: "number" }]} rows={a.contentByChannel} />
         </Card>
@@ -244,7 +244,7 @@ function ContentReport({ a }: { a: Analytics }) {
 function BlastReport({ a }: { a: Analytics }) {
   return (
     <>
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Funnel WA Blast">
           <Funnel steps={a.blastFunnel} />
         </Card>
@@ -263,7 +263,7 @@ function BlastReport({ a }: { a: Analytics }) {
 function RepReport({ a }: { a: Analytics }) {
   return (
     <>
-      <div className="grid gap-5 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3">
         <Card title="Per Cabang" className="lg:col-span-2">
           <MiniTable cols={[{ key: "name", label: "Cabang" }, { key: "reviews", label: "Ulasan", format: "number" }, { key: "avgRating", label: "Rating", format: "decimal" }, { key: "positive", label: "Positif", format: "number" }, { key: "negative", label: "Negatif", format: "number" }, { key: "responseRate", label: "Dibalas", format: "percent" }]} rows={a.reviewsByBranch} />
         </Card>
@@ -303,7 +303,7 @@ function Attribution({ a }: { a: Analytics }) {
       <Card title="Efisiensi per Kanal" subtitle="Biaya dibanding leads & deal yang tercatat">
         <MiniTable cols={[{ key: "name", label: "Kanal" }, { key: "cost", label: "Biaya", format: "money" }, { key: "leads", label: "Leads", format: "number" }, { key: "share", label: "Porsi Leads", format: "percent" }, { key: "deals", label: "Deal", format: "number" }, { key: "cpl", label: "Biaya/Lead", format: "money" }, { key: "cpa", label: "Biaya/Deal", format: "money" }]} rows={channels} />
       </Card>
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Biaya per Lead per Sumber">
           <BarList items={a.leadsBySource.filter((s) => s.cpl).map((s) => ({ name: s.name, value: s.cpl ?? 0 }))} format="money" color="var(--s2)" />
         </Card>

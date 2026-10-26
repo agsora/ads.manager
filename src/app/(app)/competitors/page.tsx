@@ -51,7 +51,7 @@ export default function CompetitorsPage() {
   }, [data, ours]);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
         eyebrow="Reputasi"
         title="Pantau Kompetitor"

@@ -13,7 +13,7 @@ export default function LeadsPage() {
   const k = a?.kpis.leads;
   const p = a?.prevKpis.leads;
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader eyebrow="Leads" title="WA Leads" desc="Laporan chat masuk WhatsApp: sumber trafik, segmentasi HOT/WARM/COLD, follow up 1–3 (H+3, H+7, H+14), dan status akhir. Kolom 'Aksi Berikutnya' memberi tahu kapan lead harus di-follow up.">
         <Link href="/leads/followup" className="btn btn-primary">
           Buka papan Follow Up
@@ -35,7 +35,7 @@ export default function LeadsPage() {
       <WaLinkBuilder />
       <ResourceTable resourceKey="leads" quickFilters={["branch", "pipeline_stage", "source", "segment", "final_status"]} computedCols={["reply_minutes", "age_days", "next_action"]} onChanged={reload} selectionActions={(ids, done) => <StopButton resource="leads" ids={ids} done={() => (done(), reload())} />} />
       {a && a.kpis.leads.leads > 0 && (
-        <div className="grid gap-5 lg:grid-cols-3">
+        <div className="grid gap-4 lg:grid-cols-3">
           <Card title="Sumber Trafik" subtitle="Leads · biaya per lead (CPL)">
             <BarList items={a.leadsBySource.map((s) => ({ name: s.name, value: s.leads, sub: s.cpl ? `CPL Rp ${Math.round(s.cpl).toLocaleString("id-ID")}` : "" }))} sub />
           </Card>

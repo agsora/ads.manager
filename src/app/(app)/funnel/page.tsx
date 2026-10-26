@@ -19,7 +19,7 @@ export default function FunnelPage() {
   const k = a.kpis;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
         eyebrow="Insight"
         title="Funnel & Atribusi"
@@ -27,7 +27,7 @@ export default function FunnelPage() {
       />
       <Card title="Funnel pembiayaan" subtitle="Lead masuk sampai akad (cair). Isi Tahap Pembiayaan dan Nilai Pencairan di WA Leads agar terhitung.">
         {a.financing.tracked ? (
-          <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
+          <div className="grid gap-4 lg:grid-cols-[3fr_2fr]">
             <Funnel steps={a.financing.funnel} />
             <dl className="space-y-3 text-[14px]">
               <Row label="Biaya per survei" value={fmtMoney(a.financing.costPerSurvey)} />
@@ -49,7 +49,7 @@ export default function FunnelPage() {
         <Stat label="Leads HOT" value={fmtNum(k.leads.hot)} hint="Prospek paling siap dibeli" />
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[3fr_2fr]">
+      <div className="grid gap-4 lg:grid-cols-[3fr_2fr]">
         <Card title="Corong penjualan" subtitle="Persentase kecil di satu tahap berarti lebih banyak calon pelanggan hilang di sana">
           <Funnel steps={steps} />
         </Card>
@@ -117,9 +117,9 @@ function advice(to: string) {
 
 function Stat({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
-    <div className="px-4 py-4">
+    <div className="px-3.5 py-3">
       <div className="text-[12.5px] text-[var(--ink-2)]">{label}</div>
-      <div className="serif mt-1 text-[26px] leading-tight tnum">{value}</div>
+      <div className="serif mt-0.5 text-[22px] leading-tight tnum">{value}</div>
       <div className="mt-1 text-[12px] text-[var(--muted)]">{hint}</div>
     </div>
   );

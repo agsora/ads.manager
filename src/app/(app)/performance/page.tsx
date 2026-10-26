@@ -29,7 +29,7 @@ export default function PerformancePage() {
   const prep = (rows: typeof f.byBranch) => rows.map((r) => ({ ...r, avgReplyText: mins(r.avgReply) }));
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
         eyebrow="WhatsApp"
         title="Cabang & Kecepatan Respons"
@@ -37,23 +37,23 @@ export default function PerformancePage() {
       />
 
       <div className="stat-grid">
-        <div className="px-4 py-4">
+        <div className="px-3.5 py-3">
           <div className="text-[12.5px] text-[var(--ink-2)]">Rata-rata respons</div>
-          <div className={`serif mt-1 text-[26px] tnum ${tone(s.avg, 5, 30)}`}>{mins(s.avg)}</div>
+          <div className={`serif mt-0.5 text-[22px] tnum ${tone(s.avg, 5, 30)}`}>{mins(s.avg)}</div>
           <div className="mt-1 text-[12px] text-[var(--muted)]">Median {mins(s.median)}</div>
         </div>
-        <div className="px-4 py-4">
+        <div className="px-3.5 py-3">
           <div className="text-[12.5px] text-[var(--ink-2)]">Dibalas ≤ 5 menit</div>
-          <div className="serif mt-1 text-[26px] tnum">{fmtPct(s.within5, 0)}</div>
+          <div className="serif mt-0.5 text-[22px] tnum">{fmtPct(s.within5, 0)}</div>
           <div className="mt-1 text-[12px] text-[var(--muted)]">Target: 80% atau lebih</div>
         </div>
-        <div className="px-4 py-4">
+        <div className="px-3.5 py-3">
           <div className="text-[12.5px] text-[var(--ink-2)]">Dibalas ≤ 30 menit</div>
-          <div className="serif mt-1 text-[26px] tnum">{fmtPct(s.within30, 0)}</div>
+          <div className="serif mt-0.5 text-[22px] tnum">{fmtPct(s.within30, 0)}</div>
         </div>
-        <div className="px-4 py-4">
+        <div className="px-3.5 py-3">
           <div className="text-[12.5px] text-[var(--ink-2)]">Lambat (&gt; 1 jam)</div>
-          <div className={`serif mt-1 text-[26px] tnum ${s.over60 ? "text-[var(--critical-ink)]" : ""}`}>{fmtNum(s.over60)}</div>
+          <div className={`serif mt-0.5 text-[22px] tnum ${s.over60 ? "text-[var(--critical-ink)]" : ""}`}>{fmtNum(s.over60)}</div>
           <div className="mt-1 text-[12px] text-[var(--muted)]">dari {fmtNum(s.measured)} lead yang terukur</div>
         </div>
       </div>

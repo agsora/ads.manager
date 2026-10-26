@@ -32,14 +32,14 @@ export default function CreativesPage() {
   const worst = ranked.slice(3).slice(-2).reverse(); // never repeat a creative already listed as best
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
         eyebrow="Iklan"
         title="Library Kreatif"
         desc="Simpan setiap desain/video iklan beserta hasilnya. Isi kolom Campaign, pilih barisnya, lalu klik Tarik hasil dari campaign: biaya, impresi, dan klik diambil dari Ads Campaign, leads dan deal dari WA Leads berkode sama. Dari sini terlihat kreatif mana yang murah mendapat leads (layak diulang) dan mana yang boros (layak dihentikan)."
       />
       {ranked.length > 0 && (
-        <div className="grid gap-5 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2">
           <Card title="Kreatif terbaik" subtitle="Biaya per lead paling rendah (min. 3 leads)">
             <ol className="space-y-2.5">
               {best.map((r, i) => (

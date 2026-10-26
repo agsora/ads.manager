@@ -150,9 +150,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen">
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-[var(--line)] bg-[var(--sidebar)] transition-transform lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}
+        className={`fixed inset-y-0 left-0 z-40 flex w-52 flex-col border-r border-[var(--line)] bg-[var(--sidebar)] transition-transform lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}
       >
-        <div className="flex h-16 items-center gap-2.5 px-5">
+        <div className="flex h-12 items-center gap-2.5 px-4">
           <Mark />
           <span className="serif text-[19px] font-medium tracking-tight">Ads Manager</span>
           <button className="ml-auto text-[var(--muted)] lg:hidden" onClick={() => setOpen(false)} aria-label="Tutup menu">
@@ -162,7 +162,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 overflow-y-auto px-3 pb-4">
           {nav.map((g, gi) => (
             <div key={gi} className="mt-2">
-              {g.section && <div className="eyebrow px-3 pb-1.5 pt-3">{g.section}</div>}
+              {g.section && <div className="eyebrow px-3 pb-1 pt-2.5">{g.section}</div>}
               {g.items.map((it) => {
                 const Icon = it.icon;
                 const on = it.href === current;
@@ -171,7 +171,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                     key={it.href}
                     href={it.href}
                     onClick={() => setOpen(false)}
-                    className={`mb-px flex items-center gap-2.5 rounded-lg border px-3 py-[7px] text-[13.5px] transition ${
+                    className={`mb-px flex items-center gap-2 rounded-lg border px-2.5 py-[5px] text-[13px] transition ${
                       on ? "border-[var(--line)] bg-[var(--surface)] font-semibold text-[var(--ink)] shadow-[0_1px_2px_rgba(31,30,29,.05)]" : "border-transparent text-[var(--ink-2)] hover:bg-[#e8e5db] hover:text-[var(--ink)]"
                     }`}
                   >
@@ -201,8 +201,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
       {open && <div className="fixed inset-0 z-30 bg-[#1f1e1d]/30 lg:hidden" onClick={() => setOpen(false)} />}
-      <div className="lg:pl-60">
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-[var(--line)] bg-[var(--bg)]/85 px-3 backdrop-blur-md sm:px-4 lg:px-10">
+      <div className="lg:pl-52">
+        <header className="sticky top-0 z-20 flex h-12 items-center gap-2 border-b border-[var(--line)] bg-[var(--bg)]/85 px-3 backdrop-blur-md sm:px-4 lg:px-7">
           <button className="btn btn-sm lg:hidden" onClick={() => setOpen(true)} aria-label="Buka menu">
             <Menu size={16} />
           </button>
@@ -215,7 +215,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <GlobalSearch />
           <NotificationBell />
         </header>
-        <main className="page mx-auto max-w-[1440px] px-4 py-7 lg:px-10">
+        <main className="page mx-auto max-w-[1440px] px-3 py-4 sm:px-4 lg:px-7">
           {currentItem?.tabs && (
             <div>
               <SectionTabs item={currentItem} path={path} />
@@ -320,14 +320,14 @@ function GlobalFilter() {
 
 export function PageHeader({ title, desc, eyebrow, children }: { title: string; desc?: string; eyebrow?: string; children?: React.ReactNode }) {
   const [more, setMore] = useState(false);
-  const long = (desc?.length ?? 0) > 150;
+  const long = (desc?.length ?? 0) > 95;
   return (
-    <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
-      <div className="max-w-3xl">
-        {eyebrow && <div className="eyebrow mb-2">{eyebrow}</div>}
-        <h1 className="serif text-[32px] font-normal leading-[1.1] tracking-[-0.01em]">{title}</h1>
+    <div className="mb-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+      <div className="min-w-0 flex-1 basis-[300px]">
+        {eyebrow && <div className="eyebrow mb-0.5">{eyebrow}</div>}
+        <h1 className="serif text-[24px] font-normal leading-[1.15] tracking-[-0.01em]">{title}</h1>
         {desc && (
-          <p className={`mt-2 text-[14px] leading-relaxed text-[var(--ink-2)] ${long && !more ? "line-clamp-2" : ""}`}>
+          <p className={`mt-1 text-[13px] leading-snug text-[var(--ink-2)] ${long && !more ? "line-clamp-1" : ""}`}>
             {desc}
             {long && more && (
               <button className="ml-1.5 text-[13px] font-semibold text-[var(--accent-ink)]" onClick={() => setMore(false)}>
@@ -337,12 +337,12 @@ export function PageHeader({ title, desc, eyebrow, children }: { title: string; 
           </p>
         )}
         {long && !more && (
-          <button className="mt-0.5 text-[13px] font-semibold text-[var(--accent-ink)]" onClick={() => setMore(true)}>
+          <button className="text-[12px] font-semibold text-[var(--accent-ink)]" onClick={() => setMore(true)}>
             Selengkapnya
           </button>
         )}
       </div>
-      {children && <div className="flex flex-wrap items-center gap-2 no-print">{children}</div>}
+      {children && <div className="flex shrink-0 flex-wrap items-center gap-2 no-print">{children}</div>}
     </div>
   );
 }

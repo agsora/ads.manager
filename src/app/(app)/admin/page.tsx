@@ -55,7 +55,7 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader eyebrow="Platform" title="Superadmin" desc="Kelola semua workspace dan pengguna, reset password, ubah role, buka workspace mana pun, dan atur apakah orang lain boleh mendaftar sendiri." />
 
       <div className="stat-grid">
@@ -78,7 +78,7 @@ export default function AdminPage() {
       </Card>
 
       <Card title="Workspace">
-        <div className="-mx-5 overflow-x-auto">
+        <div className="-mx-4 overflow-x-auto">
           <table className="data">
             <thead>
               <tr>
@@ -133,7 +133,7 @@ export default function AdminPage() {
       </Card>
 
       <Card title="Semua pengguna">
-        <div className="-mx-5 overflow-x-auto">
+        <div className="-mx-4 overflow-x-auto">
           <table className="data">
             <thead>
               <tr>
@@ -233,7 +233,7 @@ export default function AdminPage() {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="px-4 py-4">
+    <div className="px-3.5 py-3">
       <div className="text-[12.5px] text-[var(--ink-2)]">{label}</div>
       <div className="serif mt-1 text-[28px] leading-tight">{fmtNum(value)}</div>
     </div>

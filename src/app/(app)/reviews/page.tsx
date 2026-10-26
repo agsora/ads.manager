@@ -26,7 +26,7 @@ export default function ReviewsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader eyebrow="Reputasi" title="Google Business" desc="Catat jumlah total ulasan & rating tiap cabang secara berkala (isian pertama = jumlah awal), lalu lihat perkembangannya. Ulasan satu per satu tetap bisa dicatat untuk analisis sentimen & respon." />
       <div className="tabs">
         <button className="tab" data-on={tab === "progress"} onClick={() => setTab("progress")}>Rekap & perkembangan</button>
@@ -34,7 +34,7 @@ export default function ReviewsPage() {
       </div>
 
       {tab === "progress" && (
-        <div className="space-y-6">
+        <div className="space-y-4">
           <div className="stat-grid">
             <Kpi label="Total ulasan sekarang" value={totalNow || null} format="number" />
             <Kpi label="Jumlah awal" value={totalInitial || null} format="number" hint="snapshot pertama" />
@@ -111,7 +111,7 @@ export default function ReviewsPage() {
       )}
 
       {tab === "list" && (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {k && (
             <div className="stat-grid">
               <Kpi label="Ulasan dicatat" value={k.reviews} prev={p?.reviews} format="number" />
@@ -122,7 +122,7 @@ export default function ReviewsPage() {
             </div>
           )}
           {a && a.kpis.reviews.reviews > 0 && (
-            <div className="grid gap-5 lg:grid-cols-3">
+            <div className="grid gap-4 lg:grid-cols-3">
               <Card title="Per cabang">
                 <MiniTable cols={[{ key: "name", label: "Cabang" }, { key: "reviews", label: "Ulasan", format: "number" }, { key: "avgRating", label: "Rating", format: "decimal" }, { key: "negative", label: "Neg.", format: "number" }, { key: "responseRate", label: "Dibalas", format: "percent" }]} rows={a.reviewsByBranch} />
               </Card>

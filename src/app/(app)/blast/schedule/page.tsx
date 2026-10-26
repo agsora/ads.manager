@@ -53,7 +53,7 @@ export default function BlastSchedulePage() {
   );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader eyebrow="WhatsApp" title="Jadwal Broadcast" desc="Rencana pengiriman blast WhatsApp berikutnya. Tim mendapat pengingat otomatis pada hari-H dan sehari sebelumnya selama statusnya masih Draft atau Terjadwal. Ubah menjadi Terkirim setelah dikirim, lalu isi hasilnya di tab WA Blast.">
         <button className="btn btn-primary" onClick={() => setEditing(null)}>
           <Plus size={15} /> Jadwalkan blast

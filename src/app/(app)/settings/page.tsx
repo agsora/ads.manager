@@ -11,14 +11,14 @@ export default function SettingsPage() {
   const { session } = useMeta();
   const admin = session?.role === "owner" || session?.role === "admin" || session?.role === "superadmin";
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader eyebrow="Data" title="Pengaturan" desc="Kelola brand, daftar pilihan (dropdown), pengguna tim, dan data workspace." />
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-2">
         <Brands admin={admin} />
         <Users admin={admin} />
       </div>
       <OptionsEditor admin={admin} />
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-2">
         <Password />
         <Activity />
       </div>

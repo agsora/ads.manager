@@ -32,14 +32,14 @@ export default function Dashboard() {
     }
   };
 
-  if (error) return <div className="card p-6 text-[var(--critical)]">{error}</div>;
+  if (error) return <div className="card p-4 text-[var(--critical)]">{error}</div>;
   if (!a) return loading || !error ? <PageSkeleton kpis={12} /> : null;
   const k = a.kpis;
   const p = a.prevKpis;
   const empty = !k.ads.campaigns && !k.leads.leads && !k.content.planned && !k.reviews.reviews && !k.blast.blasts;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader eyebrow={new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })} title={`${greeting()}, ${session?.name?.split(" ")[0] ?? ""}`} desc={`Ringkasan digital marketing ${fmtDate(a.period.from)} – ${fmtDate(a.period.to)}${f.brand ? ` · ${f.brand}` : " · semua brand"}, dibandingkan dengan periode yang sama sebelumnya.`}>
         <a className="btn" href={`/api/report?${f.qs}`}>
           <Download size={15} /> Laporan Excel
@@ -65,7 +65,7 @@ export default function Dashboard() {
 
       <section className="card overflow-hidden">
         <div className="grid md:grid-cols-[minmax(280px,1.1fr)_2fr]">
-          <div className="flex items-center gap-5 border-b border-[var(--line)] p-6 md:border-b-0 md:border-r">
+          <div className="flex items-center gap-4 border-b border-[var(--line)] p-4 md:border-b-0 md:border-r">
             <ScoreRing value={a.scores.overall} />
             <div className="min-w-0">
               <div className="eyebrow">Kesehatan marketing</div>
@@ -89,9 +89,9 @@ export default function Dashboard() {
                 ["Reputasi", a.scores.reputation, "/reviews"],
               ] as [string, number | null, string][]
             ).map(([label, v, href]) => (
-              <Link key={label} href={href} className="group border-[var(--line)] p-5 transition hover:bg-[#fdfcf9] [&:not(:last-child)]:border-r max-sm:[&:nth-child(2)]:border-r-0 max-sm:[&:nth-child(-n+2)]:border-b">
+              <Link key={label} href={href} className="group border-[var(--line)] p-3.5 transition hover:bg-[#fdfcf9] [&:not(:last-child)]:border-r max-sm:[&:nth-child(2)]:border-r-0 max-sm:[&:nth-child(-n+2)]:border-b">
                 <div className="text-[12.5px] text-[var(--ink-2)]">{label}</div>
-                <div className="serif mt-1 text-[28px] leading-tight tnum">{v ?? "–"}</div>
+                <div className="serif mt-1 text-[22px] leading-tight tnum">{v ?? "–"}</div>
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--track)]">
                   <div className="h-1.5 rounded-full" style={{ width: `${v ?? 0}%`, background: scoreTone(v), transition: "width .8s cubic-bezier(.2,.8,.2,1)" }} />
                 </div>
@@ -117,7 +117,7 @@ export default function Dashboard() {
         <Kpi label="Nilai Deal" value={k.leads.dealValue} prev={p.leads.dealValue} format="money" />
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-3">
+      <div className="grid gap-4 xl:grid-cols-3">
         <Card title="Insight & Rekomendasi Teratas" subtitle="Dihitung otomatis dari seluruh data" className="xl:col-span-1" action={<Link href="/insights" className="text-[13px] font-semibold text-[var(--accent)]">Lihat semua ({a.insights.length})</Link>}>
           <div className="space-y-2.5">
             {a.insights.slice(0, 5).map((i, idx) => (
@@ -125,7 +125,7 @@ export default function Dashboard() {
             ))}
           </div>
         </Card>
-        <div className="space-y-5 xl:col-span-2">
+        <div className="space-y-4 xl:col-span-2">
           <Card title="Belanja Iklan" subtitle={a.period.days > 62 ? "Per minggu" : "Per hari (dibagi rata selama durasi campaign)"}>
             <TrendLines data={a.trend} series={[{ key: "spend", label: "Belanja iklan" }]} format="money" area height={200} />
           </Card>
@@ -135,7 +135,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3">
         <Card title="Funnel Marketing" subtitle="Dari impresi iklan sampai deal">
           <Funnel steps={a.funnel} />
         </Card>
@@ -154,7 +154,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Performa per Platform Iklan" action={<Link href="/ads" className="text-[13px] font-semibold text-[var(--accent)]">Detail</Link>}>
           <MiniTable
             cols={[
@@ -206,7 +206,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3">
         <Card title="Follow Up Jatuh Tempo" subtitle="Prioritas leads HOT" action={<Link href="/leads/followup" className="text-[13px] font-semibold text-[var(--accent)]">Semua ({a.followUps.length})</Link>}>
           {a.followUps.length ? (
             <ul className="divide-y divide-[var(--grid)]">

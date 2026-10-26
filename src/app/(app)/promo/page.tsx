@@ -54,7 +54,7 @@ export default function PromoPage() {
   const plannedTotal = upcoming.reduce((t, r) => t + r.budget, 0);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
         eyebrow="Konten"
         title="Kalender Promo & Budget"
@@ -62,13 +62,13 @@ export default function PromoPage() {
       />
 
       <div className="stat-grid">
-        <div className="px-4 py-4">
+        <div className="px-3.5 py-3">
           <div className="text-[12.5px] text-[var(--ink-2)]">Event mendatang</div>
-          <div className="serif mt-1 text-[26px] tnum">{fmtNum(upcoming.length)}</div>
+          <div className="serif mt-0.5 text-[22px] tnum">{fmtNum(upcoming.length)}</div>
         </div>
-        <div className="px-4 py-4">
+        <div className="px-3.5 py-3">
           <div className="text-[12.5px] text-[var(--ink-2)]">Rencana budget iklan</div>
-          <div className="serif mt-1 text-[26px] tnum">{fmtMoney(plannedTotal)}</div>
+          <div className="serif mt-0.5 text-[22px] tnum">{fmtMoney(plannedTotal)}</div>
           <div className="mt-1 text-[12px] text-[var(--muted)]">Total dari event yang belum selesai</div>
         </div>
       </div>

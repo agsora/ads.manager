@@ -49,7 +49,7 @@ export default function InsightsPage() {
   const count = (l: string) => a.insights.filter((i) => i.level === l).length;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader eyebrow="Analisis otomatis" title="Insight & Rekomendasi" desc={`Kesimpulan otomatis dari data ads, leads, blast, konten, reputasi & influencer periode ${fmtDate(a.period.from)} – ${fmtDate(a.period.to)}. Setiap temuan disertai tindakan yang disarankan.`}>
         <a className="btn" href={`/api/report?${f.qs}`}>
           <Download size={15} /> Excel
@@ -59,7 +59,7 @@ export default function InsightsPage() {
         </button>
       </PageHeader>
 
-      <div className="grid gap-5 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3">
         <Card title="Kesehatan Marketing">
           <div className="flex items-center gap-4">
             <ScoreRing value={a.scores.overall} size={96} />

@@ -43,7 +43,7 @@ export default function AdsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader eyebrow="Iklan" title="Ads Campaign" desc="Upload file ekspor Meta Ads Manager (CSV/Excel) apa adanya — kolom dikenali otomatis, data harian digabung per campaign, dan upload ulang periode yang sama tidak membuat data dobel.">
         <button className="btn btn-accent" onClick={() => setUpload(true)}>
           <Upload size={15} /> Upload Laporan Meta Ads
@@ -152,7 +152,7 @@ export default function AdsPage() {
       )}
 
       {tab === "analysis" && a && (
-        <div className="grid gap-5 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           <Card title="Belanja vs omzet per platform">
             <Bars data={a.byPlatform} series={[{ key: "spend", label: "Belanja" }, { key: "revenue", label: "Omzet" }]} format="money" />
           </Card>

@@ -48,10 +48,10 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader eyebrow="Notifikasi" title="Pusat notifikasi" desc="Semua kabar tim di satu tempat: rencana konten baru & perubahan, approval, lead HOT, peringatan otomatis setiap pagi, dan laporan mingguan. Atur email mana yang ingin Anda terima." />
 
-      <div className="grid gap-5 xl:grid-cols-[1fr_400px]">
+      <div className="grid gap-4 xl:grid-cols-[1fr_400px]">
         <div className="card min-w-0 overflow-hidden">
           <div className="flex flex-wrap items-center gap-2 border-b border-[var(--line)] px-4 py-3">
             <div className="tabs">
@@ -86,7 +86,7 @@ export default function NotificationsPage() {
           )}
         </div>
 
-        <div className="space-y-5">
+        <div className="space-y-4">
           <Card title="Email saya" subtitle={prefs.data ? `Dikirim ke ${prefs.data.email}` : undefined}>
             {prefs.data && !prefs.data.emailEnabled && (
               <div className="mb-4 rounded-lg border border-[#eac9bf] bg-[#fbefec] p-3 text-[13px] text-[var(--critical-ink)]">Pengiriman email belum aktif di server (RESEND_API_KEY belum di-set).</div>

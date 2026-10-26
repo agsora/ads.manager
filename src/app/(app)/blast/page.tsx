@@ -22,7 +22,7 @@ const DEFAULT_TEMPLATE =
 export default function BlastPage() {
   const [tab, setTab] = useState<"contacts" | "campaigns">("contacts");
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader eyebrow="WhatsApp" title="WA Blast" desc="Kelola daftar kontak blast (nomor kontrak, nama, nomor resmi 62…, harga pasar, plafon, pinjaman, rekomendasi, tipe unit, tahun), ekspor siap kirim dengan pesan personal, catat hasilnya, lalu jadikan leads." />
       <div className="tabs">
         <button className="tab" data-on={tab === "contacts"} onClick={() => setTab("contacts")}>Kontak blast</button>
@@ -65,7 +65,7 @@ function Contacts() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
         <button className="btn btn-accent" onClick={() => setUpload(true)}>
           <Upload size={15} /> Upload data kontak
@@ -116,7 +116,7 @@ function Contacts() {
       )}
 
       {a && a.contactKpis.contacts > 0 && (
-        <div className="grid gap-5 lg:grid-cols-3">
+        <div className="grid gap-4 lg:grid-cols-3">
           <Card title="Rekap per batch" className="lg:col-span-2">
             <MiniTable
               cols={[
@@ -220,7 +220,7 @@ function ExportForBlast({ onClose, onDone }: { onClose: () => void; onDone: () =
   const sample = { name: "MAHMIZAR", unit_type: "Scoopy Prestige", year: "2025", official_rec: 17000000, contract_no: "24101250400328" } as Row;
   return (
     <Modal title="Ekspor kontak untuk blast" onClose={onClose} wide>
-      <div className="grid gap-5 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         <div>
           <label className="label">Template pesan</label>
           <textarea className="input" rows={7} value={template} onChange={(e) => setTemplate(e.target.value)} />
@@ -261,7 +261,7 @@ function Campaigns() {
   const k = a?.kpis.blast;
   const p = a?.prevKpis.blast;
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {k && (
         <div className="stat-grid">
           <Kpi label="Terkirim" value={k.sent} prev={p?.sent} format="number" />
@@ -273,7 +273,7 @@ function Campaigns() {
         </div>
       )}
       {a && a.blastList.length > 0 && (
-        <div className="grid gap-5 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           <Card title="Funnel WA blast">
             <Funnel steps={a.blastFunnel} />
           </Card>

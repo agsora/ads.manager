@@ -48,7 +48,7 @@ export default function SnippetsPage() {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader eyebrow="Konten" title="Bank Caption & Template" desc="Simpan caption, hashtag, CTA, dan balasan WhatsApp yang sudah terbukti bagus. Klik Salin, tempel di mana saja — yang paling sering dipakai naik ke atas. Jenis Balasan WhatsApp juga otomatis muncul sebagai pilihan di Papan Follow Up.">
         <button className="btn btn-primary" onClick={() => setEditing(null)}>
           <Plus size={15} /> Template baru
@@ -75,7 +75,7 @@ export default function SnippetsPage() {
       {loading && !data ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="card p-5">
+            <div key={i} className="card p-4">
               <div className="skel h-4 w-32" />
               <div className="skel mt-4 h-20 w-full" />
             </div>
