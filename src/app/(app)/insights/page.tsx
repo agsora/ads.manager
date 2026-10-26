@@ -10,18 +10,20 @@ import { Card, InsightItem, PageSkeleton, ScoreRing, scoreTone, scoreWord } from
 import { fmtDate } from "@/lib/format";
 import type { Insight } from "@/lib/analytics";
 
-const LEVELS: { key: Insight["level"] | ""; label: string }[] = [
-  { key: "", label: "Semua" },
+// "act" = everything that needs doing (critical + warning): the default view, so the page opens on what matters
+const LEVELS: { key: Insight["level"] | "" | "act"; label: string }[] = [
+  { key: "act", label: "Perlu tindakan" },
   { key: "critical", label: "Kritis" },
   { key: "warning", label: "Perlu perhatian" },
   { key: "info", label: "Saran" },
   { key: "good", label: "Bagus" },
+  { key: "", label: "Semua" },
 ];
 
 export default function InsightsPage() {
   const f = useFilter();
   const { data: a, loading } = useAnalytics();
-  const [level, setLevel] = useState<string>("");
+  const [level, setLevel] = useState<string>("act");
   const [area, setArea] = useState<string>("");
   const [done, setDone] = useState<Record<string, boolean>>({});
   useEffect(() => {
@@ -44,7 +46,10 @@ export default function InsightsPage() {
 
   if (!a) return loading ? <PageSkeleton kpis={4} /> : null;
   const areas = [...new Set(a.insights.map((i) => i.area))];
-  const list = a.insights.filter((i) => (!level || i.level === level) && (!area || i.area === area));
+  const actionable = a.insights.filter((i) => i.level === "critical" || i.level === "warning").length;
+  // nothing urgent: open on the suggestions instead of an empty list
+  const effLevel = level === "act" && !actionable ? "" : level;
+  const list = a.insights.filter((i) => (!effLevel || (effLevel === "act" ? i.level === "critical" || i.level === "warning" : i.level === effLevel)) && (!area || i.area === area));
   const actions = a.insights.filter((i) => i.level === "critical" || i.level === "warning");
   const count = (l: string) => a.insights.filter((i) => i.level === l).length;
 
@@ -141,7 +146,7 @@ export default function InsightsPage() {
       <div className="serif mt-2 text-[20px]">Saran dari aturan tetap</div>
       <div className="flex flex-wrap gap-2 no-print">
         {LEVELS.map((l) => (
-          <button key={l.key} className={`btn btn-sm ${level === l.key ? "btn-primary" : ""}`} onClick={() => setLevel(l.key)}>
+          <button key={l.key} className={`btn btn-sm ${effLevel === l.key ? "btn-primary" : ""}`} onClick={() => setLevel(l.key)}>
             {l.label}
           </button>
         ))}

@@ -100,6 +100,7 @@ function contentKpis(content: Row[]) {
     completionRate: div(posted.length, planned),
     onTimeRate: div(onTime, postedWithActual),
     avgER: ers.length ? ers.reduce((a, b) => a + b, 0) / ers.length : null,
+    erSample: ers.length,
     reach: sum(posted, "reach"),
     engagement: sum(posted, "likes") + sum(posted, "comments") + sum(posted, "saves") + sum(posted, "shares"),
   };
@@ -812,16 +813,18 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
       const due = content.filter((r) => String(r.post_date) <= today && r.status !== "Cancel").length;
       const doneDue = content.filter((r) => String(r.post_date) <= today && r.status === "Posted").length;
       const rate = div(doneDue, due);
-      if (rate !== null && rate < 0.8)
+      if (rate !== null && rate < 0.8 && due >= 3)
         push({ level: "warning", area: "Konten", title: `Completion rate konten ${fmtPct(rate, 0)}`, detail: `${due - doneDue} konten yang jadwalnya sudah lewat belum berstatus Posted.`, action: "Cek bottleneck produksi (desain/review), buat bank konten H-7, dan update status setelah posting." });
-      else if (rate !== null && rate >= 0.95) push({ level: "good", area: "Konten", title: `Konten konsisten (${fmtPct(rate, 0)} sesuai jadwal)`, detail: `${doneDue} dari ${due} konten terjadwal sudah tayang.`, action: "Pertahankan ritme; mulai eksperimen format baru (Reels/carousel edukasi)." });
+      else if (rate !== null && rate >= 0.95 && due >= 3) push({ level: "good", area: "Konten", title: `Konten konsisten (${fmtPct(rate, 0)} sesuai jadwal)`, detail: `${doneDue} dari ${due} konten terjadwal sudah tayang.`, action: "Pertahankan ritme; mulai eksperimen format baru (Reels/carousel edukasi)." });
     }
     if (C.onTimeRate !== null && C.onTimeRate < 0.8)
       push({ level: "info", area: "Konten", title: `On-time posting ${fmtPct(C.onTimeRate, 0)}`, detail: "Sebagian konten tayang setelah tanggal rencana.", action: "Gunakan fitur jadwal (Meta Business Suite/TikTok scheduler) agar posting tepat waktu." });
-    if (C.avgER !== null) {
+    if (C.avgER !== null && C.erSample >= 3) {
       if (C.avgER < 0.01) push({ level: "warning", area: "Konten", title: `Engagement rate rata-rata rendah (${fmtPct(C.avgER, 2)})`, detail: "ER dihitung (Like + Comment + Saved) / Followers.", action: "Perbanyak konten interaktif (pertanyaan, polling, giveaway kecil), hook visual kuat, dan balas setiap komentar di 1 jam pertama." });
       else if (C.avgER >= 0.03) push({ level: "good", area: "Konten", title: `Engagement rate bagus (${fmtPct(C.avgER, 2)})`, detail: "Audiens aktif berinteraksi dengan konten.", action: "Boost konten dengan ER tertinggi sebagai iklan (dark post/Spark Ads) — biasanya CPC lebih murah." });
     }
+    else if (C.posted >= 3 && C.erSample < 3)
+      push({ level: "info", area: "Konten", title: `Engagement rate belum bisa dihitung (${C.erSample} dari ${C.posted} konten punya followers)`, detail: "ER = (like + comment + saved) ÷ followers saat posting. Tanpa followers dan hasil, ER tampil 0% dan menyesatkan.", action: "Buka rincian tiap konten yang sudah tayang dan isi followers, reach, like, comment (atau tempel link postingan lalu klik Tarik dari link)." });
     const pillars = contentByPillar.filter((p) => p.avgER !== null && p.posted >= 2);
     if (pillars.length >= 2) {
       const s = [...pillars].sort((a, b) => (b.avgER ?? 0) - (a.avgER ?? 0));
@@ -937,8 +940,17 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     ? clamp(50 + ((A.ctr ?? 0.01) - 0.01) * 2500 + (A.roas ? (A.roas - 2) * 10 : 0) - fatiguedCount(campaigns) * 5)
     : null;
   const scoreLeads = L.leads ? clamp((L.dealRate ?? 0) * 250 + 40 - (L.ghostRate ?? 0) * 60 - Math.min(30, followUps.length * 2)) : null;
-  const scoreContent = C.planned ? clamp((C.completionRate ?? 0) * 60 + Math.min(40, (C.avgER ?? 0) * 1000)) : null;
-  const scoreRep = R.reviews ? clamp(((R.avgRating ?? 0) / 5) * 70 + (R.responseRate ?? 0) * 30) : null;
+  const scoreContent = C.planned >= 3 ? clamp((C.completionRate ?? 0) * 60 + Math.min(40, (C.avgER ?? 0) * 1000)) : null;
+  const ratedRecap = reviewGrowth.filter((g) => g.ratingNow);
+  const recapWeight = ratedRecap.reduce((t, g) => t + Math.max(1, g.current), 0);
+  const reviewSummary = {
+    totalNow: reviewGrowth.reduce((t, g) => t + g.current, 0),
+    growth: reviewGrowth.reduce((t, g) => t + g.growth, 0),
+    ratingNow: ratedRecap.length ? ratedRecap.reduce((t, g) => t + (g.ratingNow ?? 0) * Math.max(1, g.current), 0) / recapWeight : null,
+    branches: reviewGrowth.length,
+  };
+  // individual reviews give rating + response rate; without them the Google recap rating alone gives the score
+  const scoreRep = R.reviews ? clamp(((R.avgRating ?? 0) / 5) * 70 + (R.responseRate ?? 0) * 30) : reviewSummary.ratingNow ? clamp((reviewSummary.ratingNow / 5) * 100) : null;
   const parts = [scoreAds, scoreLeads, scoreContent, scoreRep].filter((x): x is number => x !== null);
   const scores = { ads: scoreAds, leads: scoreLeads, content: scoreContent, reputation: scoreRep, overall: parts.length ? Math.round(parts.reduce((a, b) => a + b, 0) / parts.length) : null };
 
@@ -989,6 +1001,7 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     walletHistory,
     roasFromLeads,
     reviewGrowth,
+    reviewSummary,
     reviewRegions,
     reviewTrend,
     reviewTrendSeries,
