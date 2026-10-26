@@ -613,7 +613,13 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     // reviews logged individually after the last snapshot are added on top
     const [bBrand, bBranch] = key.split("|");
     const extra = reviewsAll.filter((r) => String(r.brand ?? "") === bBrand && String(r.branch ?? "") === bBranch && last && String(r.review_date) > String(last.snapshot_date) && String(r.review_date) <= to).length;
+    const lastAny = sorted[sorted.length - 1];
     return {
+      brand: bBrand,
+      branch: bBranch,
+      mapsLink: String([...sorted].reverse().find((x) => x.maps_link)?.maps_link ?? "") || null,
+      lastDate: lastAny?.snapshot_date ? String(lastAny.snapshot_date).slice(0, 10) : null,
+      daysSince: lastAny?.snapshot_date ? diffDays(String(lastAny.snapshot_date).slice(0, 10), today) : null,
       region: String(last?.region ?? sorted.map((x) => x.region).filter(Boolean).pop() ?? regionForBranch(bBranch) ?? "(Tanpa wilayah)"),
       name: bBranch ? `${bBranch}${bBrand ? ` · ${bBrand}` : ""}` : bBrand || "(Kosong)",
       initial: n(sorted[0]?.total_reviews),
@@ -907,6 +913,9 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
   const flagged = contentAll.filter((c) => c.status !== "Cancel" && c.caption && checkCompliance(String(c.caption)).issues.some((i) => i.level === "high"));
   if (flagged.length)
     push({ level: "warning", area: "Konten", title: `${flagged.length} caption memuat kata yang berisiko melanggar aturan promosi pembiayaan`, detail: flagged.slice(0, 3).map((c) => String(c.title)).join(", "), action: "Buka Content Plan, edit caption yang ditandai, dan ikuti saran kata pengganti sebelum tayang (contoh: hindari “pasti cair”, “tanpa survei”, “bunga 0%”)." });
+  const staleBranches = reviewGrowth.filter((g) => g.daysSince !== null && g.daysSince > 14);
+  if (staleBranches.length)
+    push({ level: "info", area: "Reputasi", title: `${staleBranches.length} cabang belum diperbarui rekap Google lebih dari 14 hari`, detail: staleBranches.slice(0, 4).map((g) => `${g.branch || g.brand} (${g.daysSince} hari)`).join(", "), action: "Buka Reputasi & Pasar → Google Business, klik Catat ulang di cabang itu, lalu isi total ulasan dan rating terbaru dari Google Maps." });
   const sla = financing.sla;
   if (sla.measured >= 5 && sla.avg !== null && sla.avg > 15)
     push({ level: sla.avg > 60 ? "critical" : "warning", area: "Leads", title: `Respons chat pertama lambat: rata-rata ${Math.round(sla.avg)} menit`, detail: `${Math.round((sla.within5 ?? 0) * 100)}% dibalas dalam 5 menit; ${sla.over60} lead menunggu lebih dari 1 jam.`, action: "Atur jadwal piket CS dan balasan otomatis di luar jam kerja. Lead yang dibalas dalam 5 menit jauh lebih mungkin lanjut survei." });

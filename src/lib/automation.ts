@@ -85,6 +85,11 @@ export async function runDaily(orgId: number, opts: { force?: boolean; weekly?: 
       console.error("daily ai advice", e instanceof Error ? e.message : e);
     }
   }
+  // Mondays: branches whose Google recap is older than 14 days
+  if (new Date(today + "T00:00:00Z").getUTCDay() === 1) {
+    const stale = a.reviewGrowth.filter((g) => g.daysSince !== null && g.daysSince > 14);
+    if (stale.length) await alert(`${stale.length} cabang perlu update rekap Google`, stale.slice(0, 4).map((g) => `${g.branch || g.brand} (${g.daysSince} hr)`).join(", "), "/reviews");
+  }
   // broadcasts scheduled for today/tomorrow that are not sent yet
   const dueBlasts = await q<Row>(
     `SELECT campaign_name, blast_date, blast_time, brand FROM wa_blasts WHERE org_id = $1 AND blast_date BETWEEN $2 AND $3 AND COALESCE(status, 'Draft') IN ('Draft', 'Terjadwal') ORDER BY blast_date, blast_time NULLS LAST`,

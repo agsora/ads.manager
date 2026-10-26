@@ -107,6 +107,13 @@ export function coerce(f: Field, v: unknown, fromImport = false): unknown {
       if (!fromImport || raw || Math.abs(x) > 1) return x / 100;
       return x;
     }
+    case "url": {
+      const t = cellText(v)?.trim() ?? "";
+      if (!t) return null;
+      if (/^https?:\/\//i.test(t)) return t.slice(0, 2000);
+      // "maps.app.goo.gl/xyz" or "www.google.com/maps/..." typed without the scheme
+      return /^[\w-]+(\.[\w-]+)+(\/|$)/.test(t) ? "https://" + t.slice(0, 1990) : null;
+    }
     default: {
       // keep one oversized paste from bloating the database
       const t = cellText(v);

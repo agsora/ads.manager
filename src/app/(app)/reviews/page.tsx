@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { ExternalLink, MapPin, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/shell";
 import { ResourceTable } from "@/components/resource-table";
+import { ResourceForm } from "@/components/resource-form";
+import { RESOURCE_MAP } from "@/lib/resources";
 import { useAnalytics } from "@/components/use-analytics";
 import { BarList, Card, Kpi, MiniTable, TrendLines } from "@/components/charts";
 import { fmtDate, fmtNum } from "@/lib/format";
@@ -12,6 +15,8 @@ export default function ReviewsPage() {
   const { data: a, reload } = useAnalytics();
   const [tab, setTab] = useState<"progress" | "list">("progress");
   const [tick, setTick] = useState(0);
+  // pre-filled "record again" form for one branch
+  const [recap, setRecap] = useState<Record<string, unknown> | null>(null);
   const k = a?.kpis.reviews;
   const p = a?.prevKpis.reviews;
   const growth = a?.reviewGrowth ?? [];
@@ -20,6 +25,17 @@ export default function ReviewsPage() {
   const totalInitial = growth.reduce((s, g) => s + g.initial, 0);
   const rated = growth.filter((g) => g.ratingNow);
   const ratingNow = rated.length ? rated.reduce((s, g) => s + (g.ratingNow ?? 0) * g.current, 0) / Math.max(1, rated.reduce((s, g) => s + g.current, 0)) : null;
+  const stale = growth.filter((g) => g.daysSince !== null && g.daysSince > 14).length;
+  const openRecap = (g: (typeof growth)[number]) =>
+    setRecap({
+      snapshot_date: todayISO(),
+      brand: g.brand || undefined,
+      branch: g.branch || undefined,
+      region: g.region !== "(Tanpa wilayah)" ? g.region : undefined,
+      maps_link: g.mapsLink ?? undefined,
+      total_reviews: g.current || undefined,
+      avg_rating: g.ratingNow ?? undefined,
+    });
   const refresh = () => {
     reload();
     setTick((t) => t + 1);
@@ -74,24 +90,74 @@ export default function ReviewsPage() {
             </Card>
           )}
 
-          <Card title="Perkembangan per cabang" subtitle={a ? `Periode ${fmtDate(a.period.from)} – ${fmtDate(a.period.to)}` : undefined}>
-            <MiniTable
-              cols={[
-                { key: "name", label: "Cabang" },
-                { key: "region", label: "Wilayah" },
-                { key: "initial", label: "Jumlah awal", format: "number" },
-                { key: "start", label: "Awal periode", format: "number" },
-                { key: "current", label: "Sekarang", format: "number" },
-                { key: "growth", label: "Tumbuh", format: "number" },
-                { key: "ratingStart", label: "Rating awal", format: "decimal" },
-                { key: "ratingNow", label: "Rating kini", format: "decimal" },
-                { key: "ratingChange", label: "Selisih", format: "decimal" },
-              ]}
-              rows={growth}
-              empty="Belum ada rekap. Tambahkan rekap pertama di bawah sebagai jumlah awal."
-            />
+          <Card
+            title="Per cabang"
+            subtitle={a ? `Perkembangan ${fmtDate(a.period.from)} – ${fmtDate(a.period.to)}${stale ? ` · ${stale} cabang perlu update (lebih dari 14 hari)` : ""}` : undefined}
+          >
+            {growth.length ? (
+              <div className="-mx-4 overflow-x-auto">
+                <table className="data">
+                  <thead>
+                    <tr>
+                      <th>Cabang</th>
+                      <th>Wilayah</th>
+                      <th className="num">Awal</th>
+                      <th className="num">Sekarang</th>
+                      <th className="num">Tumbuh</th>
+                      <th className="num">Rating</th>
+                      <th>Terakhir dicatat</th>
+                      <th>Google Maps</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {growth.map((g) => {
+                      const old = g.daysSince !== null && g.daysSince > 14;
+                      return (
+                        <tr key={g.name}>
+                          <td>
+                            <div className="font-medium">{g.branch || g.brand || "(Kosong)"}</div>
+                            {g.branch && g.brand ? <div className="text-[11.5px] text-[var(--muted)]">{g.brand}</div> : null}
+                          </td>
+                          <td>{g.region === "(Tanpa wilayah)" ? <span className="text-[var(--muted)]">–</span> : <span className="chip">{g.region}</span>}</td>
+                          <td className="num">{fmtNum(g.initial)}</td>
+                          <td className="num font-semibold">{fmtNum(g.current)}</td>
+                          <td className="num">{g.growth ? `${g.growth > 0 ? "+" : ""}${fmtNum(g.growth)}` : "–"}</td>
+                          <td className="num">
+                            {g.ratingNow ? `${fmtNum(g.ratingNow, 1)}★` : "–"}
+                            {g.ratingChange ? <span className={`ml-1 text-[11.5px] ${g.ratingChange > 0 ? "text-[var(--good-ink)]" : "text-[var(--critical-ink)]"}`}>{g.ratingChange > 0 ? "+" : ""}{fmtNum(g.ratingChange, 1)}</span> : null}
+                          </td>
+                          <td>
+                            {g.lastDate ? fmtDate(g.lastDate) : "–"}
+                            {old ? <span className="chip ml-1.5 !bg-[#f8eed6] !text-[var(--warning-ink)]">{g.daysSince} hr · perlu update</span> : null}
+                          </td>
+                          <td>
+                            {g.mapsLink ? (
+                              <a className="inline-flex items-center gap-1 text-[var(--accent-ink)] hover:underline" href={g.mapsLink} target="_blank" rel="noreferrer">
+                                <MapPin size={13} /> Buka Maps <ExternalLink size={11} className="opacity-60" />
+                              </a>
+                            ) : (
+                              <button className="inline-flex items-center gap-1 text-[var(--muted)] hover:text-[var(--accent-ink)]" onClick={() => openRecap(g)}>
+                                <MapPin size={13} /> + tambah link
+                              </button>
+                            )}
+                          </td>
+                          <td className="text-right">
+                            <button className="btn btn-sm" onClick={() => openRecap(g)} title="Catat total ulasan dan rating terbaru untuk cabang ini">
+                              <RefreshCw size={12} /> Catat ulang
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="py-6 text-center text-[13px] text-[var(--muted)]">Belum ada rekap. Tambahkan rekap pertama di bawah sebagai jumlah awal.</p>
+            )}
             <p className="mt-3 text-[12px] text-[var(--muted)]">
-              Sekarang = rekap terakhir + ulasan yang dicatat satu per satu setelah tanggal rekap tersebut.
+              Sekarang = rekap terakhir + ulasan yang dicatat satu per satu setelah tanggal rekap tersebut. Klik <b>Catat ulang</b>, buka link Maps cabang, lalu salin total ulasan dan rating terbarunya.
             </p>
           </Card>
 
@@ -143,6 +209,7 @@ export default function ReviewsPage() {
           <p className="text-[12px] text-[var(--muted)]">Total {fmtNum(k?.reviews ?? 0)} ulasan dicatat pada periode ini.</p>
         </div>
       )}
+      {recap && <ResourceForm resource={RESOURCE_MAP.review_stats} row={null} defaults={recap} onClose={() => setRecap(null)} onSaved={() => (setRecap(null), refresh())} />}
     </div>
   );
 }
