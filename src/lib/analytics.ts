@@ -169,7 +169,7 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
   const prevFrom = addDays(prevTo, -(cmpLen - 1));
 
   const load = (key: string, f: string, t: string, limit?: number) => listRows(orgId, RESOURCE_MAP[key], { from: f, to: t, brand, limit });
-  const [adsAll, leadsAll, contentAll, reviewsAll, blastAll, inflAll, kpiRows, walletRows, events, followers, openLeads, upcomingContent, contactsAll, statRows, adsHistory, blastHistory, inflHistory, optoutRows] =
+  const [adsAll, leadsAll, contentAll, reviewsAll, blastAll, inflAll, kpiRows, walletRows, events, followers, openLeads, upcomingContent, contactsAll, statRows, adsHistory, blastHistory, inflHistory, optoutRows, leadsHalf] =
     await Promise.all([
       // campaigns may start before the window and still spend in it
       load("ads", addDays(prevFrom, -90), to),
@@ -192,6 +192,8 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
       load("blast", "1900-01-01", to, 20000),
       load("influencers", "1900-01-01", to, 20000),
       listRows(orgId, RESOURCE_MAP.optouts, { limit: 20000 }),
+      // six months of leads for the monthly strategy view
+      load("leads", addDays(monthStart(today), -190), to, 20000),
     ]);
   const stopSet = new Set(optoutRows.map((o) => normPhone(o.phone)).filter(Boolean));
 
@@ -435,6 +437,34 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     byBranch: [...groupBy(leads, (r) => String(r.branch ?? "").trim() || "(Tanpa cabang)").entries()].map(([name, rs]) => ({ name, ...finGroup(rs) })).sort((x, y) => y.leads - x.leads),
     byPic: [...groupBy(leads, (r) => String(r.pic ?? "").trim() || "(Tanpa PIC)").entries()].map(([name, rs]) => ({ name, ...finGroup(rs) })).sort((x, y) => y.leads - x.leads),
   };
+
+  // ---- last six months side by side: money in, results out (what an owner compares before planning the next month)
+  const MONTH = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+  const monthly = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(monthStart(today) + "T00:00:00Z");
+    d.setUTCMonth(d.getUTCMonth() - (5 - i));
+    const m = d.toISOString().slice(0, 10);
+    const end = monthEnd(m) < today ? monthEnd(m) : today;
+    let spend = 0;
+    let conversations = 0;
+    for (const r of adsHistory) {
+      const sp = spendIn(r, m, end);
+      spend += sp;
+      conversations += n(r.spend) ? (n(r.conversations) * sp) / n(r.spend) : inRange(r.start_date, m, end) ? n(r.conversations) : 0;
+    }
+    const ls = leadsHalf.filter((r) => inRange(r.chat_date, m, end));
+    const deals = ls.filter((r) => r.final_status === "Deal" || r.initial_status === "Deal" || /akad|cair/i.test(String(r.pipeline_stage ?? ""))).length;
+    return {
+      month: m.slice(0, 7),
+      label: `${MONTH[d.getUTCMonth()]}${d.getUTCMonth() === 0 || i === 0 ? ` ${String(d.getUTCFullYear()).slice(2)}` : ""}`,
+      spend: Math.round(spend),
+      conversations: Math.round(conversations),
+      leads: ls.length,
+      deals,
+      costPerConv: conversations >= 1 ? spend / conversations : null,
+      costPerLead: ls.length ? spend / ls.length : null,
+    };
+  });
 
   // ---- nomor dobel: the same number entering again (other ad, other CS) inflates the lead count and cost per lead
   const dupGroups = [...groupBy(leadsAll.filter((r) => normPhone(r.phone)), (r) => normPhone(r.phone)).entries()]
@@ -988,6 +1018,7 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     followUps: followUps.slice(0, 50),
     funnel,
     financing,
+    monthly,
     duplicates,
     stopCount: stopSet.size,
     contentByChannel,

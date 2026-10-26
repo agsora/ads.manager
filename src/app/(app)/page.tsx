@@ -2,35 +2,18 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { AlertTriangle, ArrowRight, Download, Lightbulb, OctagonAlert, Printer, Sparkles } from "lucide-react";
+import { AlertTriangle, CircleCheck, Compass, Download, Printer, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/shell";
 import { api, useFetch, useFilter, useMeta, useToast } from "@/components/providers";
 import { useAnalytics } from "@/components/use-analytics";
-import { BarList, Card, Empty, Funnel, Kpi, MiniTable, PageSkeleton, ScoreRing, scoreTone, scoreWord, SEGMENT_COLORS, SplitBar, TrendLines } from "@/components/charts";
+import { Bars, BarList, Card, Empty, Funnel, Kpi, MiniTable, PageSkeleton, ScoreRing, scoreTone, scoreWord, SEGMENT_COLORS, SplitBar } from "@/components/charts";
 import { Chip } from "@/components/cells";
 import { fmtDate, fmtMoney, fmtNum, fmtPct, formatValue } from "@/lib/format";
-import type { Analytics, Insight } from "@/lib/analytics";
+import type { Analytics } from "@/lib/analytics";
+import { campaignBoard, execSummary, type Fact, type Verdict } from "@/lib/exec-summary";
 import type { StoredAdvice } from "@/lib/ai-advice";
 
 type Tab = "ads" | "leads" | "content" | "rep" | "kpi";
-
-/** Where each insight area is handled in the app. */
-const AREA_HREF: Record<Insight["area"], string> = {
-  Ads: "/ads",
-  Leads: "/leads",
-  "WA Blast": "/blast",
-  Konten: "/content",
-  Reputasi: "/reviews",
-  Influencer: "/influencers",
-  Budget: "/ads/budget",
-  Umum: "/insights",
-};
-const LEVEL = {
-  critical: { icon: OctagonAlert, color: "var(--critical)", label: "Kritis" },
-  warning: { icon: AlertTriangle, color: "var(--warning)", label: "Perhatian" },
-  info: { icon: Lightbulb, color: "var(--ink-2)", label: "Saran" },
-  good: { icon: Lightbulb, color: "var(--good)", label: "Bagus" },
-} as const;
 
 export default function Dashboard() {
   const f = useFilter();
@@ -68,9 +51,7 @@ export default function Dashboard() {
   const hasBlast = k.blast.blasts > 0;
   const rating = k.reviews.avgRating ?? a.reviewSummary.ratingNow;
 
-  // what to do now: critical and warning insights first, then a couple of suggestions
-  const urgent = a.insights.filter((i) => i.level === "critical" || i.level === "warning");
-  const todo = (urgent.length ? urgent : a.insights.filter((i) => i.level === "info")).slice(0, 4);
+  const sum = execSummary(a);
   const advice = ai?.last && Date.now() - new Date(ai.last.at).getTime() < 3 * 86400000 ? ai.last.advice : null;
 
   // the few numbers that matter, chosen from the data that exists
@@ -117,104 +98,69 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* 1. How are we doing + what needs doing */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-        <section className="card overflow-hidden">
-          <div className="flex items-center gap-4 p-4">
-            <ScoreRing value={a.scores.overall} size={92} />
-            <div className="min-w-0">
-              <div className="eyebrow">Kesehatan marketing</div>
-              <div className="serif mt-0.5 text-[22px] leading-tight">{scoreWord(a.scores.overall)}</div>
-              <div className="mt-0.5 text-[12.5px] text-[var(--muted)]">
-                {a.insights.filter((i) => i.level === "critical").length} kritis · {a.insights.filter((i) => i.level === "warning").length} perlu perhatian
+      {/* 1. Executive read: how are we doing, what is good, what to watch, what to decide */}
+      <section className="hero">
+        <div className="grid lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,2.2fr)]">
+          <div className="border-b border-[var(--line)] p-5 lg:border-b-0 lg:border-r">
+            <div className="flex items-center gap-4">
+              <ScoreRing value={a.scores.overall} size={96} />
+              <div className="min-w-0">
+                <div className="eyebrow">Kondisi marketing</div>
+                <div className="serif mt-0.5 text-[26px] leading-tight">{scoreWord(a.scores.overall)}</div>
               </div>
             </div>
+            <p className="mt-3 text-[13px] leading-snug text-[var(--ink-2)]">{sum.headline}</p>
+            <div className="mt-3 grid grid-cols-4 gap-1.5">
+              {(
+                [
+                  ["Iklan", a.scores.ads, "/ads"],
+                  ["Leads", a.scores.leads, "/leads"],
+                  ["Konten", a.scores.content, "/content"],
+                  ["Reputasi", a.scores.reputation, "/reviews"],
+                ] as [string, number | null, string][]
+              ).map(([label, v, href]) => (
+                <Link key={label} href={href} className="rounded-lg bg-white/70 px-2 py-1.5 text-center ring-1 ring-[var(--line)] transition hover:bg-white" title={v === null ? "Belum ada data" : scoreWord(v)}>
+                  <div className="serif text-[17px] leading-none tnum" style={{ color: v === null ? "var(--muted)" : scoreTone(v) }}>
+                    {v ?? "–"}
+                  </div>
+                  <div className="mt-0.5 text-[10.5px] text-[var(--muted)]">{label}</div>
+                </Link>
+              ))}
+            </div>
           </div>
-          <div className="grid grid-cols-2 border-t border-[var(--line)] sm:grid-cols-4">
-            {(
-              [
-                ["Iklan", a.scores.ads, "/ads"],
-                ["Leads & akad", a.scores.leads, "/leads"],
-                ["Konten", a.scores.content, "/content"],
-                ["Reputasi", a.scores.reputation, "/reviews"],
-              ] as [string, number | null, string][]
-            ).map(([label, v, href]) => (
-              <Link key={label} href={href} className="group border-[var(--line)] p-3 transition hover:bg-[#fdfcf9] [&:not(:last-child)]:border-r max-sm:[&:nth-child(2)]:border-r-0 max-sm:[&:nth-child(-n+2)]:border-b">
-                <div className="text-[12px] text-[var(--ink-2)]">{label}</div>
-                <div className="serif text-[20px] leading-tight tnum">{v ?? "–"}</div>
-                <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[var(--track)]">
-                  <div className="h-1 rounded-full" style={{ width: `${v ?? 0}%`, background: scoreTone(v), transition: "width .8s cubic-bezier(.2,.8,.2,1)" }} />
-                </div>
-                <div className="mt-1 text-[11.5px] text-[var(--muted)]">{v === null ? "isi datanya →" : scoreWord(v)}</div>
-              </Link>
-            ))}
+          <div className="grid divide-y divide-[var(--line)] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            <HeroColumn title="Berjalan baik" icon={<CircleCheck size={15} />} color="var(--good)" items={sum.good} empty="Belum cukup data untuk menyimpulkan." />
+            <HeroColumn title="Perlu diperhatikan" icon={<AlertTriangle size={15} />} color="var(--warning)" items={sum.watch} empty="Tidak ada yang mengkhawatirkan." />
+            <HeroColumn title="Langkah berikutnya" icon={<Compass size={15} />} color="var(--accent)" items={sum.decide} empty="Pertahankan ritme saat ini." />
           </div>
-        </section>
-
-        <section className="card p-4">
-          <div className="mb-2 flex items-baseline justify-between gap-3">
-            <h2 className="serif text-[16px] font-medium">Perlu tindakan</h2>
-            <Link href="/insights" className="text-[12.5px] font-semibold text-[var(--accent)]">
-              Semua insight ({a.insights.length})
-            </Link>
-          </div>
-          {todo.length ? (
-            <ul className="divide-y divide-[var(--grid)]">
-              {todo.map((i, idx) => {
-                const m = LEVEL[i.level];
-                const Icon = m.icon;
-                const href = i.area === "Leads" && /follow/i.test(i.title) ? "/leads/followup" : AREA_HREF[i.area];
-                return (
-                  <li key={idx}>
-                    <Link href={href} className="group flex items-start gap-2.5 py-2">
-                      <Icon size={15} className="mt-0.5 shrink-0" style={{ color: m.color }} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-[13.5px] font-semibold leading-snug">{i.title}</span>
-                        <span className="line-clamp-2 text-[12.5px] leading-snug text-[var(--ink-2)]">{i.action}</span>
-                      </span>
-                      <ArrowRight size={14} className="mt-1 shrink-0 text-[var(--muted)] transition group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" />
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <Empty text="Tidak ada yang mendesak. Semua berjalan baik." />
-          )}
-          {advice && (
-            <Link href="/insights" className="mt-2 flex items-start gap-2 rounded-lg bg-[var(--accent-soft)] px-3 py-2 text-[12.5px] leading-snug text-[var(--accent-ink)]">
-              <Sparkles size={14} className="mt-0.5 shrink-0" />
-              <span className="line-clamp-2">
-                <b>Saran AI:</b> {advice.ringkasan}
-              </span>
-            </Link>
-          )}
-        </section>
-      </div>
+        </div>
+        {advice && (
+          <Link href="/insights" className="flex items-start gap-2 border-t border-[var(--line)] bg-white/60 px-5 py-2 text-[12.5px] leading-snug text-[var(--accent-ink)]">
+            <Sparkles size={14} className="mt-0.5 shrink-0" />
+            <span className="line-clamp-2">
+              <b>Saran AI hari ini:</b> {advice.ringkasan}
+            </span>
+          </Link>
+        )}
+      </section>
 
       {/* 2. The numbers that matter */}
       {shown.length > 0 && <div className="stat-grid">{shown}</div>}
 
-      {/* 3. Trend */}
-      {(hasAds || hasLeads) && (
-        <div className={`grid gap-4 ${hasAds && hasLeads ? "lg:grid-cols-2" : ""}`}>
-          {hasAds && (
-            <Card title="Belanja iklan" subtitle={a.period.days > 62 ? "per minggu" : "per hari"}>
-              <TrendLines data={a.trend} series={[{ key: "spend", label: "Belanja iklan" }]} format="money" area height={150} />
-            </Card>
-          )}
-          {hasLeads && (
-            <Card title="Leads & deal" subtitle="chat masuk dan closing">
-              <TrendLines data={a.trend} series={[{ key: "leads", label: "Leads" }, { key: "deals", label: "Deal" }]} height={150} />
-            </Card>
-          )}
-        </div>
-      )}
+      {/* 3. Strategy: where the money works, where leads leak, how months compare, which branch leads */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+        <CampaignCard a={a} />
+        <FunnelCard a={a} />
+      </div>
+      <div className={`grid gap-4 ${a.financing.byBranch.some((b) => !b.name.startsWith("(")) ? "lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]" : ""}`}>
+        <MonthlyCard a={a} />
+        <BranchCard a={a} />
+      </div>
 
       {/* 4. Worth a look, one topic at a time */}
       <section>
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="serif text-[16px] font-medium">Perlu dilihat</h2>
+          <h2 className="sect">Perlu dilihat</h2>
           <span className="text-[12px] text-[var(--muted)]">Rincian pendukung, pilih topik</span>
         </div>
         <div className="tabs mb-3">
@@ -231,6 +177,202 @@ export default function Dashboard() {
         {cur === "kpi" && <KpiPanel a={a} />}
       </section>
     </div>
+  );
+}
+
+function HeroColumn({ title, icon, color, items, empty }: { title: string; icon: React.ReactNode; color: string; items: Fact[]; empty: string }) {
+  return (
+    <div className="p-4">
+      <div className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide" style={{ color }}>
+        {icon} {title}
+      </div>
+      {items.length ? (
+        <ul className="space-y-2">
+          {items.map((it, i) => (
+            <li key={i} className="flex gap-2 text-[13px] leading-snug">
+              <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: color }} />
+              {it.href ? (
+                <Link href={it.href} className="min-w-0 flex-1 hover:underline">
+                  {it.text}
+                </Link>
+              ) : (
+                <span className="min-w-0 flex-1">{it.text}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-[12.5px] text-[var(--muted)]">{empty}</p>
+      )}
+    </div>
+  );
+}
+
+const VERDICT_CLASS: Record<Verdict, string> = { Naikkan: "verdict-up", Pertahankan: "verdict-keep", Evaluasi: "verdict-eval", "Hentikan?": "verdict-stop" };
+const VERDICT_BAR: Record<Verdict, string> = { Naikkan: "var(--good)", Pertahankan: "var(--s1)", Evaluasi: "var(--warning)", "Hentikan?": "var(--critical)" };
+
+function CampaignCard({ a }: { a: Analytics }) {
+  const b = campaignBoard(a);
+  if (!b.rows.length)
+    return (
+      <Card title="Efisiensi campaign" subtitle="dasar keputusan budget">
+        <Empty text="Belum ada campaign di periode ini. Upload CSV Meta di Iklan → Ads Campaign." />
+      </Card>
+    );
+  return (
+    <Card title="Efisiensi campaign" subtitle={b.avg ? `Rata-rata ${fmtMoney(b.avg)} per percakapan. Naikkan yang lebih hemat, evaluasi yang lebih mahal.` : "dasar keputusan budget"} action={<Link href="/ads" className="text-[12.5px] font-semibold text-[var(--accent)]">Semua campaign</Link>}>
+      <div className="-mx-4 overflow-x-auto">
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Campaign</th>
+              <th className="num">Belanja</th>
+              <th className="num">Perc.</th>
+              <th className="num">Biaya/perc.</th>
+              <th>Saran</th>
+            </tr>
+          </thead>
+          <tbody>
+            {b.rows.slice(0, 7).map((r) => (
+              <tr key={r.name}>
+                <td className="max-w-[240px]">
+                  <div className="truncate font-medium" title={r.name}>
+                    {r.name}
+                  </div>
+                  <div className="mt-1 h-1 w-full max-w-[200px] rounded-full bg-[var(--track)]">
+                    <div className="h-1 rounded-full" style={{ width: `${Math.max(3, r.share * 100)}%`, background: VERDICT_BAR[r.verdict] }} />
+                  </div>
+                </td>
+                <td className="num">
+                  {fmtMoney(r.spend)}
+                  <div className="text-[11px] text-[var(--muted)]">{fmtPct(r.share, 0)}</div>
+                </td>
+                <td className="num">{fmtNum(r.conversations)}</td>
+                <td className="num font-semibold">{r.costPerConv ? fmtMoney(r.costPerConv) : "–"}</td>
+                <td>
+                  <span className={`verdict ${VERDICT_CLASS[r.verdict]}`}>{r.verdict}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+function FunnelCard({ a }: { a: Analytics }) {
+  const f = a.financing;
+  const tracked = f.tracked && f.funnel[0].value > 0;
+  const steps = tracked ? f.funnel : a.funnel;
+  const weakest = steps
+    .slice(1)
+    .map((s, i) => ({ from: steps[i].name, to: s.name, rate: steps[i].value ? s.value / steps[i].value : null, base: steps[i].value }))
+    .filter((x) => x.rate !== null && x.base >= 5)
+    .sort((x, y) => (x.rate ?? 1) - (y.rate ?? 1))[0];
+  return (
+    <Card title={tracked ? "Funnel pembiayaan" : "Funnel pemasaran"} subtitle={tracked ? "lead masuk sampai akad (cair)" : "dari tayangan iklan sampai deal"} action={<Link href="/funnel" className="text-[12.5px] font-semibold text-[var(--accent)]">Detail</Link>}>
+      <Funnel steps={steps} />
+      {weakest && (weakest.rate ?? 1) < 0.6 && (
+        <p className="mt-3 rounded-lg bg-[#f8eed6] px-3 py-2 text-[12.5px] leading-snug text-[var(--warning-ink)]">
+          <b>Paling bocor:</b> {weakest.from} → {weakest.to} hanya {fmtPct(weakest.rate, 0)}.
+        </p>
+      )}
+      {tracked && f.costPerAkad ? (
+        <div className="mt-3 flex items-baseline justify-between border-t border-[var(--line)] pt-2.5 text-[13px]">
+          <span className="text-[var(--ink-2)]">Biaya per akad</span>
+          <b className="serif text-[18px] tnum">{fmtMoney(f.costPerAkad)}</b>
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+function MonthlyCard({ a }: { a: Analytics }) {
+  const m = a.monthly;
+  const has = m.some((x) => x.spend || x.leads || x.conversations);
+  const last = m.length - 1;
+  const rows: [string, (x: (typeof m)[number]) => string][] = [
+    ["Biaya iklan", (x) => (x.spend ? fmtMoney(x.spend) : "–")],
+    ["Percakapan", (x) => (x.conversations ? fmtNum(x.conversations) : "–")],
+    ["Biaya / percakapan", (x) => (x.costPerConv ? fmtMoney(x.costPerConv) : "–")],
+    ["Leads WA", (x) => (x.leads ? fmtNum(x.leads) : "–")],
+    ["Deal / akad", (x) => (x.deals ? fmtNum(x.deals) : "–")],
+  ];
+  return (
+    <Card title="Enam bulan terakhir" subtitle="bandingkan bulan ke bulan sebelum menyusun strategi berikutnya">
+      {has ? (
+        <>
+          <Bars data={m.map((x) => ({ name: x.label, spend: x.spend }))} series={[{ key: "spend", label: "Biaya iklan" }]} format="money" height={120} />
+          <div className="-mx-4 mt-2 overflow-x-auto">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th />
+                  {m.map((x, i) => (
+                    <th key={x.month} className="num" style={i === last ? { color: "var(--accent-ink)" } : undefined}>
+                      {x.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(([label, get]) => (
+                  <tr key={label}>
+                    <td className="font-medium text-[var(--ink-2)]">{label}</td>
+                    {m.map((x, i) => (
+                      <td key={x.month} className="num" style={i === last ? { background: "var(--accent-soft)", fontWeight: 600 } : undefined}>
+                        {get(x)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : (
+        <Empty text="Belum ada data enam bulan terakhir" />
+      )}
+    </Card>
+  );
+}
+
+function BranchCard({ a }: { a: Analytics }) {
+  const rows = a.financing.byBranch.filter((b) => !b.name.startsWith("(")).slice(0, 6);
+  if (!rows.length) return null;
+  const max = Math.max(0.01, ...rows.map((r) => r.akadRate ?? 0));
+  return (
+    <Card title="Cabang" subtitle="lead sampai akad dan kecepatan respons" action={<Link href="/performance" className="text-[12.5px] font-semibold text-[var(--accent)]">Detail</Link>}>
+      <ul className="space-y-2.5">
+        {rows.map((r) => (
+          <li key={r.name}>
+            <div className="flex items-baseline justify-between gap-2 text-[13px]">
+              <span className="min-w-0 truncate font-medium">{r.name}</span>
+              <span className="shrink-0 tnum text-[var(--ink-2)]">
+                {fmtNum(r.leads)} lead · <b>{fmtNum(r.akad)}</b> akad
+              </span>
+            </div>
+            <div className="mt-1 flex items-center gap-2">
+              <div className="h-1.5 flex-1 rounded-full bg-[var(--track)]">
+                <div className="h-1.5 rounded-full" style={{ width: `${Math.max(2, ((r.akadRate ?? 0) / max) * 100)}%`, background: "var(--s1)" }} />
+              </div>
+              <span className="w-10 shrink-0 text-right text-[12px] tnum text-[var(--ink-2)]">{fmtPct(r.akadRate, 0)}</span>
+            </div>
+            {r.avgReply !== null && r.avgReply !== undefined && <div className="mt-0.5 text-[11.5px] text-[var(--muted)]">respons rata-rata {r.avgReply < 1 ? "<1" : fmtNum(r.avgReply, 0)} menit</div>}
+          </li>
+        ))}
+      </ul>
+      {a.reviewRegions.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5 border-t border-[var(--line)] pt-2.5">
+          {a.reviewRegions.slice(0, 6).map((r) => (
+            <span key={r.name} className="chip" title={`${fmtNum(r.current)} ulasan`}>
+              {r.name} {r.ratingNow ? `${fmtNum(r.ratingNow, 1)}★` : ""}
+            </span>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }
 

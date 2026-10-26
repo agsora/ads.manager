@@ -70,6 +70,21 @@ body {
     box-shadow: 0 1px 2px rgba(31, 30, 29, .035), 0 2px 6px -2px rgba(31, 30, 29, .04);
   }
 
+  /* executive hero: warm paper with a soft clay glow in the corner */
+  .hero {
+    background: radial-gradient(900px 260px at 0% 0%, #fbeade 0%, rgba(251, 234, 222, 0) 62%), linear-gradient(180deg, #fffdf9, #fbf8f2);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: 0 1px 2px rgba(31, 30, 29, .04), 0 8px 24px -12px rgba(31, 30, 29, .12);
+    overflow: hidden;
+  }
+  .sect { font-family: var(--font-display), ui-serif, Georgia, serif; font-size: 17px; font-weight: 500; letter-spacing: -.005em; }
+  .verdict { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+  .verdict-up { background: #e3f3e8; color: #1f6b3f; }
+  .verdict-keep { background: var(--surface-2); color: var(--ink-2); }
+  .verdict-eval { background: #f8eed6; color: #8a5a10; }
+  .verdict-stop { background: #fbe4df; color: #a63a2a; }
+
   /* hairline grid of stats: each cell draws its right + bottom rule, the frame clips the outer ones */
   .stat-grid {
     display: grid;
