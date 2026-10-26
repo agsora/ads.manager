@@ -1,7 +1,7 @@
 import { listRows } from "./repo";
 import { RESOURCE_MAP, n, type Row } from "./resources";
 import { normPhone } from "./phone";
-import { regionForBranch } from "./regions";
+import { coordsForBranch, regionForBranch } from "./regions";
 import { checkCompliance } from "./compliance";
 import { addDays, diffDays, fmtMoney, fmtNum, fmtPct, monthEnd, monthStart, todayISO } from "./format";
 
@@ -617,6 +617,11 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     return {
       brand: bBrand,
       branch: bBranch,
+      // exact point typed or resolved from the Maps link, otherwise the centre of the town named in the branch
+      point: (() => {
+        const withPoint = [...sorted].reverse().find((x) => x.lat !== null && x.lat !== undefined && x.lng !== null && x.lng !== undefined);
+        return withPoint ? { lat: n(withPoint.lat), lng: n(withPoint.lng), approx: false } : coordsForBranch(bBranch);
+      })(),
       mapsLink: String([...sorted].reverse().find((x) => x.maps_link)?.maps_link ?? "") || null,
       lastDate: lastAny?.snapshot_date ? String(lastAny.snapshot_date).slice(0, 10) : null,
       daysSince: lastAny?.snapshot_date ? diffDays(String(lastAny.snapshot_date).slice(0, 10), today) : null,

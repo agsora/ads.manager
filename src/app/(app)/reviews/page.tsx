@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, MapPin, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/shell";
 import { ResourceTable } from "@/components/resource-table";
 import { ResourceForm } from "@/components/resource-form";
 import { RESOURCE_MAP } from "@/lib/resources";
+import { BranchMap, ratingColor, type BranchPoint } from "@/components/branch-map";
+import { api } from "@/components/providers";
 import { useAnalytics } from "@/components/use-analytics";
 import { BarList, Card, Kpi, MiniTable, TrendLines } from "@/components/charts";
 import { fmtDate, fmtNum } from "@/lib/format";
@@ -13,13 +15,15 @@ import { todayISO } from "@/lib/format";
 
 export default function ReviewsPage() {
   const { data: a, reload } = useAnalytics();
-  const [tab, setTab] = useState<"progress" | "list">("progress");
+  const [tab, setTab] = useState<"progress" | "map" | "list">("progress");
+  const [mapRegion, setMapRegion] = useState("");
+  const resolved = useRef<Set<string>>(new Set());
   const [tick, setTick] = useState(0);
   // pre-filled "record again" form for one branch
   const [recap, setRecap] = useState<Record<string, unknown> | null>(null);
   const k = a?.kpis.reviews;
   const p = a?.prevKpis.reviews;
-  const growth = a?.reviewGrowth ?? [];
+  const growth = useMemo(() => a?.reviewGrowth ?? [], [a]);
   const totalNow = growth.reduce((s, g) => s + g.current, 0);
   const totalStart = growth.reduce((s, g) => s + g.start, 0);
   const totalInitial = growth.reduce((s, g) => s + g.initial, 0);
@@ -36,6 +40,28 @@ export default function ReviewsPage() {
       total_reviews: g.current || undefined,
       avg_rating: g.ratingNow ?? undefined,
     });
+  // branches with a Maps link but no exact point yet: read the point from the link once, then reload
+  useEffect(() => {
+    if (tab !== "map") return;
+    const todo = growth.filter((g) => g.mapsLink && (!g.point || g.point.approx) && !resolved.current.has(g.name));
+    if (!todo.length) return;
+    todo.forEach((g) => resolved.current.add(g.name));
+    Promise.allSettled(todo.slice(0, 8).map((g) => api("/api/geo/resolve", "POST", { link: g.mapsLink, brand: g.brand, branch: g.branch }))).then((r) => {
+      if (r.some((x) => x.status === "fulfilled")) reload();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, growth.length]);
+  const allPoints: BranchPoint[] = useMemo(
+    () =>
+      growth
+        .filter((g) => g.point)
+        .map((g) => ({ id: g.name, name: g.branch || g.brand || "(Kosong)", brand: g.brand, region: g.region, lat: g.point!.lat, lng: g.point!.lng, approx: g.point!.approx, rating: g.ratingNow, reviews: g.current, lastDate: g.lastDate, mapsLink: g.mapsLink })),
+    [growth],
+  );
+  const points = allPoints.filter((p) => !mapRegion || p.region === mapRegion);
+  const noPoint = growth.filter((g) => !g.point);
+  const approxCount = allPoints.filter((p) => p.approx).length;
+  const regionNames = [...new Set(allPoints.map((p) => p.region))].filter((r) => r !== "(Tanpa wilayah)");
   const refresh = () => {
     reload();
     setTick((t) => t + 1);
@@ -46,6 +72,7 @@ export default function ReviewsPage() {
       <PageHeader eyebrow="Reputasi" title="Google Business" desc="Catat jumlah total ulasan & rating tiap cabang secara berkala (isian pertama = jumlah awal), lalu lihat perkembangannya. Ulasan satu per satu tetap bisa dicatat untuk analisis sentimen & respon." />
       <div className="tabs">
         <button className="tab" data-on={tab === "progress"} onClick={() => setTab("progress")}>Rekap & perkembangan</button>
+        <button className="tab" data-on={tab === "map"} onClick={() => setTab("map")}>Peta cabang</button>
         <button className="tab" data-on={tab === "list"} onClick={() => setTab("list")}>Daftar ulasan</button>
       </div>
 
@@ -173,6 +200,52 @@ export default function ReviewsPage() {
               searchPlaceholder="Cari cabang, catatan…"
             />
           </div>
+        </div>
+      )}
+
+      {tab === "map" && (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button className={`btn btn-sm ${!mapRegion ? "btn-primary" : ""}`} onClick={() => setMapRegion("")}>
+                Semua wilayah ({allPoints.length})
+              </button>
+              {regionNames.map((r) => (
+                <button key={r} className={`btn btn-sm ${mapRegion === r ? "btn-primary" : ""}`} onClick={() => setMapRegion(r)}>
+                  {r} ({allPoints.filter((p) => p.region === r).length})
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-[12px] text-[var(--ink-2)]">
+              {[
+                ["4,5★ ke atas", ratingColor(4.6)],
+                ["4,0 – 4,4★", ratingColor(4.2)],
+                ["di bawah 4,0★", ratingColor(3.5)],
+                ["belum ada rating", ratingColor(null)],
+              ].map(([label, color]) => (
+                <span key={label} className="inline-flex items-center gap-1.5">
+                  <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: color }} />
+                  {label}
+                </span>
+              ))}
+              <span className="text-[var(--muted)]">ukuran = jumlah ulasan</span>
+            </div>
+          </div>
+          {points.length ? (
+            <BranchMap points={points} height={460} />
+          ) : (
+            <div className="card grid h-48 place-items-center p-4 text-center text-[13px] text-[var(--muted)]">Belum ada cabang yang bisa ditampilkan. Tambahkan rekap dengan nama cabang atau link Google Maps.</div>
+          )}
+          {approxCount > 0 && (
+            <p className="text-[12.5px] leading-relaxed text-[var(--ink-2)]">
+              <b>{approxCount} titik masih perkiraan</b> (pusat kota, tampak lebih pudar). Isi <b>Link Google Maps cabang</b> di rekap agar titiknya tepat; titik dibaca otomatis dari link, atau isi latitude dan longitude secara manual.
+            </p>
+          )}
+          {noPoint.length > 0 && (
+            <p className="text-[12.5px] leading-relaxed text-[var(--ink-2)]">
+              Belum punya titik: <b>{noPoint.map((g) => g.branch || g.brand).join(", ")}</b>. Namanya tidak dikenali, jadi tambahkan link Google Maps atau koordinatnya.
+            </p>
+          )}
         </div>
       )}
 

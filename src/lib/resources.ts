@@ -598,6 +598,8 @@ export const RESOURCES: Resource[] = [
       { key: "branch", label: "Cabang", type: "select", options: "branch" },
       { key: "maps_link", label: "Link Google Maps cabang", type: "url", hideInTable: true, aliases: ["link maps", "google maps", "maps", "link google maps"] },
       { key: "total_reviews", label: "Total Ulasan", type: "number", required: true, aliases: ["jumlah ulasan", "total ulasan"] },
+      { key: "lat", label: "Latitude (titik di peta, opsional)", type: "number", hideInTable: true, group: "Lokasi di peta", aliases: ["latitude", "lintang"] },
+      { key: "lng", label: "Longitude (titik di peta, opsional)", type: "number", hideInTable: true, group: "Lokasi di peta", aliases: ["longitude", "bujur"] },
       { key: "avg_rating", label: "Rating Rata-rata", type: "rating", aliases: ["rating"] },
       { key: "notes", label: "Catatan (mis. jumlah awal)", type: "text" },
     ],
