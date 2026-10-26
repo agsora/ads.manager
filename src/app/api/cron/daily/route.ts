@@ -5,7 +5,7 @@ import { runDaily } from "@/lib/automation";
 
 export const maxDuration = 60;
 
-/** Vercel Cron (daily 01:00 UTC = 08:00 WIB). Authorised with CRON_SECRET. */
+/** Vercel Cron (daily 02:00 UTC = 09:00 WIB). Authorised with CRON_SECRET. */
 export const GET = handle(async (req: Request) => {
   const secret = process.env.CRON_SECRET;
   if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) throw new HttpError(401, "Unauthorized");

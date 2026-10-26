@@ -122,7 +122,7 @@ export default function NotificationsPage() {
           </Card>
 
           {manager && (
-            <Card title="Otomasi" subtitle="Berjalan sendiri setiap hari 08.00 WIB; laporan mingguan setiap Senin">
+            <Card title="Otomasi" subtitle="Berjalan sendiri setiap hari 09.00 WIB; laporan mingguan setiap Senin">
               <ul className="mb-4 list-disc space-y-1 pl-5 text-[13px] leading-relaxed text-[var(--ink-2)]">
                 <li>Campaign yang lewat tanggal berakhir otomatis jadi Done</li>
                 <li>Peringatan: konten terlewat, menunggu review, hasil belum diisi, lead HOT, saldo iklan menipis, ulasan negatif</li>

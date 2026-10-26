@@ -5,7 +5,7 @@ import { appUrl, emailEnabled, renderEmail, sendEmails, type EmailSection } from
 export const CATEGORIES = {
   content: { label: "Content plan", desc: "Rencana konten baru, diedit, dihapus, approval & revisi, dan pengingat cek performa tiap 7 hari setelah tayang", emailDefault: true },
   alerts: { label: "Peringatan penting", desc: "Lead HOT baru, konten terlewat jadwal, saldo iklan menipis, ulasan negatif", emailDefault: true },
-  digest: { label: "Ringkasan harian (08.00 WIB)", desc: "Jadwal konten hari ini, approval tertunda, follow up jatuh tempo, insight kritis", emailDefault: true },
+  digest: { label: "Ringkasan harian (09.00 WIB)", desc: "Jadwal konten hari ini, approval tertunda, follow up jatuh tempo, insight kritis", emailDefault: true },
   weekly: { label: "Laporan mingguan (Senin)", desc: "Ringkasan 7 hari + lampiran Excel laporan lengkap", emailDefault: true },
   activity: { label: "Aktivitas tim", desc: "Impor data, upload laporan Meta, kontak blast dijadikan leads", emailDefault: false },
 } as const;
