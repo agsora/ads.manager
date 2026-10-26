@@ -1,6 +1,7 @@
 import { listRows } from "./repo";
 import { RESOURCE_MAP, n, type Row } from "./resources";
 import { normPhone } from "./phone";
+import { regionForBranch } from "./regions";
 import { checkCompliance } from "./compliance";
 import { addDays, diffDays, fmtMoney, fmtNum, fmtPct, monthEnd, monthStart, todayISO } from "./format";
 
@@ -612,6 +613,7 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     const [bBrand, bBranch] = key.split("|");
     const extra = reviewsAll.filter((r) => String(r.brand ?? "") === bBrand && String(r.branch ?? "") === bBranch && last && String(r.review_date) > String(last.snapshot_date) && String(r.review_date) <= to).length;
     return {
+      region: String(last?.region ?? sorted.map((x) => x.region).filter(Boolean).pop() ?? regionForBranch(bBranch) ?? "(Tanpa wilayah)"),
       name: bBranch ? `${bBranch}${bBrand ? ` · ${bBrand}` : ""}` : bBrand || "(Kosong)",
       initial: n(sorted[0]?.total_reviews),
       initialDate: sorted[0]?.snapshot_date ?? null,
@@ -624,6 +626,25 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
       snapshots: sorted.length,
     };
   });
+  // per region: total reviews now / at the start / initial, weighted rating, and the individually logged reviews
+  const reviewRegions = [...groupBy(reviewGrowth, (g) => g.region).entries()]
+    .map(([name, gs]) => {
+      const current = gs.reduce((t, g) => t + g.current, 0);
+      const rated = gs.filter((g) => g.ratingNow);
+      const own = reviews.filter((r) => String(r.region ?? regionForBranch(r.branch) ?? "(Tanpa wilayah)") === name);
+      return {
+        name,
+        branches: gs.length,
+        initial: gs.reduce((t, g) => t + g.initial, 0),
+        start: gs.reduce((t, g) => t + g.start, 0),
+        current,
+        growth: gs.reduce((t, g) => t + g.growth, 0),
+        ratingNow: rated.length ? rated.reduce((t, g) => t + (g.ratingNow ?? 0) * g.current, 0) / Math.max(1, rated.reduce((t, g) => t + g.current, 0)) : null,
+        logged: own.length,
+        negative: own.filter((r) => r.sentiment === "Negatif" || (n(r.rating) > 0 && n(r.rating) <= 2)).length,
+      };
+    })
+    .sort((x, y) => y.current - x.current);
   const reviewTrendMap = new Map<string, Record<string, number | string>>();
   for (const r of [...statRows].sort((x, y) => String(x.snapshot_date).localeCompare(String(y.snapshot_date)))) {
     const d = String(r.snapshot_date).slice(0, 10);
@@ -968,6 +989,7 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     walletHistory,
     roasFromLeads,
     reviewGrowth,
+    reviewRegions,
     reviewTrend,
     reviewTrendSeries,
     kpiProgress,

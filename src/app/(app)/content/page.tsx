@@ -36,6 +36,10 @@ function LinkOpener({ onOpen }: { onOpen: (id: number) => void }) {
 export default function ContentPage() {
   const [tab, setTab] = useState<"calendar" | "plan" | "results" | "analytics">("calendar");
   const [openId, setOpenId] = useState<number | null>(null);
+  // detail drawer shared by the Planning and Hasil tables (the calendar has its own)
+  const [detailRow, setDetailRow] = useState<Row | null>(null);
+  const [editRow, setEditRow] = useState<Row | null>(null);
+  const [bump, setBump] = useState(0);
   const tabs = [
     { key: "calendar", label: "Kalender", icon: CalendarDays },
     { key: "plan", label: "Planning", icon: ClipboardList },
@@ -53,7 +57,7 @@ export default function ContentPage() {
         ))}
       </div>
       {tab === "calendar" && <Calendar />}
-      {tab === "plan" && <Planning />}
+      {tab === "plan" && <Planning onDetail={setDetailRow} bump={bump} />}
       <Suspense fallback={null}>
         <LinkOpener
           onOpen={(id) => {
@@ -62,7 +66,19 @@ export default function ContentPage() {
           }}
         />
       </Suspense>
-      {tab === "results" && <Results openId={openId} onOpened={() => setOpenId(null)} />}
+      {tab === "results" && <Results openId={openId} onOpened={() => setOpenId(null)} onDetail={setDetailRow} bump={bump} />}
+      {detailRow && (
+        <ContentDrawer
+          row={detailRow}
+          onClose={() => setDetailRow(null)}
+          onEdit={() => {
+            setEditRow(detailRow);
+            setDetailRow(null);
+          }}
+          onChanged={() => setBump((b) => b + 1)}
+        />
+      )}
+      {editRow && <ResourceForm resource={RESOURCE_MAP.content} row={editRow} onClose={() => setEditRow(null)} onSaved={() => setBump((b) => b + 1)} />}
       {tab === "analytics" && <ContentAnalytics />}
     </div>
   );
@@ -76,7 +92,7 @@ function usePlanStats(tick: number) {
   return useFetch<{ rows: Row[] }>(`/api/r/content?from=${f.from}&to=${f.to}${f.brand ? `&brand=${encodeURIComponent(f.brand)}` : ""}&_=${tick}`);
 }
 
-function Planning() {
+function Planning({ onDetail, bump = 0 }: { onDetail?: (row: Row) => void; bump?: number }) {
   const toast = useToast();
   const [tick, setTick] = useState(0);
   const { data } = usePlanStats(tick);
@@ -112,7 +128,8 @@ function Planning() {
         computedCols={[]}
         searchPlaceholder="Cari judul, PIC, caption…"
         defaults={{ status: "Ide", approval_status: "Menunggu review" }}
-        reloadKey={tick}
+        reloadKey={tick + bump * 1000}
+        onDetail={onDetail}
         onChanged={() => setTick((t) => t + 1)}
         selectionActions={(ids, done) => (
           <>
@@ -129,7 +146,7 @@ function Planning() {
   );
 }
 
-function Results({ openId, onOpened }: { openId?: number | null; onOpened?: () => void }) {
+function Results({ openId, onOpened, onDetail, bump = 0 }: { openId?: number | null; onOpened?: () => void; onDetail?: (row: Row) => void; bump?: number }) {
   const toast = useToast();
   const [tick, setTick] = useState(0);
   const { data } = usePlanStats(tick);
@@ -178,7 +195,8 @@ function Results({ openId, onOpened }: { openId?: number | null; onOpened?: () =
           </button>
         )}
         rowFilter={(r) => r.status !== "Cancel" && (r.status === "Posted" || String(r.post_date) <= today)}
-        reloadKey={tick}
+        reloadKey={tick + bump * 1000}
+        onDetail={onDetail}
         onChanged={() => setTick((t) => t + 1)}
       />
     </div>

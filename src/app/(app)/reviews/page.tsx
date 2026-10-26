@@ -57,10 +57,28 @@ export default function ReviewsPage() {
             </Card>
           )}
 
+          {(a?.reviewRegions.length ?? 0) > 0 && (
+            <Card title="Per wilayah" subtitle="Jumlah ulasan dan rating gabungan semua cabang di tiap wilayah">
+              <MiniTable
+                cols={[
+                  { key: "name", label: "Wilayah" },
+                  { key: "branches", label: "Cabang", format: "number" },
+                  { key: "initial", label: "Jumlah awal", format: "number" },
+                  { key: "current", label: "Sekarang", format: "number" },
+                  { key: "growth", label: "Tumbuh", format: "number" },
+                  { key: "ratingNow", label: "Rating", format: "decimal" },
+                  { key: "negative", label: "Ulasan negatif", format: "number" },
+                ]}
+                rows={a!.reviewRegions}
+              />
+            </Card>
+          )}
+
           <Card title="Perkembangan per cabang" subtitle={a ? `Periode ${fmtDate(a.period.from)} – ${fmtDate(a.period.to)}` : undefined}>
             <MiniTable
               cols={[
                 { key: "name", label: "Cabang" },
+                { key: "region", label: "Wilayah" },
                 { key: "initial", label: "Jumlah awal", format: "number" },
                 { key: "start", label: "Awal periode", format: "number" },
                 { key: "current", label: "Sekarang", format: "number" },
@@ -82,7 +100,7 @@ export default function ReviewsPage() {
             <ResourceTable
               resourceKey="review_stats"
               ignoreDate
-              quickFilters={["branch"]}
+              quickFilters={["region", "branch"]}
               defaults={{ snapshot_date: todayISO() }}
               reloadKey={tick}
               onChanged={refresh}
@@ -121,7 +139,7 @@ export default function ReviewsPage() {
               <MiniTable cols={[{ key: "date", label: "Tanggal", format: "date" }, { key: "reviewer", label: "Pengulas" }, { key: "rating", label: "Rating", format: "number" }, { key: "branch", label: "Cabang" }, { key: "comment", label: "Komentar" }]} rows={a.unanswered} />
             </Card>
           )}
-          <ResourceTable resourceKey="reviews" quickFilters={["branch", "sentiment", "responded"]} onChanged={reload} />
+          <ResourceTable resourceKey="reviews" quickFilters={["region", "branch", "sentiment", "responded"]} onChanged={reload} />
           <p className="text-[12px] text-[var(--muted)]">Total {fmtNum(k?.reviews ?? 0)} ulasan dicatat pada periode ini.</p>
         </div>
       )}

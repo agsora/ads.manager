@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Check, ChevronDown, Columns3, Download, FileDown, Pencil, Plus, Search, SlidersHorizontal, Trash2, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, Columns3, Download, Eye, FileDown, Pencil, Plus, Search, SlidersHorizontal, Trash2, Upload } from "lucide-react";
 import { MenuItem, Popover } from "./popover";
 import { RESOURCE_MAP, n, type Field, type Row } from "@/lib/resources";
 import { api, useFetch, useFilter, useMeta, useToast } from "./providers";
@@ -41,9 +41,11 @@ export interface ResourceTableProps {
   /** open this row's form as soon as possible (e.g. coming from a notification) */
   openRowId?: number | null;
   onOpened?: () => void;
+  /** when given, rows get a Rincian button and clicking a row opens the detail view (the pencil still opens the form) */
+  onDetail?: (row: Row) => void;
 }
 
-export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ignoreDate, rowFilter, defaults, onChanged, toolbar, selectionActions, importPlatform, reloadKey = 0, columns, formGroups, formTitle, allowCreate = true, searchPlaceholder, openRowId, onOpened }: ResourceTableProps) {
+export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ignoreDate, rowFilter, defaults, onChanged, toolbar, selectionActions, importPlatform, reloadKey = 0, columns, formGroups, formTitle, allowCreate = true, searchPlaceholder, openRowId, onOpened, onDetail }: ResourceTableProps) {
   const r = RESOURCE_MAP[resourceKey];
   const f = useFilter();
   const { options, session } = useMeta();
@@ -274,7 +276,7 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
               </tr>
             )}
             {shown.map((row) => (
-              <tr key={row.id} className="cursor-pointer" onClick={() => setEditing(row)}>
+              <tr key={row.id} className="cursor-pointer" onClick={() => (onDetail ? onDetail(row) : setEditing(row))}>
                 <td onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
@@ -306,6 +308,11 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
                 ))}
                 <td onClick={(e) => e.stopPropagation()}>
                   <div className="flex justify-end gap-1">
+                    {onDetail && (
+                      <button className="btn btn-sm btn-ghost" onClick={() => onDetail(row)} aria-label="Rincian">
+                        <Eye size={14} /> Rincian
+                      </button>
+                    )}
                     <button className="btn btn-sm btn-ghost !px-1.5" onClick={() => setEditing(row)} aria-label="Edit">
                       <Pencil size={14} />
                     </button>

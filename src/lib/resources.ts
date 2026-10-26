@@ -1,6 +1,8 @@
 // Single source of truth for every editable module: DB columns, form fields,
 // table columns, import header aliases and computed metrics.
 
+import { REGIONS, regionForBranch } from "./regions";
+
 export type FieldType =
   | "text"
   | "longtext"
@@ -560,6 +562,7 @@ export const RESOURCES: Resource[] = [
     fields: [
       { key: "review_date", label: "Tanggal Ulasan", type: "date", required: true },
       { key: "brand", label: "Brand", type: "brand", required: true },
+      { key: "region", label: "Wilayah", type: "select", options: "review_region", aliases: ["wilayah", "region"] },
       { key: "branch", label: "Cabang", type: "select", options: "branch", aliases: ["lokasi cabang"] },
       { key: "reviewer", label: "Nama Pengulas", type: "text" },
       { key: "rating", label: "Rating", type: "rating", required: true, aliases: ["rating⭐"] },
@@ -569,6 +572,11 @@ export const RESOURCES: Resource[] = [
       { key: "category", label: "Kategori", type: "select", options: "review_category", aliases: ["kategori komentar"] },
       { key: "follow_up", label: "Tindak Lanjut", type: "longtext", hideInTable: true, aliases: ["tindak lanjut / catatan"] },
     ],
+    // the region follows the branch name when it is not chosen explicitly
+    derive: (r) => {
+      if (!r.region) r.region = regionForBranch(r.branch);
+      return r;
+    },
   },
   {
     key: "review_stats",
@@ -585,11 +593,16 @@ export const RESOURCES: Resource[] = [
     fields: [
       { key: "snapshot_date", label: "Tanggal", type: "date", required: true },
       { key: "brand", label: "Brand", type: "brand", required: true },
+      { key: "region", label: "Wilayah", type: "select", options: "review_region", aliases: ["wilayah", "region"] },
       { key: "branch", label: "Cabang", type: "select", options: "branch" },
       { key: "total_reviews", label: "Total Ulasan", type: "number", required: true, aliases: ["jumlah ulasan", "total ulasan"] },
       { key: "avg_rating", label: "Rating Rata-rata", type: "rating", aliases: ["rating"] },
       { key: "notes", label: "Catatan (mis. jumlah awal)", type: "text" },
     ],
+    derive: (r) => {
+      if (!r.region) r.region = regionForBranch(r.branch);
+      return r;
+    },
   },
   {
     key: "influencers",
@@ -679,6 +692,7 @@ export const DEFAULT_OPTIONS: Record<string, { label: string; values: string[] }
   },
   wallet_source: { label: "Sumber Dana Saldo", values: ["Meta", "TikTok", "Google Ads", "YouTube", "WhatsApp Blast", "Influencer", "Lainnya"] },
   optout_reason: { label: "Alasan Stop", values: ["Minta berhenti", "Salah nomor", "Keluhan / marah", "Nomor tidak aktif", "Bukan nasabah", "Lainnya"] },
+  review_region: { label: "Wilayah", values: [...REGIONS] },
   creative_format: { label: "Format Kreatif", values: ["Gambar Tunggal", "Carousel", "Video Pendek", "Video Panjang", "Story", "UGC / Testimoni"] },
   creative_verdict: { label: "Keputusan Kreatif", values: ["Uji coba", "Pertahankan", "Skala (naikkan budget)", "Ulangi dengan variasi", "Hentikan"] },
   snippet_kind: { label: "Jenis Template", values: ["Caption", "Hashtag", "CTA", "Balasan WhatsApp", "Script Video", "Lainnya"] },
