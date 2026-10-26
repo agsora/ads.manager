@@ -1,14 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Loader2, SendHorizontal, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Download, FileSpreadsheet, FileText, Image as ImageIcon, Loader2, SendHorizontal, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/shell";
 import { api, useToast } from "@/components/providers";
 
+interface AiFile {
+  name: string;
+  mime: string;
+  b64?: string;
+  kind: "xlsx" | "csv" | "docx" | "pdf" | "txt" | "svg";
+}
 interface Msg {
   role: "user" | "model";
   text: string;
   steps?: string[];
+  files?: AiFile[];
 }
 interface Status {
   configured: boolean;
@@ -26,7 +33,75 @@ const SUGGESTIONS = [
   "Berapa lead HOT yang belum di-follow up lebih dari 3 hari?",
   "Bagaimana kecepatan respons chat tiap CS bulan ini?",
   "Bandingkan leads per sumber trafik 30 hari terakhir",
+  "Export leads bulan ini ke Excel",
+  "Buat grafik biaya iklan per bulan 6 bulan terakhir (gambar)",
+  "Buat laporan marketing bulan ini dalam PDF dan Word",
 ];
+
+const blobOf = (f: AiFile) => {
+  const bin = atob(f.b64 ?? "");
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: f.mime });
+};
+const save = (blob: Blob, name: string) => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+};
+/** Charts come as SVG; draw it on a canvas to hand over a PNG as well. */
+const savePng = (f: AiFile) => {
+  const url = URL.createObjectURL(blobOf(f));
+  const img = new window.Image();
+  img.onload = () => {
+    const c = document.createElement("canvas");
+    c.width = 1800;
+    c.height = 1040;
+    c.getContext("2d")?.drawImage(img, 0, 0, c.width, c.height);
+    c.toBlob((b) => b && save(b, f.name.replace(/\.svg$/, ".png")), "image/png");
+    URL.revokeObjectURL(url);
+  };
+  img.src = url;
+};
+
+function FileCard({ f }: { f: AiFile }) {
+  const gone = !f.b64;
+  const preview = useMemo(() => (f.kind === "svg" && f.b64 ? URL.createObjectURL(blobOf(f)) : null), [f]);
+  const Icon = f.kind === "svg" ? ImageIcon : f.kind === "xlsx" || f.kind === "csv" ? FileSpreadsheet : FileText;
+  const label = { xlsx: "Excel", csv: "CSV", docx: "Word", pdf: "PDF", txt: "Teks", svg: "Gambar grafik" }[f.kind];
+  return (
+    <div className="mt-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-2.5">
+      {preview && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={preview} alt={f.name} className="mb-2 w-full rounded-lg border border-[var(--line)]" />
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <Icon size={18} className="text-[var(--accent-ink)]" />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[13px] font-semibold">{f.name}</div>
+          <div className="text-[11.5px] text-[var(--muted)]">{label}{gone ? " · sudah tidak tersedia, minta AI membuatnya lagi" : ""}</div>
+        </div>
+        {!gone && (
+          <>
+            {f.kind === "svg" && (
+              <button className="btn btn-sm" onClick={() => savePng(f)}>
+                <Download size={14} /> PNG
+              </button>
+            )}
+            <button className="btn btn-sm" onClick={() => save(blobOf(f), f.name)}>
+              <Download size={14} /> {f.kind === "svg" ? "SVG" : "Unduh"}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 /** Small renderer for the model's answer: paragraphs, bullets, numbered lists, **bold**. */
 function Answer({ text }: { text: string }) {
@@ -99,7 +174,7 @@ export default function AiPage() {
   useEffect(() => {
     api<Status>("/api/ai/chat", "GET").then(setSt).catch(() => setSt(null));
     try {
-      const saved = JSON.parse(localStorage.getItem(KEY) ?? "[]");
+      const saved: Msg[] = JSON.parse(localStorage.getItem(KEY) ?? "[]");
       if (Array.isArray(saved)) setMsgs(saved.slice(-30));
     } catch {
       /* optional */
@@ -107,7 +182,7 @@ export default function AiPage() {
   }, []);
   useEffect(() => {
     try {
-      localStorage.setItem(KEY, JSON.stringify(msgs.slice(-30)));
+      localStorage.setItem(KEY, JSON.stringify(msgs.slice(-30).map((m) => (m.files ? { ...m, files: m.files.map((f) => ({ ...f, b64: undefined })) } : m)))); // file bytes stay in memory only
     } catch {
       /* optional */
     }
@@ -122,8 +197,8 @@ export default function AiPage() {
     setInput("");
     setBusy(true);
     try {
-      const r = await api<{ reply: string; steps: string[]; used: number; limit: number }>("/api/ai/chat", "POST", { messages: next.map((m) => ({ role: m.role, text: m.text })) });
-      setMsgs([...next, { role: "model", text: r.reply, steps: [...new Set(r.steps)] }]);
+      const r = await api<{ reply: string; steps: string[]; files?: AiFile[]; used: number; limit: number }>("/api/ai/chat", "POST", { messages: next.map((m) => ({ role: m.role, text: m.text })) });
+      setMsgs([...next, { role: "model", text: r.reply, steps: [...new Set(r.steps)], files: r.files }]);
       setSt((s) => (s ? { ...s, used: r.used, limit: r.limit } : s));
     } catch (e) {
       toast((e as Error).message, "err");
@@ -190,6 +265,7 @@ export default function AiPage() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <Answer text={m.text} />
+                  {m.files?.map((f, k) => <FileCard key={k} f={f} />)}
                   {m.steps && m.steps.length > 0 && <div className="mt-1.5 text-[11.5px] text-[var(--muted)]">Sumber: {m.steps.join(" · ")}</div>}
                 </div>
               </div>

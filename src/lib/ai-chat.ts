@@ -2,6 +2,7 @@ import { buildContext, GEMINI_BASE, geminiCandidates } from "./ai-advice";
 import { HttpError } from "./auth";
 import { getSetting, setSetting } from "./db";
 import { addDays, monthEnd, monthStart, todayISO } from "./format";
+import { createFile, type AiFile } from "./ai-files";
 import { listRows } from "./repo";
 import { n, RESOURCES, RESOURCE_MAP, type Resource, type Row } from "./resources";
 
@@ -159,6 +160,35 @@ export const TOOLS = [
           required: ["resource"],
         },
       },
+      {
+        name: "create_file",
+        description:
+          "Buat file untuk diunduh pengguna: Excel (xlsx), CSV, Word (docx), PDF, teks (txt), atau gambar grafik (png). Panggil ini bila pengguna meminta export, file, laporan, dokumen, tabel, atau gambar/grafik. Untuk xlsx/csv: isi 'resource' (+ filter) agar baris diambil langsung dari database, ATAU isi 'sheets' berisi angka yang sudah kamu dapat dari alat lain (jangan mengarang angka). Untuk docx/pdf/txt: isi 'content' (markdown ringan: # judul, - butir, 1. daftar, | tabel |, **tebal**). Untuk png: isi chart_type, labels, series.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            format: { ...STR, description: "xlsx, csv, docx, pdf, txt, atau png" },
+            title: { ...STR, description: "Judul/nama file" },
+            resource: { ...STR, description: "xlsx/csv: tabel database yang diexport" },
+            from: DATE,
+            to: DATE,
+            brand: STR,
+            search: STR,
+            where: { type: "OBJECT" },
+            fields: { type: "ARRAY", items: STR, description: "Kolom yang diexport; kosong berarti semua" },
+            sheets: {
+              type: "ARRAY",
+              description: "xlsx/csv: tabel hasil hitungan sendiri",
+              items: { type: "OBJECT", properties: { name: STR, columns: { type: "ARRAY", items: STR }, rows: { type: "ARRAY", items: { type: "ARRAY", items: STR } } } },
+            },
+            content: { ...STR, description: "docx/pdf/txt: isi dokumen" },
+            chart_type: { ...STR, description: "bar, line, atau pie" },
+            labels: { type: "ARRAY", items: STR },
+            series: { type: "ARRAY", items: { type: "OBJECT", properties: { name: STR, values: { type: "ARRAY", items: { type: "NUMBER" } } } } },
+          },
+          required: ["format", "title"],
+        },
+      },
     ],
   },
 ];
@@ -178,7 +208,8 @@ Hari ini ${todayISO()}. Bulan berjalan ${monthStart(todayISO())} sampai ${monthE
 
 Cara bekerja:
 - Untuk angka, JANGAN menebak. Panggil alat get_overview, aggregate, atau query_rows, lalu jawab dari hasilnya. Boleh memanggil beberapa alat berurutan.
-- Kamu hanya bisa MEMBACA. Kamu tidak bisa mengubah, menambah, atau menghapus data; kalau diminta, jelaskan langkah yang bisa dilakukan pengguna di aplikasi.
+- Kamu hanya bisa MEMBACA data. Kamu tidak bisa mengubah, menambah, atau menghapus data; kalau diminta, jelaskan langkah yang bisa dilakukan pengguna di aplikasi.
+- Bila pengguna meminta export, file, Excel, CSV, Word, PDF, laporan, atau gambar/grafik, panggil alat create_file (jangan hanya menempelkan isinya di chat). Untuk laporan atau grafik, ambil angkanya dulu dengan alat baca, lalu buat filenya. Setelah file dibuat, katakan singkat apa isinya; tombol unduh muncul otomatis, jangan menulis link.
 - Sebutkan periode dan sumber angka dalam jawaban. Kalau data kosong atau tidak cukup, katakan terus terang.
 - ${pii ? "Nama dan nomor nasabah tersedia, tapi tampilkan seperlunya saja." : "Nama dan nomor nasabah disamarkan (inisial, tiga digit terakhir). Jangan mencoba menebak identitas asli."}
 - Saran harus spesifik: siapa, melakukan apa, angka apa yang dipantau. Ini industri yang diawasi OJK: jangan menyarankan klaim seperti pasti cair atau tanpa survei.
@@ -204,9 +235,9 @@ export interface ChatTurn {
   text: string;
 }
 
-const STEP_LABEL: Record<string, string> = { get_overview: "Membaca ringkasan marketing", query_rows: "Membaca baris data", aggregate: "Menghitung agregat" };
+const STEP_LABEL: Record<string, string> = { get_overview: "Membaca ringkasan marketing", query_rows: "Membaca baris data", aggregate: "Menghitung agregat", create_file: "Membuat file" };
 
-export async function chat(orgId: number, history: ChatTurn[]): Promise<{ reply: string; steps: string[] }> {
+export async function chat(orgId: number, history: ChatTurn[]): Promise<{ reply: string; steps: string[]; files: AiFile[] }> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new HttpError(503, "Obrolan AI memakai Gemini: GEMINI_API_KEY belum dipasang di server.");
   const used = await chatUsedToday(orgId);
@@ -219,10 +250,11 @@ export async function chat(orgId: number, history: ChatTurn[]): Promise<{ reply:
 
   const started = Date.now();
   const steps: string[] = [];
+  const files: AiFile[] = [];
   let modelIdx = 0;
   for (let step = 0; step < MAX_STEPS; step++) {
     const remainingAtStart = BUDGET_MS - (Date.now() - started);
-    if (remainingAtStart < 6000) return { reply: "Pertanyaannya butuh waktu lebih lama dari batas yang saya punya. Coba persempit, misalnya satu cabang atau satu periode.", steps };
+    if (remainingAtStart < 6000) return { reply: "Pertanyaannya butuh waktu lebih lama dari batas yang saya punya. Coba persempit, misalnya satu cabang atau satu periode.", steps, files };
     let res: Response | null = null;
     for (; modelIdx < models.length; modelIdx++) {
       try {
@@ -267,7 +299,7 @@ export async function chat(orgId: number, history: ChatTurn[]): Promise<{ reply:
       const reply = parts.map((p) => p.text ?? "").join("").trim();
       if (!reply) throw new HttpError(502, "AI tidak memberi jawaban. Coba ulangi pertanyaannya.");
       await setSetting(`ai:chat:${orgId}:${todayISO()}`, String(used + 1));
-      return { reply, steps };
+      return { reply, steps, files };
     }
     // echo the model turn back unchanged (it carries signatures the API needs), then answer each call
     contents.push({ role: "model", parts });
@@ -275,10 +307,20 @@ export async function chat(orgId: number, history: ChatTurn[]): Promise<{ reply:
     for (const p of calls) {
       const fc = p.functionCall!;
       steps.push(STEP_LABEL[fc.name] ?? fc.name);
-      const result = await runTool(orgId, fc.name, fc.args ?? {}, pii);
+      let result: unknown;
+      if (fc.name === "create_file") {
+        try {
+          if (files.length >= 3) throw new Error("Maksimal 3 file per jawaban");
+          const f = await createFile(orgId, fc.args ?? {});
+          files.push(f);
+          result = { ok: true, file_name: f.name, note: "File sudah dibuat dan tombol unduh tampil untuk pengguna." };
+        } catch (e) {
+          result = { error: e instanceof Error ? e.message : String(e) };
+        }
+      } else result = await runTool(orgId, fc.name, fc.args ?? {}, pii);
       responses.push({ functionResponse: { name: fc.name, response: { result } } });
     }
     contents.push({ role: "user", parts: responses });
   }
-  return { reply: "Saya sudah membaca banyak data tapi belum sampai pada jawaban. Coba pertanyaan yang lebih spesifik.", steps };
+  return { reply: "Saya sudah membaca banyak data tapi belum sampai pada jawaban. Coba pertanyaan yang lebih spesifik.", steps, files };
 }
