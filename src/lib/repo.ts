@@ -77,6 +77,7 @@ export function validate(r: Resource, data: Record<string, unknown>): string | n
     if (typeof v === "number" && ["number", "money", "percent", "rating"].includes(f.type)) {
       if (Math.abs(v) > 1e13) return `${f.label} terlalu besar`;
       if (v < 0 && !MAY_BE_NEGATIVE.has(f.key)) return `${f.label} tidak boleh negatif`;
+      if (f.type === "rating" && (v < 0 || v > 5)) return `${f.label} harus antara 0,0 dan 5,0`;
     }
   }
   return null;

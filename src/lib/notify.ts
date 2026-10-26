@@ -3,7 +3,7 @@ import { appUrl, emailEnabled, renderEmail, sendEmails, type EmailSection } from
 
 /** Email categories a user can switch off. In-app notifications are always kept. */
 export const CATEGORIES = {
-  content: { label: "Content plan", desc: "Rencana konten baru, diedit, dihapus, approval & revisi", emailDefault: true },
+  content: { label: "Content plan", desc: "Rencana konten baru, diedit, dihapus, approval & revisi, dan pengingat cek performa tiap 7 hari setelah tayang", emailDefault: true },
   alerts: { label: "Peringatan penting", desc: "Lead HOT baru, konten terlewat jadwal, saldo iklan menipis, ulasan negatif", emailDefault: true },
   digest: { label: "Ringkasan harian (08.00 WIB)", desc: "Jadwal konten hari ini, approval tertunda, follow up jatuh tempo, insight kritis", emailDefault: true },
   weekly: { label: "Laporan mingguan (Senin)", desc: "Ringkasan 7 hari + lampiran Excel laporan lengkap", emailDefault: true },

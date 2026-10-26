@@ -5,6 +5,7 @@ import { appUrl, emailEnabled, renderEmail, sendEmails, type EmailSection } from
 import { notify, orgUsers, wantsEmail } from "./notify";
 import { refreshContentMetrics } from "./metrics-sync";
 import { aiConfigured, generateAdvice, lastAdvice } from "./ai-advice";
+import { runContentChecks } from "./content-checks";
 import { driveEnabled, saveFileRecord, uploadFromServer } from "./drive";
 import { addDays, fmtDate, fmtMoney, fmtNum, fmtPct, monthEnd, monthStart, todayISO } from "./format";
 import type { Row } from "./resources";
@@ -54,6 +55,9 @@ export async function runDaily(orgId: number, opts: { force?: boolean; weekly?: 
   const lowWallets = a.wallets.filter((w) => w.closing < 0 || (w.daysLeft !== null && w.daysLeft < 7));
   const negative = a.unanswered.filter((u) => u.rating > 0 && u.rating <= 3);
   const critical = a.insights.filter((i) => i.level === "critical");
+
+  // ---- 7-day performance checks for posted content (one notification per content)
+  const checks = await runContentChecks(orgId, today).catch((e) => (console.error("content checks", e instanceof Error ? e.message : e), { sent: 0, due: [] as { id: number; title: string; days: number; line: string }[] }));
 
   // ---- in-app alerts (one per topic per day; email goes out in the digest instead)
   let alerts = 0;
@@ -119,6 +123,7 @@ export async function runDaily(orgId: number, opts: { force?: boolean; weekly?: 
     if (a.followUps.length) sections.push({ title: `Follow up jatuh tempo (${a.followUps.length})`, items: a.followUps.slice(0, 10).map((f) => `${f.segment ?? "-"} · ${f.name} · ${f.age} hari · FU${f.stage > 3 ? "✓" : f.stage}`) });
     if (lowWallets.length) sections.push({ title: "Saldo iklan menipis", items: lowWallets.map((w) => `${w.brand} · ${w.platform}: ${fmtMoney(w.closing)}`) });
     if (negative.length) sections.push({ title: "Ulasan negatif belum dibalas", items: negative.map((n) => `${n.reviewer ?? "Anonim"} (${n.rating}★) — ${String(n.comment ?? "").slice(0, 80)}`) });
+    if (checks.due.length) sections.push({ title: `Cek performa konten, kelipatan 7 hari (${checks.due.length})`, items: checks.due.map((d) => `Hari ke-${d.days}: ${d.line}`) });
     const advToday = await lastAdvice(orgId);
     if (advToday && advToday.at.slice(0, 10) === today)
       sections.push({ title: "Saran AI hari ini", items: [advToday.advice.ringkasan, ...advToday.advice.saran.slice(0, 3).map((x) => `[${x.prioritas}] ${x.judul} — ${x.langkah[0] ?? ""}`)] });
@@ -192,6 +197,6 @@ export async function runDaily(orgId: number, opts: { force?: boolean; weekly?: 
     if (res.sent) await notify({ orgId, category: "weekly", title: "Laporan mingguan terkirim", body: `Dikirim ke ${res.sent} email (owner/admin).`, link: "/reports", skipActor: false, userIds: managers.map((m) => m.id) });
   }
 
-  await logActivity(orgId, "Otomasi", "Otomasi harian", `${synced.updated} metrik konten diperbarui · ${closed.length} campaign ditutup · ${alerts} peringatan · ${digestEmails} digest · ${weeklyEmails} laporan mingguan${emailProblem ? ` · email ditolak: ${emailProblem.replace(/\s+/g, " ").slice(0, 160)}` : ""}`);
+  await logActivity(orgId, "Otomasi", "Otomasi harian", `${synced.updated} metrik konten diperbarui · ${closed.length} campaign ditutup · ${alerts} peringatan · ${checks.sent} cek performa konten · ${digestEmails} digest · ${weeklyEmails} laporan mingguan${emailProblem ? ` · email ditolak: ${emailProblem.replace(/\s+/g, " ").slice(0, 160)}` : ""}`);
   return { orgId, closedCampaigns: closed.length, alerts, digestEmails, weeklyEmails };
 }

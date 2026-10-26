@@ -1,7 +1,7 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { RESOURCES, type FieldType } from "./resources";
 
-const SCHEMA_VERSION = "16";
+const SCHEMA_VERSION = "17";
 
 // Keep DATE/TIMESTAMP as raw strings (no timezone shifting) and NUMERIC/INT8 as numbers.
 const RAW = (v: string) => v;
@@ -132,6 +132,8 @@ export function schemaStatements(): string[] {
     for (const f of r.fields) s.push(`ALTER TABLE ${r.table} ADD COLUMN IF NOT EXISTS ${f.key} ${colType(f.type)}`);
     s.push(`CREATE INDEX IF NOT EXISTS ${r.table}_org_date ON ${r.table} (org_id, ${r.dateField})`);
   }
+  // who entered a content plan, so its 7-day performance reminders reach that person
+  s.push(`ALTER TABLE content_plans ADD COLUMN IF NOT EXISTS created_by int`);
   return s;
 }
 

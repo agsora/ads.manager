@@ -98,7 +98,24 @@ export function FieldInput({ f, value, onChange }: { f: Field; value: string; on
   if (f.type === "longtext") return <textarea {...common} rows={3} />;
   if (f.type === "date") return <input {...common} type="date" />;
   if (f.type === "time") return <input {...common} type="time" />;
-  if (f.type === "rating") return <input {...common} type="number" min={1} max={5} step={0.5} />;
+  if (f.type === "rating")
+    // plain text so both "4.6" and "4,6" can be typed; only digits and one separator are kept, and the value never exceeds 5.0
+    return (
+      <input
+        {...common}
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        placeholder="0.0 – 5.0, mis. 4.6"
+        onChange={(e) => {
+          let v = e.target.value.replace(",", ".").replace(/[^0-9.]/g, "");
+          const dot = v.indexOf(".");
+          if (dot >= 0) v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, "").slice(0, 2);
+          if (Number(v) > 5) v = "5.0";
+          onChange(v);
+        }}
+      />
+    );
   if (["number", "money", "percent"].includes(f.type))
     return <input {...common} type="number" step="any" inputMode="decimal" placeholder={f.type === "money" ? "Rp" : f.type === "percent" ? "%" : ""} />;
   if (f.type === "url") return <input {...common} type="url" placeholder="https://" />;
