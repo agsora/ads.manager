@@ -104,6 +104,24 @@ function matchHeader(r: Resource, header: unknown[]) {
   return best;
 }
 
+/** Every column that could feed each field, best match first (a field can match several headers). */
+function matchCandidates(r: Resource, header: unknown[]) {
+  const all = new Map<string, { col: number; score: number }[]>();
+  header.forEach((h, col) => {
+    const t = norm(h);
+    if (!t) return;
+    for (const f of r.fields) {
+      let score = 0;
+      if (t === norm(f.label) || t === f.key) score = 3;
+      else if ((f.aliases ?? []).some((a) => norm(a) === t)) score = 2;
+      else if (norm(f.label).length > 4 && (t.startsWith(norm(f.label)) || (f.aliases ?? []).some((a) => norm(a).length > 5 && t.startsWith(norm(a))))) score = 1;
+      if (score) all.set(f.key, [...(all.get(f.key) ?? []), { col, score }]);
+    }
+  });
+  for (const list of all.values()) list.sort((x, y) => y.score - x.score);
+  return all;
+}
+
 export interface ParsedSheet {
   sheet: string;
   resource: Resource;
@@ -138,6 +156,24 @@ export function parseSheet(sheet: Sheet, r: Resource, defaultBrand?: string | nu
     }
   }
   if (subUsed) dataStart++;
+
+  // Meta exports can carry an empty "Mulai"/"Berakhir" column next to the real daily "Tanggal": when the best-matching
+  // column holds no data at all, use another column that matches the same field and does.
+  {
+    const filled = (col: number) => {
+      for (let i = dataStart; i < sheet.rows.length; i++) {
+        const v = sheet.rows[i]?.[col];
+        if (v !== null && v !== undefined && String(v).trim() !== "") return true;
+      }
+      return false;
+    };
+    const cands = matchCandidates(r, sheet.rows[headerIdx] ?? []);
+    for (const [key, cur] of [...bestMap]) {
+      if (filled(cur.col)) continue;
+      const alt = (cands.get(key) ?? []).find((c) => c.col !== cur.col && filled(c.col));
+      if (alt) bestMap.set(key, alt);
+    }
+  }
 
   // The Marketing Report template has "Klik tautan" and "CPC" values swapped in practice:
   // clicks are whole numbers, CPC usually has decimals. Detect the CPC column to repair rows.
