@@ -10,6 +10,16 @@ const getRow = async (org: number, r: Resource, id: number) => (await q<Row>(`SE
 
 type Ctx = { params: Promise<{ resource: string; id: string }> };
 
+export const GET = handle(async (_req: Request, ctx: Ctx) => {
+  const s = await requireSession();
+  const p = await ctx.params;
+  const r = getResource(p.resource);
+  if (!r) throw new HttpError(404, "Modul tidak ditemukan");
+  const row = await getRow(s.org, r, Number(p.id));
+  if (!row) throw new HttpError(404, "Data tidak ditemukan");
+  return NextResponse.json({ row });
+});
+
 export const PUT = handle(async (req: Request, ctx: Ctx) => {
   const s = await requireSession();
   const p = await ctx.params;

@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { BarChart3, CalendarDays, Check, Link2, ChevronLeft, ChevronRight, ClipboardList, PieChart, Plus, RotateCcw } from "lucide-react";
 import { PageHeader } from "@/components/shell";
 import { ResourceTable } from "@/components/resource-table";
@@ -18,8 +19,23 @@ const MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", 
 const DAYS = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 const STATUS_DOT: Record<string, string> = { Posted: "var(--good)", Scheduled: "var(--s2)", Produksi: "var(--s5)", Review: "var(--s5)", Draft: "#c3c2b7", Ide: "#c3c2b7", Cancel: "var(--critical)" };
 
+/** Reads ?hasil=<id> (from a performance-check notification), then tells the page to open that content's results form. */
+function LinkOpener({ onOpen }: { onOpen: (id: number) => void }) {
+  const sp = useSearchParams();
+  const router = useRouter();
+  const id = Number(sp.get("hasil"));
+  useEffect(() => {
+    if (!id) return;
+    onOpen(id);
+    router.replace("/content"); // so a refresh does not reopen it
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+  return null;
+}
+
 export default function ContentPage() {
   const [tab, setTab] = useState<"calendar" | "plan" | "results" | "analytics">("calendar");
+  const [openId, setOpenId] = useState<number | null>(null);
   const tabs = [
     { key: "calendar", label: "Kalender", icon: CalendarDays },
     { key: "plan", label: "Planning", icon: ClipboardList },
@@ -38,7 +54,15 @@ export default function ContentPage() {
       </div>
       {tab === "calendar" && <Calendar />}
       {tab === "plan" && <Planning />}
-      {tab === "results" && <Results />}
+      <Suspense fallback={null}>
+        <LinkOpener
+          onOpen={(id) => {
+            setTab("results");
+            setOpenId(id);
+          }}
+        />
+      </Suspense>
+      {tab === "results" && <Results openId={openId} onOpened={() => setOpenId(null)} />}
       {tab === "analytics" && <ContentAnalytics />}
     </div>
   );
@@ -105,7 +129,7 @@ function Planning() {
   );
 }
 
-function Results() {
+function Results({ openId, onOpened }: { openId?: number | null; onOpened?: () => void }) {
   const toast = useToast();
   const [tick, setTick] = useState(0);
   const { data } = usePlanStats(tick);
@@ -131,6 +155,8 @@ function Results() {
         columns={RESULT_COLUMNS}
         formGroups={["Hasil"]}
         formTitle="Input hasil konten"
+        openRowId={openId}
+        onOpened={onOpened}
         allowCreate={false}
         quickFilters={["channel", "status"]}
         computedCols={["result_state", "er", "on_time"]}

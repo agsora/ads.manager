@@ -62,7 +62,7 @@ export async function runContentChecks(orgId: number, today: string): Promise<{ 
       category: "content",
       title: `Cek performa konten (hari ke-${days}): ${r.title}`,
       body: `Tayang ${fmtDate(base)} di ${r.channel ?? "-"}. ${empty ? "Hasil belum diisi: buka Content Plan → Hasil, isi followers, reach, like, dan comment (atau tempel link postingan agar terisi otomatis)." : `Sekarang: ${figures}. Perbarui angkanya di Content Plan → Hasil bila sudah berubah.`}`,
-      link: "/content",
+      link: `/content?hasil=${r.id}`, // opens that content's results form (likes, reach, comments, followers)
       userIds: to,
       skipActor: false,
     });

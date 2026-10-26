@@ -38,9 +38,12 @@ export interface ResourceTableProps {
   formTitle?: string;
   allowCreate?: boolean;
   searchPlaceholder?: string;
+  /** open this row's form as soon as possible (e.g. coming from a notification) */
+  openRowId?: number | null;
+  onOpened?: () => void;
 }
 
-export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ignoreDate, rowFilter, defaults, onChanged, toolbar, selectionActions, importPlatform, reloadKey = 0, columns, formGroups, formTitle, allowCreate = true, searchPlaceholder }: ResourceTableProps) {
+export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ignoreDate, rowFilter, defaults, onChanged, toolbar, selectionActions, importPlatform, reloadKey = 0, columns, formGroups, formTitle, allowCreate = true, searchPlaceholder, openRowId, onOpened }: ResourceTableProps) {
   const r = RESOURCE_MAP[resourceKey];
   const f = useFilter();
   const { options, session } = useMeta();
@@ -70,6 +73,18 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
   if (debounced) params.set("q", debounced);
   const qs = params.toString();
   const { data, loading, error, reload } = useFetch<{ rows: Row[] }>(`/api/r/${resourceKey}?${qs}&_=${reloadKey}`);
+  // open one row's form on request; fetch it directly because it may sit outside the current date filter
+  useEffect(() => {
+    if (!openRowId) return;
+    let alive = true;
+    api<{ row: Row }>(`/api/r/${resourceKey}/${openRowId}`, "GET")
+      .then((j) => alive && (setEditing(j.row), onOpened?.()))
+      .catch(() => alive && onOpened?.());
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openRowId, resourceKey]);
   const refresh = () => {
     reload();
     onChanged?.();
