@@ -652,6 +652,7 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
         const withPoint = [...sorted].reverse().find((x) => x.lat !== null && x.lat !== undefined && x.lng !== null && x.lng !== undefined);
         return withPoint ? { lat: n(withPoint.lat), lng: n(withPoint.lng), approx: false } : coordsForBranch(bBranch);
       })(),
+      recapId: lastAny?.id ? Number(lastAny.id) : null,
       mapsLink: String([...sorted].reverse().find((x) => x.maps_link)?.maps_link ?? "") || null,
       lastDate: lastAny?.snapshot_date ? String(lastAny.snapshot_date).slice(0, 10) : null,
       daysSince: lastAny?.snapshot_date ? diffDays(String(lastAny.snapshot_date).slice(0, 10), today) : null,

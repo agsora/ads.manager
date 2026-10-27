@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ExternalLink, MapPin, RefreshCw } from "lucide-react";
+import { ExternalLink, MapPin, Pencil, RefreshCw } from "lucide-react";
+import { PointDialog } from "@/components/point-dialog";
 import { PageHeader } from "@/components/shell";
 import { ResourceTable } from "@/components/resource-table";
 import { ResourceForm } from "@/components/resource-form";
@@ -25,6 +26,7 @@ export default function ReviewsPage() {
   const k = a?.kpis.reviews;
   const p = a?.prevKpis.reviews;
   const growth = useMemo(() => a?.reviewGrowth ?? [], [a]);
+  const [pointFor, setPointFor] = useState<(typeof growth)[number] | null>(null); // branch whose exact map point is being typed
   const totalNow = growth.reduce((s, g) => s + g.current, 0);
   const totalStart = growth.reduce((s, g) => s + g.start, 0);
   const totalInitial = growth.reduce((s, g) => s + g.initial, 0);
@@ -122,6 +124,7 @@ export default function ReviewsPage() {
                       <th className="num">Rating</th>
                       <th>Terakhir dicatat</th>
                       <th>Google Maps</th>
+                      <th>Titik peta</th>
                       <th />
                     </tr>
                   </thead>
@@ -156,6 +159,16 @@ export default function ReviewsPage() {
                                 <MapPin size={13} /> + tambah link
                               </button>
                             )}
+                          </td>
+                          <td>
+                            <button className="inline-flex items-center gap-1 text-left hover:text-[var(--accent-ink)]" onClick={() => setPointFor(g)} title="Atur titik cabang di peta">
+                              {g.point && !g.point.approx ? (
+                                <span className="tnum text-[12px]">{g.point.lat.toFixed(4)}, {g.point.lng.toFixed(4)}</span>
+                              ) : (
+                                <span className="chip !bg-[#f8eed6] !text-[var(--warning-ink)]">{g.point ? "perkiraan" : "belum ada"}</span>
+                              )}
+                              <Pencil size={11} className="opacity-60" />
+                            </button>
                           </td>
                           <td className="text-right">
                             <button className="btn btn-sm" onClick={() => openRecap(g)} title="Catat total ulasan dan rating terbaru untuk cabang ini">
@@ -226,12 +239,19 @@ export default function ReviewsPage() {
           )}
           {approxCount > 0 && (
             <p className="text-[12.5px] leading-relaxed text-[var(--ink-2)]">
-              <b>{approxCount} titik masih perkiraan</b> (pusat kota, tampak lebih pudar). Isi <b>Link Google Maps cabang</b> di rekap agar titiknya tepat; titik dibaca otomatis dari link, atau isi latitude dan longitude secara manual.
+              <b>{approxCount} titik masih perkiraan</b> (pusat kota, tampak lebih pudar). Isi <b>Link Google Maps cabang</b> agar dibaca otomatis, atau klik cabangnya untuk mengisi latitude dan longitude sendiri:
+              <span className="mt-1.5 flex flex-wrap gap-1.5">
+                {growth.filter((g) => g.point?.approx).map((g) => (
+                  <button key={g.name} className="chip hover:!bg-[var(--accent-soft)]" onClick={() => setPointFor(g)}>
+                    <Pencil size={10} className="mr-1" /> {g.branch || g.brand}
+                  </button>
+                ))}
+              </span>
             </p>
           )}
           {noPoint.length > 0 && (
             <p className="text-[12.5px] leading-relaxed text-[var(--ink-2)]">
-              Belum punya titik: <b>{noPoint.map((g) => g.branch || g.brand).join(", ")}</b>. Namanya tidak dikenali, jadi tambahkan link Google Maps atau koordinatnya.
+              Belum punya titik: <b>{noPoint.map((g) => g.branch || g.brand).join(", ")}</b>. Namanya tidak dikenali, jadi tambahkan link Google Maps atau isi koordinatnya lewat tabel Per cabang (kolom Titik peta).
             </p>
           )}
         </div>
@@ -271,6 +291,7 @@ export default function ReviewsPage() {
         </div>
       )}
       {recap && <ResourceForm resource={RESOURCE_MAP.review_stats} row={null} defaults={recap} onClose={() => setRecap(null)} onSaved={() => (setRecap(null), refresh())} />}
+      {pointFor && <PointDialog name={pointFor.branch || pointFor.brand || pointFor.name} recapId={pointFor.recapId} current={pointFor.point && !pointFor.point.approx ? { lat: pointFor.point.lat, lng: pointFor.point.lng } : null} onClose={() => setPointFor(null)} onSaved={refresh} />}
     </div>
   );
 }
