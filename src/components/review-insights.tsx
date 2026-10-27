@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { AlertTriangle, CircleCheck, Compass } from "lucide-react";
 import { BarList, Card } from "./charts";
 import { ratingColor } from "./branch-map";
@@ -38,6 +38,9 @@ const BANDS = [
 
 /** What an owner wants from review data: where we stand, which branches drag the rating down, which regions differ. */
 export function ReviewInsights({ growth, regions, loggedStars }: { growth: BranchRating[]; regions: RegionRating[]; loggedStars: { name: string; value: number }[] }) {
+  const many = growth.length > 14;
+  const [view, setView] = useState<"low" | "high" | "all" | null>(null);
+  const [openBands, setOpenBands] = useState<Record<number, boolean>>({});
   const m = useMemo(() => {
     const rated = growth.filter((g) => g.ratingNow);
     const unrated = growth.filter((g) => !g.ratingNow);
@@ -65,7 +68,13 @@ export function ReviewInsights({ growth, regions, loggedStars }: { growth: Branc
 
   // ---- chart data
   const bandData = [...BANDS.map((b) => ({ key: String(b.star), name: `${b.star} bintang`, value: m.rated.filter((g) => b.test(g.ratingNow ?? 0)).length })), { key: "none", name: "Belum ada rating", value: m.unrated.length }];
-  const barData = m.sorted.map((g) => ({ name: label(g), rating: g.ratingNow ?? 0, reviews: g.current }));
+  const barAll = m.sorted.map((g) => ({ name: label(g), rating: g.ratingNow ?? 0, reviews: g.current }));
+  const mode = view ?? (many ? "low" : "all");
+  const barData = mode === "low" ? [...barAll].reverse().slice(0, 10) : mode === "high" ? barAll.slice(0, 10) : barAll;
+  // with many branches only the ones that matter get a name on the bubble map
+  const labeled = many
+    ? [...m.drag.slice(0, 5).map((x) => label(x.g))]
+    : barAll.map((d) => d.name);
   const regionData = [...m.regionRated]
     .sort((x, y) => (y.ratingNow ?? 0) - (x.ratingNow ?? 0))
     .map((r) => {
@@ -75,6 +84,7 @@ export function ReviewInsights({ growth, regions, loggedStars }: { growth: Branc
       return { name: r.name, rating: r.ratingNow ?? 0, branches: r.branches, reviews: r.current, low: inRegion.length > 1 && low ? `${label(low)} ${r1(low.ratingNow ?? 0)}` : undefined, high: inRegion.length > 1 && high ? `${label(high)} ${r1(high.ratingNow ?? 0)}` : undefined };
     });
   const changeData = m.rated.filter((g) => g.ratingChange).map((g) => ({ name: label(g), change: Math.round((g.ratingChange ?? 0) * 10) / 10 })).filter((d) => d.change).sort((x, y) => y.change - x.change);
+  const changeShown = changeData.length > 12 ? [...changeData.slice(0, 6), ...changeData.slice(-6)] : changeData;
 
   // ---- conclusions an owner can act on
   const good: string[] = [];
@@ -132,8 +142,26 @@ export function ReviewInsights({ growth, regions, loggedStars }: { growth: Branc
             ))}
           </div>
         </Card>
-        <Card title="Rating semua cabang" subtitle="Terbaik ke terendah; garis hijau putus-putus adalah target 4,5★">
-          {barData.length ? <BranchRatingBars data={barData} /> : <p className="py-6 text-center text-[13px] text-[var(--muted)]">Belum ada rating tercatat.</p>}
+        <Card
+          title="Rating cabang"
+          subtitle={mode === "low" ? "10 cabang dengan rating terendah (tangani dulu)" : mode === "high" ? "10 cabang dengan rating tertinggi" : `Semua ${barAll.length} cabang, terbaik ke terendah`}
+          action={
+            many ? (
+              <div className="tabs !p-0.5">
+                {([["low", "Terendah"], ["high", "Tertinggi"], ["all", `Semua ${barAll.length}`]] as const).map(([k, t]) => (
+                  <button key={k} className="tab !h-7 !px-2.5 !text-[12px]" data-on={mode === k} onClick={() => setView(k)}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+            ) : undefined
+          }
+        >
+          {barData.length ? (
+            <div className={mode === "all" && barData.length > 14 ? "max-h-[520px] overflow-y-auto pr-1" : ""}>
+              <BranchRatingBars data={barData} />
+            </div>
+          ) : <p className="py-6 text-center text-[13px] text-[var(--muted)]">Belum ada rating tercatat.</p>}
         </Card>
       </div>
 
@@ -157,11 +185,16 @@ export function ReviewInsights({ growth, regions, loggedStars }: { growth: Branc
                   </div>
                   {list.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {list.map((g) => (
+                      {(openBands[b.star] || list.length <= 10 ? list : list.slice(0, 10)).map((g) => (
                         <span key={g.name} className="chip" title={`${g.name} · ${fmtNum(g.current)} ulasan`}>
                           {label(g)} <b className="ml-1">{r1(g.ratingNow ?? 0)}</b>
                         </span>
                       ))}
+                      {list.length > 10 && (
+                        <button className="chip !bg-transparent font-semibold !text-[var(--accent-ink)] underline" onClick={() => setOpenBands((o) => ({ ...o, [b.star]: !o[b.star] }))}>
+                          {openBands[b.star] ? "Ringkas" : `+${list.length - 10} lainnya`}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -183,7 +216,7 @@ export function ReviewInsights({ growth, regions, loggedStars }: { growth: Branc
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <Card title="Peta prioritas" subtitle="Kanan = banyak ulasan, bawah = rating rendah. Cabang di area merah paling menekan rating gabungan; tangani dulu">
-          {barData.length ? <ImpactScatter data={barData} /> : <p className="py-6 text-center text-[13px] text-[var(--muted)]">Belum ada rating tercatat.</p>}
+          {barData.length ? <ImpactScatter data={barAll} labeled={labeled} tall={many} /> : <p className="py-6 text-center text-[13px] text-[var(--muted)]">Belum ada rating tercatat.</p>}
         </Card>
         <Card title="Rating per wilayah" subtitle="Rata-rata tertimbang jumlah ulasan; arahkan kursor untuk cabang terendah dan tertinggi">
           {regionData.length ? <RegionColumns data={regionData} /> : <p className="py-6 text-center text-[13px] text-[var(--muted)]">Belum ada rating per wilayah.</p>}
@@ -191,8 +224,8 @@ export function ReviewInsights({ growth, regions, loggedStars }: { growth: Branc
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Perubahan rating" subtitle="Naik atau turun sejak awal periode (hanya cabang yang berubah)">
-          {changeData.length ? <ChangeBars data={changeData} /> : <p className="py-6 text-center text-[13px] text-[var(--muted)]">Belum ada perubahan rating di periode ini. Catat ulang rekap cabang agar terlihat.</p>}
+        <Card title="Perubahan rating" subtitle={changeData.length > 12 ? "Enam naik terbesar dan enam turun terbesar sejak awal periode" : "Naik atau turun sejak awal periode (hanya cabang yang berubah)"}>
+          {changeData.length ? <ChangeBars data={changeShown} /> : <p className="py-6 text-center text-[13px] text-[var(--muted)]">Belum ada perubahan rating di periode ini. Catat ulang rekap cabang agar terlihat.</p>}
         </Card>
         <Card title="Pertambahan ulasan" subtitle="Cabang dengan ulasan baru terbanyak di periode ini">
           {m.grew.length ? <BarList items={m.grew.slice(0, 8).map((g) => ({ name: label(g), value: g.growth }))} /> : <p className="py-6 text-center text-[13px] text-[var(--muted)]">Belum ada pertambahan di periode ini. Catat ulang rekap cabang agar terlihat.</p>}

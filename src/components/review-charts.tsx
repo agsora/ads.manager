@@ -76,13 +76,13 @@ export function BranchRatingBars({ data }: { data: { name: string; rating: numbe
 }
 
 /** Bubble map of impact: right = many reviews, down = low rating. Bottom right (red zone) is where to act first. */
-export function ImpactScatter({ data }: { data: { name: string; rating: number; reviews: number }[] }) {
+export function ImpactScatter({ data, labeled, tall }: { data: { name: string; rating: number; reviews: number }[]; labeled?: string[]; tall?: boolean }) {
   const maxR = Math.max(10, ...data.map((d) => d.reviews));
   const sorted = [...data].map((d) => d.reviews).sort((a, b) => a - b);
   const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
   const minRating = Math.max(0, Math.floor(Math.min(...data.map((d) => d.rating), 4) * 2) / 2 - 0.5);
   return (
-    <div className="h-[340px]">
+    <div className={tall ? "h-[420px]" : "h-[340px]"}>
       <ResponsiveContainer width="100%" height="100%">
         <ScatterChart margin={{ left: 0, right: 16, top: 12, bottom: 18 }}>
           <CartesianGrid stroke={GRID} />
@@ -96,7 +96,7 @@ export function ImpactScatter({ data }: { data: { name: string; rating: number; 
             {data.map((d) => (
               <Cell key={d.name} fill={ratingColor(d.rating)} stroke="#fff" strokeWidth={2} />
             ))}
-            <LabelList dataKey="name" position="top" style={{ fontSize: 10.5, fill: "#3a3a36" }} />
+            <LabelList dataKey="name" position="top" style={{ fontSize: 10.5, fill: "#3a3a36" }} formatter={(v: unknown) => (!labeled || labeled.includes(String(v)) ? String(v) : "")} />
           </Scatter>
         </ScatterChart>
       </ResponsiveContainer>
