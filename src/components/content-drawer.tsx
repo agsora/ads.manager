@@ -63,7 +63,7 @@ export function ContentDrawer({ row, onClose, onEdit, onChanged }: { row: Row; o
       setSaving(false);
     }
   };
-  const pull = async () => {
+  const pull = async (quiet = false) => {
     setPulling(true);
     try {
       // save a freshly typed link first, then read the numbers from it
@@ -72,10 +72,10 @@ export function ContentDrawer({ row, onClose, onEdit, onChanged }: { row: Row; o
       const j = await api<{ row: Row }>(`/api/r/content/${row.id}`, "GET");
       setCur(j.row);
       setRes(fromRow(j.row));
-      toast(r.updated ? "Angka ditarik dari link postingan" : r.failed[0]?.message ?? "Tidak ada angka baru", r.updated ? "ok" : "err");
+      if (!quiet || !r.updated) toast(r.updated ? "Angka ditarik dari link postingan" : r.failed[0]?.message ?? "Tidak ada angka baru", r.updated ? "ok" : "err");
       if (r.updated) onChanged();
     } catch (e) {
-      toast((e as Error).message, "err");
+      if (!quiet) toast((e as Error).message, "err");
     } finally {
       setPulling(false);
     }
@@ -117,6 +117,13 @@ export function ContentDrawer({ row, onClose, onEdit, onChanged }: { row: Row; o
   useEffect(() => {
     loadFiles();
   }, [loadFiles]);
+
+  // opening a posted content with a link refreshes its numbers by itself when they are older than 6 hours
+  useEffect(() => {
+    const at = cur.metrics_at ? new Date(String(cur.metrics_at)).getTime() : 0;
+    if (cur.status === "Posted" && (cur.post_link || cur.brief_link) && Date.now() - at > 6 * 3600_000) void pull(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [row.id]);
 
   const hero = files.find((f) => isImage(f.mime, f.name)) ?? files[0];
   const setStatus = async (value: string) => {
@@ -214,9 +221,13 @@ export function ContentDrawer({ row, onClose, onEdit, onChanged }: { row: Row; o
                 <ExternalLink size={13} /> Buka postingan
               </a>
             ) : null}
-            <button className="btn btn-sm" onClick={pull} disabled={pulling || !(res.post_link || cur.brief_link)} title="Ambil reach, like, comment dari link postingan">
+            <button className="btn btn-sm" onClick={() => pull()} disabled={pulling || !(res.post_link || cur.brief_link)} title="Ambil reach, like, comment dari link postingan">
               <Link2 size={13} /> {pulling ? "Menarik…" : "Tarik dari link"}
             </button>
+            <span className="text-[11.5px] text-[var(--muted)]">
+              {cur.metrics_at ? `Diperbarui ${new Date(String(cur.metrics_at)).toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" })} WIB` : "Belum pernah ditarik"}
+              {cur.metrics_note ? ` · gagal terakhir: ${String(cur.metrics_note)}` : ""}
+            </span>
           </div>
         </div>
 
