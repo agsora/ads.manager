@@ -20,6 +20,15 @@ const RESULT_FIELDS = [
   ["saves", "Saved"],
   ["followers", "Followers saat posting"],
 ] as const;
+// numbers the post link supplies by itself; followers at posting time cannot be read from a link, so it stays manual
+const AUTO_KEYS = ["reach", "views", "likes", "comments", "shares", "saves"];
+const hasAutoLink = (u: string) => {
+  try {
+    return /(^|\.)(tiktok\.com|youtube\.com|instagram\.com)$|^youtu\.be$/.test(new URL(u).hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+};
 const MAX_CHECKS = 8;
 const num = (v: unknown) => (v === null || v === undefined || v === "" ? 0 : Number(v) || 0);
 const er = (r: Record<string, unknown>) => (num(r.followers) ? (num(r.likes) + num(r.comments) + num(r.saves)) / num(r.followers) : null);
@@ -43,11 +52,12 @@ export function ContentDrawer({ row, onClose, onEdit, onChanged }: { row: Row; o
   const dirty = JSON.stringify(res) !== JSON.stringify(fromRow(cur));
   const { data: all } = useFetch<{ rows: Row[] }>("/api/r/content");
 
+  const auto = hasAutoLink(res.post_link);
   const saveResults = async () => {
     setSaving(true);
     try {
       const body: Record<string, unknown> = { actual_date: res.actual_date || null, post_link: res.post_link || null };
-      for (const [k] of RESULT_FIELDS) body[k] = res[k] === "" ? null : res[k];
+      for (const [k] of RESULT_FIELDS) if (!(auto && AUTO_KEYS.includes(k))) body[k] = res[k] === "" ? null : res[k];
       if (cur.status !== "Posted" && markPosted) {
         body.status = "Posted";
         if (!res.actual_date) body.actual_date = todayISO();
@@ -269,12 +279,13 @@ export function ContentDrawer({ row, onClose, onEdit, onChanged }: { row: Row; o
             </label>
             <input id="cd-link" type="url" className="input" placeholder="https://…" value={res.post_link} onChange={(e) => setRes({ ...res, post_link: e.target.value })} />
           </div>
+          {auto && <p className="text-[12.5px] text-[var(--muted)] sm:col-span-2 lg:col-span-4">Reach, views, like, comment, share, dan saved terisi otomatis dari link postingan (setiap jam 06:00 WIB dan saat konten dibuka), jadi tidak bisa diisi manual. Followers saat posting tetap diisi sendiri.</p>}
           {RESULT_FIELDS.map(([k, label]) => (
             <div key={k}>
               <label className="label" htmlFor={`cd-${k}`}>
                 {label}
               </label>
-              <input id={`cd-${k}`} type="number" inputMode="numeric" min={0} step="1" className="input" value={res[k]} onChange={(e) => setRes({ ...res, [k]: e.target.value })} />
+              <input id={`cd-${k}`} type="number" inputMode="numeric" min={0} step="1" className="input" value={res[k]} readOnly={auto && AUTO_KEYS.includes(k)} title={auto && AUTO_KEYS.includes(k) ? "Terisi otomatis dari link postingan" : undefined} style={auto && AUTO_KEYS.includes(k) ? { background: "var(--surface-2)", cursor: "not-allowed" } : undefined} onChange={(e) => setRes({ ...res, [k]: e.target.value })} />
             </div>
           ))}
         </div>
