@@ -76,26 +76,63 @@ async function youtube(url: string): Promise<Metrics> {
 
 const IG_API = "https://graph.facebook.com/v21.0";
 
+/**
+ * Connected Instagram accounts from the environment. The first pair is IG_ACCESS_TOKEN + IG_USER_ID;
+ * every extra account is another pair with the same suffix, e.g. IG_ACCESS_TOKEN_OTO + IG_USER_ID_OTO.
+ */
+function igAccounts() {
+  const list: { name: string; token: string; id: string }[] = [];
+  const env = process.env;
+  if (env.IG_ACCESS_TOKEN && env.IG_USER_ID) list.push({ name: "utama", token: env.IG_ACCESS_TOKEN, id: env.IG_USER_ID });
+  for (const k of Object.keys(env)) {
+    const m = /^IG_ACCESS_TOKEN_(.+)$/.exec(k);
+    const id = m ? env[`IG_USER_ID_${m[1]}`] : undefined;
+    if (m && env[k] && id) list.push({ name: m[1].toLowerCase(), token: env[k]!, id });
+  }
+  return list;
+}
+
+type IgMedia = { id: string; permalink: string; like_count?: number; comments_count?: number };
+
+async function igFind(acc: { token: string; id: string }, code: string): Promise<IgMedia | null> {
+  // walks the latest 200 posts of this account
+  let next: string | null = `${IG_API}/${acc.id}/media?fields=id,permalink,like_count,comments_count&limit=50&access_token=${acc.token}`;
+  for (let page = 0; page < 4 && next; page++) {
+    const j: { data?: IgMedia[]; paging?: { next?: string }; error?: { message: string } } = await (await fetch(next, { signal: AbortSignal.timeout(15000) })).json();
+    if (j.error) throw new Error(j.error.message);
+    const hit = j.data?.find((x) => x.permalink.includes(`/${code}/`));
+    if (hit) return hit;
+    next = j.paging?.next ?? null;
+  }
+  return null;
+}
+
 async function instagram(url: string): Promise<Metrics> {
-  const token = process.env.IG_ACCESS_TOKEN;
-  const igUser = process.env.IG_USER_ID;
-  if (!token || !igUser)
+  const accounts = igAccounts();
+  if (!accounts.length)
     throw new Error("Instagram tidak bisa dibaca dari link tanpa login. Hubungkan Instagram Graph API (IG_ACCESS_TOKEN & IG_USER_ID) atau isi manual.");
   const code = new URL(url).pathname.split("/").filter(Boolean).find((_, i, a) => ["p", "reel", "reels", "tv"].includes(a[i - 1] ?? ""));
   if (!code) throw new Error("Link Instagram tidak dikenali (harus /p/… atau /reel/…)");
-  // find the media whose permalink contains this shortcode (walks the latest 200 posts)
-  let next: string | null = `${IG_API}/${igUser}/media?fields=id,permalink,like_count,comments_count&limit=50&access_token=${token}`;
-  let media: { id: string; like_count?: number; comments_count?: number } | null = null;
-  for (let page = 0; page < 4 && next && !media; page++) {
-    const j: { data?: { id: string; permalink: string; like_count?: number; comments_count?: number }[]; paging?: { next?: string }; error?: { message: string } } = await (await fetch(next, { signal: AbortSignal.timeout(15000) })).json();
-    if (j.error) throw new Error(`Instagram API: ${j.error.message}`);
-    media = j.data?.find((x) => x.permalink.includes(`/${code}/`)) ?? null;
-    next = j.paging?.next ?? null;
+  // the post belongs to one of the connected accounts: try each until its permalink turns up
+  let media: IgMedia | null = null;
+  let acc = accounts[0];
+  let lastError = "";
+  for (const a of accounts) {
+    try {
+      media = await igFind(a, code);
+    } catch (e) {
+      lastError = `Instagram API (${a.name}): ${(e as Error).message}`;
+      continue;
+    }
+    if (media) {
+      acc = a;
+      break;
+    }
   }
-  if (!media) throw new Error("Postingan tidak ditemukan di akun Instagram yang terhubung");
+  if (!media) throw new Error(lastError || `Postingan tidak ditemukan di ${accounts.length > 1 ? `${accounts.length} akun Instagram yang terhubung` : "akun Instagram yang terhubung"}`);
   const out: Metrics = { likes: media.like_count, comments: media.comments_count };
   const ins: { data?: { name: string; values?: { value: number }[]; total_value?: { value: number } }[]; error?: { message: string } } = await (
-    await fetch(`${IG_API}/${media.id}/insights?metric=reach,views,saved,shares&access_token=${token}`, { signal: AbortSignal.timeout(15000) })
+    await fetch(`${IG_API}/${media.id}/insights?metric=reach,views,saved,shares&access_token=${acc.token}`, { signal: AbortSignal.timeout(15000) })
   ).json();
   for (const d of ins.data ?? []) {
     const v = d.total_value?.value ?? d.values?.[0]?.value;
