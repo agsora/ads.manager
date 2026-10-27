@@ -9,7 +9,8 @@ import { RESOURCE_MAP } from "@/lib/resources";
 import { BranchMap, ratingColor, type BranchPoint } from "@/components/branch-map";
 import { api } from "@/components/providers";
 import { useAnalytics } from "@/components/use-analytics";
-import { BarList, Card, Kpi, MiniTable, TrendLines } from "@/components/charts";
+import { BarList, Card, Kpi, MiniTable } from "@/components/charts";
+import { ReviewInsights } from "@/components/review-insights";
 import { fmtDate, fmtNum } from "@/lib/format";
 import { todayISO } from "@/lib/format";
 
@@ -85,23 +86,10 @@ export default function ReviewsPage() {
             <Kpi label="Rating gabungan" value={ratingNow} format="decimal" hint="rata-rata tertimbang" />
           </div>
 
-          {growth.length > 0 && a && a.reviewTrend.length > 1 && (
-            <Card title="Perkembangan jumlah ulasan" subtitle="Per cabang, dari rekap yang dicatat">
-              <TrendLines data={a.reviewTrend} series={a.reviewTrendSeries.map((name) => ({ key: name, label: name }))} />
-            </Card>
-          )}
-          {growth.length > 0 && a && a.reviewTrend.length > 1 && (
-            <Card title="Perkembangan rating">
-              <TrendLines
-                data={a.reviewTrend.map((t) => Object.fromEntries(Object.entries(t).map(([key, v]) => [key.endsWith("__rating") ? key.replace("__rating", "") : key === "date" ? key : `x_${key}`, v])))}
-                series={a.reviewTrendSeries.map((name) => ({ key: name, label: name }))}
-                decimals
-              />
-            </Card>
-          )}
+          {a && <ReviewInsights growth={growth} regions={a.reviewRegions} loggedStars={a.ratingDist} />}
 
           {(a?.reviewRegions.length ?? 0) > 0 && (
-            <Card title="Per wilayah" subtitle="Jumlah ulasan dan rating gabungan semua cabang di tiap wilayah">
+            <Card title="Rincian per wilayah" subtitle="Jumlah ulasan dan pertumbuhan semua cabang di tiap wilayah">
               <MiniTable
                 cols={[
                   { key: "name", label: "Wilayah" },
