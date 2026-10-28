@@ -33,11 +33,22 @@ export async function saveMetaAccounts(orgId: number, list: MetaAdAccount[]) {
 
 export const metaLastSync = (orgId: number) => getSetting(syncKey(orgId));
 
-/** Tokens that may carry ads_read: META_ADS_TOKEN first, then the Facebook-type Instagram tokens (those not starting with IG). */
+/**
+ * Tokens that may carry ads_read, with the variable they come from: META_ADS_TOKEN and META_ADS_TOKEN_<NAME> first,
+ * then the Facebook-type Instagram tokens (Instagram Login tokens, which start with IG, cannot read ads).
+ */
 function tokens() {
   const env = process.env;
-  const list = [env.META_ADS_TOKEN, env.IG_ACCESS_TOKEN, ...Object.keys(env).filter((k) => /^IG_ACCESS_TOKEN_.+/.test(k)).map((k) => env[k])].filter((t): t is string => !!t && !/^IG/.test(t));
-  return [...new Set(list)];
+  const names = [...Object.keys(env).filter((k) => /^META_ADS_TOKEN(_.+)?$/.test(k)), ...Object.keys(env).filter((k) => /^IG_ACCESS_TOKEN(_.+)?$/.test(k))];
+  const out: { name: string; token: string; skip?: string }[] = [];
+  const seen = new Set<string>();
+  for (const name of names) {
+    const token = env[name];
+    if (!token || seen.has(token)) continue;
+    seen.add(token);
+    out.push({ name, token, skip: /^IG/.test(token) ? "token Instagram Login tidak bisa membaca iklan" : undefined });
+  }
+  return out;
 }
 
 type Page<T> = { data?: T[]; paging?: { next?: string }; error?: { message: string } };
@@ -109,17 +120,21 @@ export async function syncMetaAds(orgId: number, days = 7) {
 
   for (const acc of accounts) {
     let data: Awaited<ReturnType<typeof pull>> | null = null;
-    let last = "";
+    const tried: string[] = [];
     for (const t of toks) {
+      if (t.skip) {
+        tried.push(`${t.name}: dilewati (${t.skip})`);
+        continue;
+      }
       try {
-        data = await pull(acc.account, t, since, until);
+        data = await pull(acc.account, t.token, since, until);
         break;
       } catch (e) {
-        last = (e as Error).message;
+        tried.push(`${t.name}: ${(e as Error).message}`);
       }
     }
     if (!data) {
-      errors.push(`${acc.account}: ${toks.length ? last : "token Meta tidak ditemukan"}`);
+      errors.push(`${acc.account} gagal. ${tried.length ? tried.join(" | ") : "Token Meta tidak ditemukan"}`);
       continue;
     }
     const byId = new Map(data.campaigns.map((c) => [c.id, c]));
