@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FolderOpen, Pencil, Upload } from "lucide-react";
+import { CloudDownload, FolderOpen, Pencil, Settings2, Upload } from "lucide-react";
 import { Modal } from "@/components/resource-form";
 import { FileAttachments } from "@/components/file-attachments";
 import { PageHeader } from "@/components/shell";
@@ -11,7 +11,7 @@ import { useAnalytics } from "@/components/use-analytics";
 import { Bars, Card, Kpi, KpiSkeleton, MiniTable } from "@/components/charts";
 import { Chip } from "@/components/cells";
 import { fmtDate, formatValue } from "@/lib/format";
-import { api, useToast } from "@/components/providers";
+import { api, useFetch, useMeta, useToast } from "@/components/providers";
 
 export default function AdsPage() {
   const { data: a, reload } = useAnalytics();
@@ -20,6 +20,35 @@ export default function AdsPage() {
   const [tick, setTick] = useState(0);
   const toast = useToast();
   const [filesFor, setFilesFor] = useState<{ id: number; name: string } | null>(null);
+  const { brands } = useMeta();
+  const { data: metaInfo } = useFetch<{ accounts: { account: string; brand: string }[]; lastSync: string | null }>(`/api/ads/meta?t=${tick}`);
+  const [days, setDays] = useState("30");
+  const [pulling, setPulling] = useState(false);
+  const [setup, setSetup] = useState<{ account: string; brand: string }[] | null>(null);
+  const pullMeta = async () => {
+    if (!metaInfo?.accounts.length) return setSetup([{ account: "", brand: brands[0]?.name ?? "" }]);
+    setPulling(true);
+    try {
+      const r = await api<{ inserted: number; updated: number; errors: string[] }>("/api/ads/meta", "POST", { days: Number(days) });
+      if (r.errors.length) toast(r.errors[0], "err");
+      else toast(`Meta Ads: ${r.inserted} baris baru, ${r.updated} diperbarui`);
+      refresh();
+    } catch (e) {
+      toast((e as Error).message, "err");
+    } finally {
+      setPulling(false);
+    }
+  };
+  const saveSetup = async () => {
+    try {
+      await api("/api/ads/meta", "PUT", { accounts: setup });
+      setSetup(null);
+      toast("Akun iklan disimpan");
+      setTick((t) => t + 1);
+    } catch (e) {
+      toast((e as Error).message, "err");
+    }
+  };
   const k = a?.kpis.ads;
   const p = a?.prevKpis.ads;
   const refresh = () => {
@@ -44,11 +73,60 @@ export default function AdsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader eyebrow="Iklan" title="Ads Campaign" desc="Upload file ekspor Meta Ads Manager (CSV/Excel) apa adanya — kolom dikenali otomatis, data harian digabung per campaign, dan upload ulang periode yang sama tidak membuat data dobel.">
-        <button className="btn btn-accent" onClick={() => setUpload(true)}>
-          <Upload size={15} /> Upload Laporan Meta Ads
+      <PageHeader eyebrow="Iklan" title="Ads Campaign" desc="Data Meta Ads ditarik otomatis lewat API setiap jam 06:00 WIB (biaya, jangkauan, impresi, klik, percakapan). Upload file ekspor tetap bisa dipakai untuk TikTok/Google atau data lama.">
+        <select className="input !w-auto" value={days} onChange={(e) => setDays(e.target.value)} aria-label="Rentang tarik data">
+          <option value="7">7 hari terakhir</option>
+          <option value="30">30 hari terakhir</option>
+          <option value="90">90 hari terakhir</option>
+          <option value="300">Tahun ini</option>
+        </select>
+        <button className="btn btn-accent" onClick={pullMeta} disabled={pulling}>
+          <CloudDownload size={15} /> {pulling ? "Menarik…" : "Tarik dari Meta Ads"}
+        </button>
+        <button className="btn" onClick={() => setSetup(metaInfo?.accounts.length ? metaInfo.accounts : [{ account: "", brand: brands[0]?.name ?? "" }])} title="Atur akun iklan Meta">
+          <Settings2 size={15} />
+        </button>
+        <button className="btn" onClick={() => setUpload(true)}>
+          <Upload size={15} /> Upload Laporan
         </button>
       </PageHeader>
+
+      {metaInfo?.accounts.length ? (
+        <p className="-mt-2 text-[12.5px] text-[var(--muted)]">
+          Meta Ads: {metaInfo.lastSync ? `diperbarui ${new Date(metaInfo.lastSync).toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" })} WIB` : "belum pernah ditarik"} · {metaInfo.accounts.map((x) => `${x.brand} (${x.account})`).join(", ")}
+        </p>
+      ) : null}
+
+      {setup && (
+        <Modal title="Akun iklan Meta" subtitle="Satu akun iklan untuk satu brand. ID akun ada di Ads Manager (format act_123…)." onClose={() => setSetup(null)}>
+          <div className="space-y-3">
+            {setup.map((x, i) => (
+              <div key={i} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                <input className="input" placeholder="act_296034658909653" value={x.account} onChange={(e) => setSetup(setup.map((y, j) => (j === i ? { ...y, account: e.target.value } : y)))} aria-label="ID akun iklan" />
+                <select className="input" value={x.brand} onChange={(e) => setSetup(setup.map((y, j) => (j === i ? { ...y, brand: e.target.value } : y)))} aria-label="Brand">
+                  <option value="">— brand —</option>
+                  {brands.map((b) => (
+                    <option key={b.name} value={b.name}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+                <button className="btn btn-sm" onClick={() => setSetup(setup.filter((_, j) => j !== i))}>
+                  Hapus
+                </button>
+              </div>
+            ))}
+            <div className="flex gap-2">
+              <button className="btn btn-sm" onClick={() => setSetup([...setup, { account: "", brand: "" }])}>
+                + Akun lain
+              </button>
+              <button className="btn btn-accent btn-sm ml-auto" onClick={saveSetup}>
+                Simpan
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {!k && <KpiSkeleton />}
       {k && (
