@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Copy, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Copy, Library, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/shell";
 import { ResourceForm } from "@/components/resource-form";
 import { api, useFetch, useMeta, useToast } from "@/components/providers";
@@ -37,6 +37,19 @@ export default function SnippetsPage() {
       toast("Gagal menyalin — salin manual dari kotak teks", "err");
     }
   };
+  const [packing, setPacking] = useState(false);
+  const addPack = async () => {
+    setPacking(true);
+    try {
+      const j = await api<{ added: number; skipped: number }>("/api/snippets/pack", "POST");
+      toast(j.added ? `${j.added} template ditambahkan${j.skipped ? `, ${j.skipped} sudah ada` : ""}` : "Semua template paket sudah ada");
+      setTick((x) => x + 1);
+    } catch (e) {
+      toast((e as Error).message, "err");
+    } finally {
+      setPacking(false);
+    }
+  };
   const remove = async (row: Row) => {
     if (!confirm(`Hapus template "${row.title}"?`)) return;
     try {
@@ -50,6 +63,11 @@ export default function SnippetsPage() {
   return (
     <div className="space-y-4">
       <PageHeader eyebrow="Konten" title="Bank Caption & Template" desc="Simpan caption, hashtag, CTA, dan balasan WhatsApp yang sudah terbukti bagus. Klik Salin, tempel di mana saja — yang paling sering dipakai naik ke atas. Jenis Balasan WhatsApp juga otomatis muncul sebagai pilihan di Papan Follow Up.">
+        {session?.role !== "staff" && (
+          <button className="btn" onClick={addPack} disabled={packing} title="Tambah 55+ caption, hashtag, CTA, balasan WhatsApp, dan script video siap pakai">
+            <Library size={15} /> {packing ? "Menambah…" : "Isi paket template"}
+          </button>
+        )}
         <button className="btn btn-primary" onClick={() => setEditing(null)}>
           <Plus size={15} /> Template baru
         </button>
