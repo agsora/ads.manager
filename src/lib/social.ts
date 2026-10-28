@@ -75,6 +75,9 @@ async function youtube(url: string): Promise<Metrics> {
 }
 
 const IG_API = "https://graph.facebook.com/v21.0";
+const IG_LOGIN_API = "https://graph.instagram.com/v21.0";
+/** Tokens made with "Instagram Login" start with IG… and only work on graph.instagram.com; system-user/page tokens use graph.facebook.com. */
+const igApi = (token: string) => (/^IG/.test(token) ? IG_LOGIN_API : IG_API);
 
 /**
  * Connected Instagram accounts from the environment. The first pair is IG_ACCESS_TOKEN + IG_USER_ID;
@@ -96,7 +99,7 @@ type IgMedia = { id: string; permalink: string; like_count?: number; comments_co
 
 async function igFind(acc: { token: string; id: string }, code: string): Promise<IgMedia | null> {
   // walks the latest 200 posts of this account
-  let next: string | null = `${IG_API}/${acc.id}/media?fields=id,permalink,like_count,comments_count&limit=50&access_token=${acc.token}`;
+  let next: string | null = `${igApi(acc.token)}/${acc.id}/media?fields=id,permalink,like_count,comments_count&limit=50&access_token=${acc.token}`;
   for (let page = 0; page < 4 && next; page++) {
     const j: { data?: IgMedia[]; paging?: { next?: string }; error?: { message: string } } = await (await fetch(next, { signal: AbortSignal.timeout(15000) })).json();
     if (j.error) throw new Error(j.error.message);
@@ -132,7 +135,7 @@ async function instagram(url: string): Promise<Metrics> {
   if (!media) throw new Error(lastError || `Postingan tidak ditemukan di ${accounts.length > 1 ? `${accounts.length} akun Instagram yang terhubung` : "akun Instagram yang terhubung"}`);
   const out: Metrics = { likes: media.like_count, comments: media.comments_count };
   const ins: { data?: { name: string; values?: { value: number }[]; total_value?: { value: number } }[]; error?: { message: string } } = await (
-    await fetch(`${IG_API}/${media.id}/insights?metric=reach,views,saved,shares&access_token=${acc.token}`, { signal: AbortSignal.timeout(15000) })
+    await fetch(`${igApi(acc.token)}/${media.id}/insights?metric=reach,views,saved,shares&access_token=${acc.token}`, { signal: AbortSignal.timeout(15000) })
   ).json();
   for (const d of ins.data ?? []) {
     const v = d.total_value?.value ?? d.values?.[0]?.value;
@@ -156,4 +159,20 @@ export async function fetchMetrics(url: string): Promise<MetricsResult> {
   } catch (e) {
     return { ok: false, platform, metrics: {}, missing: [], message: (e as Error).message };
   }
+}
+
+/** Follower count of every connected Instagram account (read from the profile, no post needed). */
+export async function igFollowers() {
+  return Promise.all(
+    igAccounts().map(async (a) => {
+      const brand = process.env[`IG_BRAND_${a.name.toUpperCase()}`];
+      try {
+        const j: { followers_count?: number; username?: string; name?: string; error?: { message: string } } = await (await fetch(`${igApi(a.token)}/${a.id}?fields=followers_count,username,name&access_token=${a.token}`, { signal: AbortSignal.timeout(15000) })).json();
+        if (j.error || typeof j.followers_count !== "number") throw new Error(j.error?.message ?? "followers_count tidak ada");
+        return { account: a.name, brand, username: j.username ?? "", displayName: j.name ?? "", followers: j.followers_count, error: "" };
+      } catch (e) {
+        return { account: a.name, brand, username: "", displayName: "", followers: 0, error: `Akun ${a.name}: ${(e as Error).message}` };
+      }
+    }),
+  );
 }

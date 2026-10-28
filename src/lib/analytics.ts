@@ -503,13 +503,14 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
   });
   const contentStatus = countBy(content, "status");
 
-  // followers growth (latest vs earliest snapshot per channel)
+  // followers growth (latest snapshot vs the one at the start of the period, per channel)
   const followerGrowth = [...groupBy(followers, (r) => `${r.brand} · ${r.channel}`).entries()].map(([name, rs]) => {
     const sorted = [...rs].sort((a, b) => String(a.snapshot_date).localeCompare(String(b.snapshot_date)));
     const inWin = sorted.filter((r) => String(r.snapshot_date) <= to);
     const last = inWin[inWin.length - 1];
-    const base = [...inWin].reverse().find((r) => String(r.snapshot_date) < from) ?? inWin[0];
-    return { name, current: n(last?.followers), start: n(base?.followers), growth: n(last?.followers) - n(base?.followers), growthRate: div(n(last?.followers) - n(base?.followers), n(base?.followers)) };
+    // start of the period: the snapshot of the 1st, else the last one before it, else the first one inside it
+    const base = inWin.find((r) => String(r.snapshot_date) === from) ?? [...inWin].reverse().find((r) => String(r.snapshot_date) < from) ?? inWin[0];
+    return { name, updatedAt: last ? String(last.snapshot_date).slice(0, 10) : null, auto: String(last?.notes ?? "").startsWith("Otomatis"), current: n(last?.followers), start: n(base?.followers), growth: n(last?.followers) - n(base?.followers), growthRate: div(n(last?.followers) - n(base?.followers), n(base?.followers)) };
   });
 
   // ---- reviews
@@ -639,7 +640,8 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     const sorted = [...rs].sort((x, y) => String(x.snapshot_date).localeCompare(String(y.snapshot_date)));
     const inWin = sorted.filter((r) => String(r.snapshot_date) <= to);
     const last = inWin[inWin.length - 1];
-    const base = [...inWin].reverse().find((r) => String(r.snapshot_date) < from) ?? inWin[0];
+    // start of the period: the snapshot of the 1st, else the last one before it, else the first one inside it
+    const base = inWin.find((r) => String(r.snapshot_date) === from) ?? [...inWin].reverse().find((r) => String(r.snapshot_date) < from) ?? inWin[0];
     // reviews logged individually after the last snapshot are added on top
     const [bBrand, bBranch] = key.split("|");
     const extra = reviewsAll.filter((r) => String(r.brand ?? "") === bBrand && String(r.branch ?? "") === bBranch && last && String(r.review_date) > String(last.snapshot_date) && String(r.review_date) <= to).length;
