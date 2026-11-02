@@ -155,6 +155,31 @@ function Results({ openId, onOpened, onDetail, bump = 0 }: { openId?: number | n
   const posted = due.filter((r) => r.status === "Posted");
   const filled = posted.filter((r) => Number(r.likes) || Number(r.reach) || Number(r.views));
   const ers = filled.filter((r) => Number(r.followers)).map((r) => (Number(r.likes ?? 0) + Number(r.comments ?? 0) + Number(r.saves ?? 0)) / Number(r.followers));
+  const linked = posted.filter((r) => r.post_link || r.brief_link);
+  const [pulling, setPulling] = useState<{ done: number; total: number } | null>(null);
+  // reads every posted content that has a link, 25 at a time (the server tries each connected Instagram account), then today's followers
+  const pullAll = async () => {
+    const ids = linked.map((r) => Number(r.id));
+    if (!ids.length) return toast("Belum ada konten tayang yang punya link postingan", "err");
+    let updated = 0;
+    const failed: string[] = [];
+    try {
+      for (let i = 0; i < ids.length; i += 25) {
+        setPulling({ done: i, total: ids.length });
+        const r = await api<{ updated: number; failed: { title: string; message: string }[] }>("/api/content/metrics", "POST", { ids: ids.slice(i, i + 25) });
+        updated += r.updated;
+        failed.push(...r.failed.map((x) => x.message));
+      }
+      const fol = await api<{ updated: number; errors: string[] }>("/api/followers/sync", "POST", {}).catch(() => null);
+      const note = [failed[0], fol?.errors?.[0]].filter(Boolean).join(" · ");
+      toast(`${updated} konten diperbarui${failed.length ? `, ${failed.length} gagal` : ""}${fol ? `, followers ${fol.updated} akun` : ""}${note ? ` — ${note}` : ""}`, failed.length && !updated ? "err" : "ok");
+    } catch (e) {
+      toast((e as Error).message, "err");
+    } finally {
+      setPulling(null);
+      setTick((t) => t + 1);
+    }
+  };
   return (
     <div className="space-y-4">
       <div className="stat-grid">
@@ -164,9 +189,14 @@ function Results({ openId, onOpened, onDetail, bump = 0 }: { openId?: number | n
         <Kpi label="Hasil belum diisi" value={posted.length - filled.length} format="number" />
         <Kpi label="Rata-rata ER" value={ers.length ? ers.reduce((a, b) => a + b, 0) / ers.length : null} format="percent" />
       </div>
-      <p className="text-[13px] text-[var(--ink-2)]">
-        Hanya konten yang tanggalnya sudah lewat atau sudah tayang. Klik baris untuk mengisi hasil — rencananya tidak ikut berubah. Tandai status <b>Posted</b> agar masuk perhitungan.
-      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="min-w-[240px] flex-1 text-[13px] text-[var(--ink-2)]">
+          Hanya konten yang tanggalnya sudah lewat atau sudah tayang. Klik baris untuk mengisi hasil — rencananya tidak ikut berubah. Tandai status <b>Posted</b> agar masuk perhitungan.
+        </p>
+        <button className="btn btn-primary" onClick={pullAll} disabled={!!pulling || !linked.length} title="Baca angka semua konten tayang yang punya link lewat API Instagram (semua akun terhubung), lalu perbarui followers">
+          <Link2 size={14} /> {pulling ? `Menarik ${Math.min(pulling.done + 25, pulling.total)}/${pulling.total}…` : `Tarik semua dari API${linked.length ? ` (${linked.length})` : ""}`}
+        </button>
+      </div>
       <ResourceTable
         resourceKey="content"
         columns={RESULT_COLUMNS}
