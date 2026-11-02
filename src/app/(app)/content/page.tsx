@@ -85,7 +85,7 @@ export default function ContentPage() {
 }
 
 const PLAN_COLUMNS = ["post_date", "post_time", "title", "brand", "channel", "content_type", "pillar", "pic", "status", "approval_status"];
-const RESULT_COLUMNS = ["post_date", "title", "channel", "status", "post_link", "actual_date", "reach", "views", "likes", "comments", "saves", "followers"];
+const RESULT_COLUMNS = ["post_date", "title", "channel", "status", "brand", "post_link", "actual_date", "reach", "views", "likes", "comments", "saves", "followers"];
 
 function usePlanStats(tick: number) {
   const f = useFilter();
