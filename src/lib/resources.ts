@@ -399,6 +399,8 @@ export const RESOURCES: Resource[] = [
       { key: "brand", label: "Brand", type: "brand", required: true },
       { key: "name", label: "Nama", type: "text", aliases: ["nama / identitas", "nama"] },
       { key: "phone", label: "No. WhatsApp", type: "phone", aliases: ["nomor whatsapp", "no wa", "whatsapp"] },
+      { key: "nik", label: "NIK", type: "text", aliases: ["nik", "no ktp", "nomor ktp", "ktp"] },
+      { key: "kk", label: "No. KK", type: "text", aliases: ["kk", "no kk", "nomor kk", "kartu keluarga"] },
       { key: "branch", label: "Cabang", type: "select", options: "branch", aliases: ["cabang", "kantor"] },
       { key: "chat_time", label: "Jam Chat Masuk", type: "time", hideInTable: true, aliases: ["jam chat", "jam masuk"] },
       { key: "first_reply_time", label: "Jam Dibalas Pertama", type: "time", hideInTable: true, aliases: ["jam dibalas", "jam balas"] },
