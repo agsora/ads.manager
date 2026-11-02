@@ -84,7 +84,7 @@ export default function AdsPage() {
           <CloudDownload size={15} /> {pulling ? "Menarik…" : "Tarik dari Meta Ads"}
         </button>
         <button className="btn" onClick={() => setSetup(metaInfo?.accounts.length ? metaInfo.accounts : [{ account: "", brand: brands[0]?.name ?? "" }])} title="Atur akun iklan Meta">
-          <Settings2 size={15} />
+          <Settings2 size={15} /> Akun iklan
         </button>
         <button className="btn" onClick={() => setUpload(true)}>
           <Upload size={15} /> Upload Laporan
@@ -93,7 +93,10 @@ export default function AdsPage() {
 
       {metaInfo?.accounts.length ? (
         <p className="-mt-2 text-[12.5px] text-[var(--muted)]">
-          Meta Ads: {metaInfo.lastSync ? `diperbarui ${new Date(metaInfo.lastSync).toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" })} WIB` : "belum pernah ditarik"} · {metaInfo.accounts.map((x) => `${x.brand} (${x.account})`).join(", ")}
+          Meta Ads: {metaInfo.lastSync ? `diperbarui ${new Date(metaInfo.lastSync).toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" })} WIB` : "belum pernah ditarik"} · {metaInfo.accounts.map((x) => `${x.brand} (${x.account})`).join(", ")} ·{" "}
+          <button className="font-semibold text-[var(--accent)] underline" onClick={() => setSetup(metaInfo.accounts)}>
+            Tambah / hapus akun
+          </button>
         </p>
       ) : null}
 

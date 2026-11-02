@@ -51,6 +51,21 @@ function tokens() {
   return out;
 }
 
+/** Ad accounts a token can really read (name + id), to point at the right ID when the configured one is rejected. */
+async function visibleAccounts(list: { token: string; skip?: string }[]) {
+  const seen = new Map<string, string>();
+  for (const t of list) {
+    if (t.skip) continue;
+    try {
+      const j: { data?: { id: string; name?: string }[] } = await (await fetch(`${API}/me/adaccounts?fields=id,name&limit=100&access_token=${t.token}`, { signal: AbortSignal.timeout(15000) })).json();
+      for (const a of j.data ?? []) seen.set(a.id, a.name ?? "");
+    } catch {
+      /* this token just cannot list accounts */
+    }
+  }
+  return [...seen].map(([id, name]) => `${name || "(tanpa nama)"} (${id})`);
+}
+
 type Page<T> = { data?: T[]; paging?: { next?: string }; error?: { message: string } };
 
 async function getAll<T>(url: string, max = 20): Promise<T[]> {
@@ -134,7 +149,9 @@ export async function syncMetaAds(orgId: number, days = 7) {
       }
     }
     if (!data) {
-      errors.push(`${acc.account} gagal. ${tried.length ? tried.join(" | ") : "Token Meta tidak ditemukan"}`);
+      const known = tried.length ? await visibleAccounts(toks) : [];
+      const hint = known.length ? ` | Akun iklan yang bisa dibaca token: ${known.join(", ")}. Pakai ID yang benar di pengaturan akun iklan.` : tried.length ? " | Token tidak melihat akun iklan apa pun: pasangkan akun iklan ke system user (Business Settings) dan beri izin ads_read." : "";
+      errors.push(`${acc.account} gagal. ${tried.length ? tried.join(" | ") : "Token Meta tidak ditemukan"}${hint}`);
       continue;
     }
     const byId = new Map(data.campaigns.map((c) => [c.id, c]));
