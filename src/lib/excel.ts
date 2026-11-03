@@ -230,6 +230,47 @@ export function parseSheet(sheet: Sheet, r: Resource, defaultBrand?: string | nu
   return { sheet: sheet.name, resource: r, rows: out, skipped, matched: [...bestMap.keys()] };
 }
 
+const MONTH_NAMES = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+
+/**
+ * Recap sheets of leads can carry rows with no person but an ADS and a BLAST amount next to a month title ("08 AGUSTUS"):
+ * what was spent on Meta ads and on WhatsApp blast that month. They become one Ads Campaign row and one WA Blast row per month.
+ */
+export function parseSpendSummary(sheet: Sheet, brand: string | null): { ads: ParsedSheet | null; blast: ParsedSheet | null } {
+  const none = { ads: null, blast: null };
+  let headerIdx = -1;
+  let cols = { ads: -1, blast: -1, month: -1 };
+  for (let i = 0; i < Math.min(15, sheet.rows.length) && headerIdx < 0; i++) {
+    const h = (sheet.rows[i] ?? []).map(norm);
+    cols = { ads: h.indexOf("ads"), blast: h.indexOf("blast"), month: h.indexOf("bulan") };
+    if (cols.ads >= 0 && cols.blast >= 0 && cols.month >= 0) headerIdx = i;
+  }
+  if (headerIdx < 0 || !brand) return none;
+
+  const adsR = RESOURCES.find((x) => x.key === "ads")!;
+  const blastR = RESOURCES.find((x) => x.key === "blast")!;
+  const ads: Record<string, unknown>[] = [];
+  const blast: Record<string, unknown>[] = [];
+  const fill = (r: Resource, row: Record<string, unknown>) => {
+    for (const f of r.fields) if (!(f.key in row)) row[f.key] = null;
+    return applyDerive(r, row);
+  };
+  for (let i = headerIdx + 1; i < sheet.rows.length; i++) {
+    const raw = sheet.rows[i] ?? [];
+    const day = toISODate(raw[cols.month]);
+    const adSpend = toNumber(raw[cols.ads]);
+    const blastCost = toNumber(raw[cols.blast]);
+    if (!day || (adSpend === null && blastCost === null)) continue;
+    const [y, m] = day.split("-").map(Number);
+    const last = `${y}-${String(m).padStart(2, "0")}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`;
+    const label = `${MONTH_NAMES[m - 1]} ${y}`;
+    if (adSpend) ads.push(fill(adsR, { brand, platform: "Meta", campaign_name: `Ads ${label}`, start_date: day, end_date: last, spend: adSpend, notes: "Total biaya iklan bulanan dari rekap leads" }));
+    if (blastCost) blast.push(fill(blastR, { brand, blast_date: day, campaign_name: `Blast ${label}`, cost: blastCost, status: "Terkirim" }));
+  }
+  const wrap = (r: Resource, rows: Record<string, unknown>[]): ParsedSheet | null => (rows.length ? { sheet: sheet.name, resource: r, rows, skipped: 0, matched: ["campaign_name", "spend", "cost"] } : null);
+  return { ads: wrap(adsR, ads), blast: wrap(blastR, blast) };
+}
+
 /** "Ads Report - Ringkasan" style transposed summary → ad_wallets rows. */
 export function parseWalletSummary(sheet: Sheet): Record<string, unknown>[] {
   const rows = sheet.rows;

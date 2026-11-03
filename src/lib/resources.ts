@@ -391,36 +391,70 @@ export const RESOURCES: Resource[] = [
     description: "Data chat masuk WhatsApp: sumber trafik, segmentasi HOT/WARM/COLD, follow up 1-3, dan status akhir.",
     dateField: "chat_date",
     titleField: "name",
-    importKeys: ["chat_date", "name", "phone"],
+    importKeys: ["name", "phone", "nik"],
     sheetHints: ["wa leads", "leads", "chat masuk"],
     defaultSort: "chat_date",
     fields: [
-      { key: "chat_date", label: "Tanggal Chat", type: "date", required: true, aliases: ["tanggal chat masuk", "tanggal"] },
+      { key: "chat_date", label: "Tanggal Chat", type: "date", required: true, aliases: ["tanggal chat masuk", "tanggal", "bulan"] },
       { key: "brand", label: "Brand", type: "brand", required: true },
       { key: "name", label: "Nama", type: "text", aliases: ["nama / identitas", "nama"] },
-      { key: "phone", label: "No. WhatsApp", type: "phone", aliases: ["nomor whatsapp", "no wa", "whatsapp"] },
+      { key: "phone", label: "No. WhatsApp", type: "phone", aliases: ["nomor whatsapp", "no wa", "whatsapp", "no telp", "no telepon", "telp"] },
       { key: "nik", label: "NIK", type: "text", aliases: ["nik", "no ktp", "nomor ktp", "ktp"] },
       { key: "kk", label: "No. KK", type: "text", aliases: ["kk", "no kk", "nomor kk", "kartu keluarga"] },
+      { key: "financing", label: "Pembiayaan", type: "text", hideInTable: true, aliases: ["pembiayaan", "jenis pembiayaan", "akad"] },
+      { key: "region", label: "Daerah", type: "text", aliases: ["daerah", "provinsi", "wilayah"] },
+      { key: "city", label: "Kota", type: "text", hideInTable: true, aliases: ["kota", "kabupaten"] },
+      { key: "unit", label: "Unit", type: "text", hideInTable: true, aliases: ["unit", "jenis unit", "jaminan"] },
+      { key: "nominal", label: "Nominal Pengajuan", type: "money", hideInTable: true, aliases: ["nominal", "plafon", "nilai pengajuan"] },
+      { key: "os_pokok", label: "OS Pokok", type: "money", hideInTable: true, aliases: ["os pokok", "sisa pokok"] },
+      { key: "os_bunga", label: "OS Bunga", type: "money", hideInTable: true, aliases: ["os bunga", "sisa bunga"] },
+      { key: "os_total", label: "OS Total", type: "money", hideInTable: true, aliases: ["os", "total os", "outstanding"] },
       { key: "branch", label: "Cabang", type: "select", options: "branch", aliases: ["cabang", "kantor"] },
       { key: "chat_time", label: "Jam Chat Masuk", type: "time", hideInTable: true, aliases: ["jam chat", "jam masuk"] },
       { key: "first_reply_time", label: "Jam Dibalas Pertama", type: "time", hideInTable: true, aliases: ["jam dibalas", "jam balas"] },
-      { key: "customer_type", label: "Jenis Pelanggan", type: "select", options: "customer_type" },
-      { key: "source", label: "Sumber Trafik", type: "select", options: "lead_source" },
+      { key: "customer_type", label: "Jenis Pelanggan", type: "select", options: "customer_type", aliases: ["cust", "jenis customer"] },
+      { key: "source", label: "Sumber Trafik", type: "select", options: "lead_source", aliases: ["asal", "sumber"] },
       { key: "campaign_ref", label: "Kode Campaign / Blast", type: "text", suggest: "campaigns", aliases: ["campaign", "kode campaign", "ref"] },
       { key: "plan_timing", label: "Rencana", type: "select", options: "plan_timing", hideInTable: true, aliases: ["rencana pinjaman", "rencana pembelian", "rencana"] },
       { key: "post_chat_status", label: "Status Pasca Chat", type: "select", options: "post_chat_status", hideInTable: true },
       { key: "segment", label: "Segmen", type: "select", options: "lead_segment", aliases: ["segmentasi prospek", "segmentasi"] },
       { key: "initial_status", label: "Status Awal", type: "select", options: "initial_status", hideInTable: true },
-      { key: "need", label: "Kebutuhan/Keterangan", type: "longtext", hideInTable: true, aliases: ["keterangan (isi jika perlu)", "keterangan"] },
+      { key: "need", label: "Kebutuhan/Keterangan", type: "longtext", hideInTable: true, aliases: ["keterangan (isi jika perlu)", "keterangan", "alasan"] },
       { key: "followup_1", label: "Follow Up 1 (3-7 hr)", type: "longtext", hideInTable: true, aliases: ["follow up 1 (3-7 hari)", "follow up 1"] },
       { key: "followup_2", label: "Follow Up 2 (7-14 hr)", type: "longtext", hideInTable: true, aliases: ["follow up 2 (7-14 hari)", "follow up 2"] },
       { key: "followup_3", label: "Follow Up 3 (14-30 hr)", type: "longtext", hideInTable: true, aliases: ["follow up 3 (14-30 hari)", "follow up 3"] },
-      { key: "pipeline_stage", label: "Tahap Pembiayaan", type: "select", options: "pipeline_stage", aliases: ["tahap", "tahapan", "stage"] },
+      { key: "pipeline_stage", label: "Tahap Pembiayaan", type: "select", options: "pipeline_stage", aliases: ["tahap", "tahapan", "stage", "status"] },
       { key: "final_status", label: "Status Akhir", type: "select", options: "final_status" },
       { key: "deal_value", label: "Nilai Deal / Pencairan", type: "money", aliases: ["nilai transaksi", "omzet", "nilai pencairan", "pencairan"] },
       { key: "pic", label: "PIC/CS", type: "text", hideInTable: true },
     ],
     derive: (r) => {
+      const up = (v: unknown) => String(v ?? "").trim().toUpperCase();
+      // recap sheets keep phones as text with a leading apostrophe ('0812…)
+      if (typeof r.phone === "string") r.phone = r.phone.replace(/^'+/, "").trim() || null;
+      // recap-sheet codes → the app's own option labels
+      const src = up(r.source);
+      if (src === "ADS") r.source = "Ads Meta";
+      else if (src === "BLAST") r.source = "Whatsapp Blast";
+      const cust = up(r.customer_type);
+      if (cust === "RO") r.customer_type = "Repeat Order";
+      else if (cust === "NON RO") r.customer_type = "Baru";
+      const stage = up(r.pipeline_stage);
+      const STAGE: Record<string, [string, string]> = {
+        APPROVE: ["Approve", "Follow-up"],
+        PENDING: ["Survei", "Pending"],
+        CANCEL: ["Ditolak / Batal", "Cancel"],
+        "REJECK SURVEY": ["Ditolak / Batal", "Cancel"],
+        "REJECK SLIK": ["Ditolak / Batal", "Cancel"],
+        "REJECT SURVEY": ["Ditolak / Batal", "Cancel"],
+        "REJECT SLIK": ["Ditolak / Batal", "Cancel"],
+      };
+      if (STAGE[stage]) {
+        // keep the original wording (e.g. REJECK SLIK) in the note, the stage keeps the app's own labels
+        if (/^RE[JC]+/.test(stage)) r.need = [`Status: ${stage}`, r.need].filter(Boolean).join(" · ");
+        r.pipeline_stage = STAGE[stage][0];
+        if (!r.final_status) r.final_status = STAGE[stage][1];
+      }
       // "[ref: fasilitas-okt]" or "ref=fasilitas-okt" typed anywhere in the note becomes the campaign code
       if (!r.campaign_ref && r.need) {
         const m = String(r.need).match(/ref\s*[:=]\s*([\w\-. ]+?)(?:\]|\)|$|,|;)/i);

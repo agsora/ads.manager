@@ -38,6 +38,12 @@ export function toISODate(v: unknown): string | null {
   if (m && ID_MONTHS[m[2]]) return iso(+m[3], ID_MONTHS[m[2]], +m[1]);
   m = s.match(/^([a-z]+)\s+(\d{4})$/);
   if (m && ID_MONTHS[m[1]]) return iso(+m[2], ID_MONTHS[m[1]], 1);
+  // "08 AGUSTUS": month number + month name, no day or year → first of that month (this year, or last year if still ahead)
+  m = s.match(/^(\d{1,2})\s+([a-z]+)$/);
+  if (m && ID_MONTHS[m[2]] === +m[1]) {
+    const now = new Date();
+    return iso(+m[1] > now.getMonth() + 1 ? now.getFullYear() - 1 : now.getFullYear(), +m[1], 1);
+  }
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : iso(d.getFullYear(), d.getMonth() + 1, d.getDate());
 }
