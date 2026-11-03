@@ -378,6 +378,7 @@ export const RESOURCES: Resource[] = [
       { key: "avg_engagement", label: "Rata-rata Engagement", type: "number", hideInTable: true },
       { key: "promo", label: "Promo / Penawaran", type: "text" },
       { key: "ads_running", label: "Beriklan?", type: "select", options: "yes_no", hideInTable: true },
+      { key: "ig_link", label: "Link Instagram", type: "url", aliases: ["link ig", "instagram", "akun instagram", "ig"] },
       { key: "link", label: "Link Akun", type: "url", hideInTable: true },
       { key: "maps_link", label: "Link Google Maps", type: "url", hideInTable: true, aliases: ["link maps", "google maps", "maps"] },
       { key: "notes", label: "Catatan", type: "longtext", hideInTable: true },
