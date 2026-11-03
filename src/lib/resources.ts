@@ -409,7 +409,7 @@ export const RESOURCES: Resource[] = [
       { key: "os_pokok", label: "OS Pokok", type: "money", hideInTable: true, aliases: ["os pokok", "sisa pokok"] },
       { key: "os_bunga", label: "OS Bunga", type: "money", hideInTable: true, aliases: ["os bunga", "sisa bunga"] },
       { key: "os_total", label: "OS Total", type: "money", hideInTable: true, aliases: ["os", "total os", "outstanding"] },
-      { key: "branch", label: "Cabang", type: "select", options: "branch", aliases: ["cabang", "kantor"] },
+      { key: "branch", label: "Cabang", type: "select", options: "branch", aliases: ["cabang", "kantor", "kota"] },
       { key: "chat_time", label: "Jam Chat Masuk", type: "time", hideInTable: true, aliases: ["jam chat", "jam masuk"] },
       { key: "first_reply_time", label: "Jam Dibalas Pertama", type: "time", hideInTable: true, aliases: ["jam dibalas", "jam balas"] },
       { key: "customer_type", label: "Jenis Pelanggan", type: "select", options: "customer_type", aliases: ["cust", "jenis customer"] },
@@ -432,6 +432,8 @@ export const RESOURCES: Resource[] = [
       const up = (v: unknown) => String(v ?? "").trim().toUpperCase();
       // recap sheets keep phones as text with a leading apostrophe ('0812…)
       if (typeof r.phone === "string") r.phone = r.phone.replace(/^'+/, "").trim() || null;
+      // recap sheets write the branch in capitals (MEDAN NRA): same wording as the option list
+      if (typeof r.branch === "string" && r.branch === r.branch.toUpperCase()) r.branch = r.branch.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
       // recap-sheet codes → the app's own option labels
       const src = up(r.source);
       if (src === "ADS") r.source = "Ads Meta";
