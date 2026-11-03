@@ -441,7 +441,7 @@ export const RESOURCES: Resource[] = [
       else if (cust === "NON RO") r.customer_type = "Baru";
       const stage = up(r.pipeline_stage);
       const STAGE: Record<string, [string, string]> = {
-        APPROVE: ["Approve", "Follow-up"],
+        APPROVE: ["Akad (Cair)", "Deal"], // approved = already financed and finished
         PENDING: ["Survei", "Pending"],
         CANCEL: ["Ditolak / Batal", "Cancel"],
         "REJECK SURVEY": ["Ditolak / Batal", "Cancel"],
@@ -454,6 +454,7 @@ export const RESOURCES: Resource[] = [
         if (/^RE[JC]+/.test(stage)) r.need = [`Status: ${stage}`, r.need].filter(Boolean).join(" · ");
         r.pipeline_stage = STAGE[stage][0];
         if (!r.final_status) r.final_status = STAGE[stage][1];
+        if (stage === "APPROVE" && (r.deal_value === null || r.deal_value === undefined) && r.nominal) r.deal_value = r.nominal;
       }
       // "[ref: fasilitas-okt]" or "ref=fasilitas-okt" typed anywhere in the note becomes the campaign code
       if (!r.campaign_ref && r.need) {
