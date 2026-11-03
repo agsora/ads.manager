@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { handle, HttpError, requireSession } from "@/lib/auth";
 import { getResource, RESOURCE_MAP, type Resource } from "@/lib/resources";
-import { guessResource, parseSheet, parseSpendSummary, parseWalletSummary, readWorkbook, type ParsedSheet } from "@/lib/excel";
+import { guessResource, parseSheet, parseWalletSummary, readWorkbook, type ParsedSheet } from "@/lib/excel";
 import { deleteMatching, getBrands, insertMany } from "@/lib/repo";
 import { logActivity, q } from "@/lib/db";
 import { activityEvent } from "@/lib/events";
@@ -27,7 +27,6 @@ export const POST = handle(async (req: Request) => {
   const brandFromSheet = (name: string) => brands.find((b) => name.toLowerCase().includes(b.toLowerCase())) ?? null;
 
   const parsed: ParsedSheet[] = [];
-  const spend: ParsedSheet[] = []; // monthly ad / blast spend found inside a leads recap
   const ignored: string[] = [];
   for (const sh of sheets) {
     let r: Resource | undefined = target === "auto" ? guessResource(sh.name) : getResource(target);
@@ -46,11 +45,6 @@ export const POST = handle(async (req: Request) => {
     const p = parseSheet(sh, r, brand, defaultPlatform);
     if (p && (p.rows.length || target !== "auto")) parsed.push(p);
     else ignored.push(sh.name);
-    if (p && r.key === "leads") {
-      const sp = parseSpendSummary(sh, brand);
-      if (sp.ads) spend.push(sp.ads);
-      if (sp.blast) spend.push(sp.blast);
-    }
     if (target !== "auto") break; // single-module import uses the first matching sheet
   }
   if (!parsed.length) throw new HttpError(400, "Tidak ada sheet/kolom yang cocok. Gunakan template dari tombol 'Template' atau pastikan judul kolom sesuai.");
@@ -64,7 +58,7 @@ export const POST = handle(async (req: Request) => {
     }
   }
 
-  const summary = [...parsed, ...spend].map((p) => ({
+  const summary = parsed.map((p) => ({
     sheet: p.sheet,
     resource: p.resource.key,
     label: p.resource.label,
@@ -96,14 +90,6 @@ export const POST = handle(async (req: Request) => {
     }
     for (const b of new Set(p.rows.map((r) => r.brand).filter(Boolean) as string[]))
       await q(`INSERT INTO brands (org_id, name) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [s.org, b]);
-    total += await insertMany(s.org, p.resource, p.rows);
-  }
-  for (const p of spend) {
-    // never wipes the module: only the same brand/month rows are replaced, so a re-import does not double the spend
-    if (p.resource.upsertKeys) await deleteMatching(s.org, p.resource, p.rows);
-    else
-      for (const row of p.rows)
-        await q(`DELETE FROM ${p.resource.table} WHERE org_id=$1 AND brand=$2 AND campaign_name=$3 AND blast_date=$4`, [s.org, row.brand, row.campaign_name, row.blast_date]);
     total += await insertMany(s.org, p.resource, p.rows);
   }
   await logActivity(s.org, s.name, "Impor data", `${file.name}: ${total} baris${replaced ? ` (${replaced} diperbarui)` : ""}`);
