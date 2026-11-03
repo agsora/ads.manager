@@ -341,6 +341,18 @@ export function Score({ label, value }: { label: string; value: number | null })
   );
 }
 
+/** Clickable account link in a table cell, shown as @handle; only http(s) addresses become links. */
+function ExternalLink({ href }: { href: unknown }) {
+  const url = typeof href === "string" ? href.trim() : "";
+  if (!/^https?:\/\//i.test(url)) return <>–</>;
+  const handle = url.replace(/[?#].*$/, "").replace(/\/+$/, "").split("/").pop();
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="font-semibold text-[var(--accent-ink)] underline-offset-2 hover:underline">
+      @{handle}
+    </a>
+  );
+}
+
 export function MiniTable({ cols, rows, empty }: { cols: { key: string; label: string; format?: string; align?: "right" }[]; rows: Record<string, unknown>[]; empty?: string }) {
   if (!rows.length) return <Empty text={empty} />;
   return (
@@ -360,7 +372,7 @@ export function MiniTable({ cols, rows, empty }: { cols: { key: string; label: s
             <tr key={i}>
               {cols.map((c) => (
                 <td key={c.key} className={c.align === "right" || (c.format && c.format !== "text" && c.format !== "date") ? "num" : c.format === "date" ? "whitespace-nowrap" : ""}>
-                  {c.format ? formatValue(r[c.key], c.format) : String(r[c.key] ?? "–")}
+                  {c.format === "link" ? <ExternalLink href={r[c.key]} /> : c.format ? formatValue(r[c.key], c.format) : String(r[c.key] ?? "–")}
                 </td>
               ))}
             </tr>

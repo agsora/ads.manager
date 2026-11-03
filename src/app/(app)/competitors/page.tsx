@@ -39,6 +39,7 @@ export default function CompetitorsPage() {
           brand: cur.brand,
           name: cur.name,
           channel: cur.channel,
+          igLink: cur.ig_link ?? (cur.channel === "Instagram" ? cur.link : null),
           date: cur.snapshot_date,
           followers: n(cur.followers) || null,
           growth,
@@ -62,6 +63,7 @@ export default function CompetitorsPage() {
           cols={[
             { key: "name", label: "Kompetitor" },
             { key: "channel", label: "Channel" },
+            { key: "igLink", label: "Instagram", format: "link" },
             { key: "date", label: "Dicatat", format: "date" },
             { key: "followers", label: "Followers", format: "number" },
             { key: "growth", label: "Perubahan", format: "number" },
