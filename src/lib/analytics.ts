@@ -83,6 +83,11 @@ function leadKpis(leads: Row[]) {
     dealRate: div(deals, total),
     ghostRate: div(ghost, total),
     dealValue: sum(leads, "deal_value"),
+    // outstanding of the customers' existing contracts and the amount applied for (recap files carry these per lead)
+    nominal: sum(leads, "nominal"),
+    osPokok: sum(leads, "os_pokok"),
+    osBunga: sum(leads, "os_bunga"),
+    osTotal: sum(leads, "os_total") || sum(leads, "os_pokok") + sum(leads, "os_bunga"),
     repeat: leads.filter((r) => /repeat|langganan/i.test(String(r.customer_type ?? ""))).length,
   };
 }
@@ -236,6 +241,9 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     blast: blastKpis(blasts),
     influencer: influencerKpis(infl),
   };
+  // leads logged in WA Leads with source WhatsApp Blast count even when the blast rows carry no lead number
+  const blastLeads = (rows: Row[]) => rows.filter((r) => /blast|broadcast/i.test(String(r.source ?? ""))).length;
+  kpis.blast.leads = Math.max(kpis.blast.leads, blastLeads(leads));
   const prevKpis = {
     ads: adsKpis(adsPrev),
     leads: leadKpis(prev(leadsAll, "chat_date")),
@@ -244,6 +252,7 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     blast: blastKpis(prev(blastAll, "blast_date")),
     influencer: influencerKpis(prev(inflAll, "post_date")),
   };
+  prevKpis.blast.leads = Math.max(prevKpis.blast.leads, blastLeads(prev(leadsAll, "chat_date")));
   const totalCost = kpis.ads.spend + kpis.blast.cost + kpis.influencer.fee;
   const totalRevenue = kpis.ads.revenue + kpis.blast.revenue + kpis.influencer.revenue + kpis.leads.dealValue;
   const overall = {

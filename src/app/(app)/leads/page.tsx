@@ -30,6 +30,10 @@ export default function LeadsPage() {
           <Kpi label="Persentase Deal" value={k.dealRate} prev={p?.dealRate} format="percent" />
           <Kpi label="Ghosting" value={k.ghostRate} prev={p?.ghostRate} format="percent" invert />
           <Kpi label="Repeat Order" value={k.repeat} prev={p?.repeat} format="number" />
+          <Kpi label="Nominal Pengajuan" value={k.nominal} prev={p?.nominal} format="money" />
+          <Kpi label="OS Pokok" value={k.osPokok} prev={p?.osPokok} format="money" />
+          <Kpi label="OS Bunga" value={k.osBunga} prev={p?.osBunga} format="money" />
+          <Kpi label="Total OS" value={k.osTotal} prev={p?.osTotal} format="money" />
         </div>
       )}
       <WaLinkBuilder />
