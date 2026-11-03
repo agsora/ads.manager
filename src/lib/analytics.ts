@@ -366,6 +366,17 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
   const leadSegments = countBy(leads, "segment");
   const leadFinal = countBy(leads, "final_status");
   const leadsByBrand = [...groupBy(leads, (r) => String(r.brand ?? "")).entries()].map(([name, rs]) => ({ name, ...leadKpis(rs) }));
+  // by province (Daerah) and city (Kota): leads, deals and the outstanding of those customers
+  const byPlace = (key: string, max: number) =>
+    [...groupBy(leads.filter((r) => String(r[key] ?? "").trim()), (r) => String(r[key]).trim()).entries()]
+      .map(([name, rs]) => {
+        const k = leadKpis(rs);
+        return { name, leads: k.leads, deals: k.deals, dealRate: k.dealRate, cancel: k.cancel, dealValue: k.dealValue, osPokok: k.osPokok, osBunga: k.osBunga, osTotal: k.osTotal };
+      })
+      .sort((a, b) => b.leads - a.leads)
+      .slice(0, max);
+  const leadsByRegion = byPlace("region", 20);
+  const leadsByCity = byPlace("city", 15);
   const followUps = openLeads
     .filter((r) => !["Deal", "Cancel", "Ghosting"].includes(String(r.final_status)))
     .map((r) => {
@@ -1023,6 +1034,8 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     byObjective,
     campaigns,
     leadsBySource,
+    leadsByRegion,
+    leadsByCity,
     attribution,
     leadSegments,
     leadFinal,

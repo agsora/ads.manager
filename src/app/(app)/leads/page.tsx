@@ -68,6 +68,19 @@ export default function LeadsPage() {
               />
             </Card>
           )}
+          {a.leadsByRegion.length > 0 && (
+            <Card title="Per Daerah" subtitle="Leads, deal, dan total OS nasabah" className="lg:col-span-2">
+              <MiniTable
+                cols={[{ key: "name", label: "Daerah" }, { key: "leads", label: "Leads", format: "number" }, { key: "deals", label: "Deal", format: "number" }, { key: "dealRate", label: "Conv.", format: "percent" }, { key: "cancel", label: "Batal", format: "number" }, { key: "dealValue", label: "Nilai deal", format: "money" }, { key: "osPokok", label: "OS pokok", format: "money" }, { key: "osBunga", label: "OS bunga", format: "money" }, { key: "osTotal", label: "Total OS", format: "money" }]}
+                rows={a.leadsByRegion}
+              />
+            </Card>
+          )}
+          {a.leadsByCity.length > 0 && (
+            <Card title="Kota terbanyak" subtitle="15 kota dengan leads terbanyak">
+              <BarList items={a.leadsByCity.map((c) => ({ name: c.name, value: c.leads, sub: `deal ${c.deals}` }))} sub />
+            </Card>
+          )}
           <Card title="Per Brand">
             <MiniTable cols={[{ key: "name", label: "Brand" }, { key: "leads", label: "Leads", format: "number" }, { key: "hot", label: "HOT", format: "number" }, { key: "deals", label: "Deal", format: "number" }, { key: "dealRate", label: "Conv.", format: "percent" }]} rows={a.leadsByBrand} />
           </Card>
