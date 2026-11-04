@@ -85,13 +85,26 @@ export async function readWorkbook(buf: ArrayBuffer, filename: string): Promise<
   return sheets;
 }
 
+/**
+ * Header texts a column can be matched by. A header that repeats ("nomor pelanggan" twice) is also tried as
+ * "nomor pelanggan 2", "… 3", so a resource can tell its same-named columns apart with an alias.
+ */
+function headerTexts(header: unknown[]) {
+  const seen = new Map<string, number>();
+  return header.map((h) => {
+    const t = norm(h);
+    if (!t) return [];
+    const k = (seen.get(t) ?? 0) + 1;
+    seen.set(t, k);
+    return k > 1 ? [t, `${t} ${k}`] : [t];
+  });
+}
+
 /** Map column index -> field key by matching header text against labels/aliases. */
 function matchHeader(r: Resource, header: unknown[]) {
   const best = new Map<string, { col: number; score: number }>();
-  header.forEach((h, col) => {
-    const t = norm(h);
-    if (!t) return;
-    for (const f of r.fields) {
+  headerTexts(header).forEach((texts, col) => {
+    for (const t of texts) for (const f of r.fields) {
       let score = 0;
       if (t === norm(f.label) || t === f.key) score = 3;
       else if ((f.aliases ?? []).some((a) => norm(a) === t)) score = 2;
@@ -107,14 +120,16 @@ function matchHeader(r: Resource, header: unknown[]) {
 /** Every column that could feed each field, best match first (a field can match several headers). */
 function matchCandidates(r: Resource, header: unknown[]) {
   const all = new Map<string, { col: number; score: number }[]>();
-  header.forEach((h, col) => {
-    const t = norm(h);
-    if (!t) return;
+  headerTexts(header).forEach((texts, col) => {
     for (const f of r.fields) {
       let score = 0;
-      if (t === norm(f.label) || t === f.key) score = 3;
-      else if ((f.aliases ?? []).some((a) => norm(a) === t)) score = 2;
-      else if (norm(f.label).length > 4 && (t.startsWith(norm(f.label)) || (f.aliases ?? []).some((a) => norm(a).length > 5 && t.startsWith(norm(a))))) score = 1;
+      for (const t of texts) {
+        let s = 0;
+        if (t === norm(f.label) || t === f.key) s = 3;
+        else if ((f.aliases ?? []).some((a) => norm(a) === t)) s = 2;
+        else if (norm(f.label).length > 4 && (t.startsWith(norm(f.label)) || (f.aliases ?? []).some((a) => norm(a).length > 5 && t.startsWith(norm(a))))) s = 1;
+        score = Math.max(score, s);
+      }
       if (score) all.set(f.key, [...(all.get(f.key) ?? []), { col, score }]);
     }
   });

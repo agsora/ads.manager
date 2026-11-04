@@ -555,7 +555,9 @@ export const RESOURCES: Resource[] = [
       { key: "brand", label: "Brand", type: "brand", required: true, group: "Blast" },
       { key: "blast", label: "Blast", type: "select", options: "yes_no_en", group: "Blast", aliases: ["blast?", "kirim"] },
       { key: "status", label: "Status Blast", type: "select", options: "contact_status", group: "Blast" },
-      { key: "contract_no", label: "Nomor Kontrak", type: "text", group: "Data Konsumen", aliases: ["nomor kontrak", "no kontrak", "no. kontrak", "contract"] },
+      { key: "customer_no", label: "No. Pelanggan", type: "text", group: "Data Konsumen", hideInTable: true, aliases: ["nomor pelanggan", "no pelanggan", "no. pelanggan"] },
+      { key: "contract_no", label: "Nomor Kontrak", type: "text", group: "Data Konsumen", aliases: ["nomor kontrak", "no kontrak", "no. kontrak", "contract", "nomor pelanggan 2"] },
+      { key: "financing", label: "Jenis", type: "text", group: "Data Konsumen", aliases: ["jenis", "jenis pembiayaan", "pembiayaan"] },
       { key: "name", label: "Nama", type: "text", required: true, group: "Data Konsumen", aliases: ["nama", "nama konsumen"] },
       { key: "phone", label: "Nomor", type: "phone", group: "Data Konsumen", hideInTable: true, aliases: ["nomor", "no hp", "no. hp", "hp", "no wa"] },
       { key: "phone_official", label: "No. Resmi (62)", type: "phone", group: "Data Konsumen", aliases: ["noresmi", "no resmi", "nomor resmi"] },
@@ -570,6 +572,7 @@ export const RESOURCES: Resource[] = [
     ],
     derive: (r) => {
       const digits = (v: unknown) => String(v ?? "").replace(/\D/g, "");
+      if (typeof r.financing === "string" && r.financing) r.financing = r.financing.charAt(0).toUpperCase() + r.financing.slice(1).toLowerCase();
       if (!r.phone_official && r.phone) {
         const d = digits(r.phone);
         r.phone_official = d.startsWith("0") ? "62" + d.slice(1) : d.startsWith("8") ? "62" + d : d;
