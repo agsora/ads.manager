@@ -1,5 +1,5 @@
 import { listRows } from "./repo";
-import { RESOURCE_MAP, n, type Row } from "./resources";
+import { RESOURCE_MAP, isFinishedLead, n, type Row } from "./resources";
 import { normPhone } from "./phone";
 import { coordsForBranch, regionForBranch } from "./regions";
 import { checkCompliance } from "./compliance";
@@ -76,7 +76,7 @@ function leadKpis(leads: Row[]) {
   const cold = leads.filter((r) => lc(r.segment) === "cold").length;
   const ghost = leads.filter((r) => r.final_status === "Ghosting").length;
   const cancel = leads.filter((r) => r.final_status === "Cancel").length;
-  const closed = leads.filter((r) => ["Deal", "Cancel", "Ghosting"].includes(String(r.final_status))).length;
+  const closed = leads.filter((r) => isFinishedLead(r)).length;
   return {
     leads: total, deals, hot, warm, cold, ghost, cancel,
     open: total - closed,
@@ -378,7 +378,7 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
   const leadsByRegion = byPlace("region", 20);
   const leadsByCity = byPlace("city", 15);
   const followUps = openLeads
-    .filter((r) => !["Deal", "Cancel", "Ghosting"].includes(String(r.final_status)))
+    .filter((r) => !isFinishedLead(r))
     .map((r) => {
       const age = diffDays(String(r.chat_date).slice(0, 10), today);
       const stage = !r.followup_1 ? 1 : !r.followup_2 ? 2 : !r.followup_3 ? 3 : 4;

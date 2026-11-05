@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/shell";
 import { api, useFetch, useFilter, useMeta, useToast } from "@/components/providers";
 import { ResourceForm } from "@/components/resource-form";
 import { Chip } from "@/components/cells";
-import { RESOURCE_MAP, type Row } from "@/lib/resources";
+import { RESOURCE_MAP, isFinishedLead, type Row } from "@/lib/resources";
 import { normPhone } from "@/lib/phone";
 import { addDays, diffDays, fmtDate, todayISO } from "@/lib/format";
 
@@ -44,7 +44,7 @@ export default function FollowUpBoard() {
   const open = useMemo(
     () =>
       (data?.rows ?? [])
-        .filter((r) => !["Deal", "Cancel", "Ghosting"].includes(String(r.final_status)))
+        .filter((r) => !isFinishedLead(r))
         .map((r) => {
           const age = diffDays(String(r.chat_date).slice(0, 10), today);
           const stage = !r.followup_1 ? 1 : !r.followup_2 ? 2 : !r.followup_3 ? 3 : 4;

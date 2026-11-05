@@ -65,6 +65,11 @@ export interface Resource {
   defaultSort?: string;
 }
 
+/** A lead whose case is over: Status Akhir (or the stage) is Done, Approve, Deal, Cancel or Ghosting. Its next action is "Selesai". */
+const FINISHED = new Set(["done", "approve", "deal", "cancel", "ghosting"]);
+export const isFinishedLead = (r: Record<string, unknown>): boolean =>
+  FINISHED.has(String(r.final_status ?? "").trim().toLowerCase()) || String(r.pipeline_stage ?? "").trim().toLowerCase() === "approve";
+
 export const n = (v: unknown): number => {
   if (v === null || v === undefined || v === "") return 0;
   const x = typeof v === "number" ? v : Number(String(v).replace(/[^0-9.\-]/g, ""));
@@ -488,7 +493,7 @@ export const RESOURCES: Resource[] = [
         label: "Aksi Berikutnya",
         format: "text",
         fn: (r) => {
-          if (["Deal", "Cancel", "Ghosting"].includes(String(r.final_status))) return "Selesai";
+          if (isFinishedLead(r)) return "Selesai";
           const age = daysBetween(r.chat_date, new Date().toISOString().slice(0, 10)) ?? 0;
           if (!r.followup_1) return age >= 3 ? "FU1 jatuh tempo" : "FU1 mulai H+3";
           if (!r.followup_2) return age >= 7 ? "FU2 jatuh tempo" : "Tunggu FU2";
