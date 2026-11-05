@@ -151,6 +151,12 @@ body {
   table.data th:first-child, table.data td:first-child { padding-left: 16px; }
   table.data th:last-child, table.data td:last-child { padding-right: 16px; }
   table.data tbody tr:hover td { background: #fcfbf8; }
+  /* frozen leading columns (ResourceTable freeze): stay put while the table scrolls sideways */
+  table.data th.frz, table.data td.frz { position: sticky; background: var(--surface); }
+  table.data th.frz { z-index: 3; background: var(--surface-2); }
+  table.data td.frz { z-index: 2; }
+  table.data .frz-last { box-shadow: 1px 0 0 var(--line), 5px 0 6px -4px rgba(0, 0, 0, .16); }
+  table.data tbody tr:hover td.frz { background: #fcfbf8; }
 
   /* compact pill controls (topbar pickers) */
   .pill {

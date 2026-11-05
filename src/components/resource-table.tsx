@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Check, ChevronDown, Columns3, Download, Eye, FileDown, Pencil, Plus, Search, SlidersHorizontal, Trash2, Upload } from "lucide-react";
 import { MenuItem, Popover } from "./popover";
 import { RESOURCE_MAP, n, type Field, type Row } from "@/lib/resources";
@@ -33,6 +33,8 @@ export interface ResourceTableProps {
   reloadKey?: number;
   /** show only these fields as columns (in this order) */
   columns?: string[];
+  /** leftmost field keys that stay in view while scrolling sideways (they must be the first columns) */
+  freeze?: string[];
   /** limit the add/edit form to these field groups */
   formGroups?: string[];
   formTitle?: string;
@@ -45,7 +47,7 @@ export interface ResourceTableProps {
   onDetail?: (row: Row) => void;
 }
 
-export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ignoreDate, rowFilter, defaults, onChanged, toolbar, selectionActions, importPlatform, reloadKey = 0, columns, formGroups, formTitle, allowCreate = true, searchPlaceholder, openRowId, onOpened, onDetail }: ResourceTableProps) {
+export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ignoreDate, rowFilter, defaults, onChanged, toolbar, selectionActions, importPlatform, reloadKey = 0, columns, freeze, formGroups, formTitle, allowCreate = true, searchPlaceholder, openRowId, onOpened, onDetail }: ResourceTableProps) {
   const r = RESOURCE_MAP[resourceKey];
   const f = useFilter();
   const { options, session } = useMeta();
@@ -121,6 +123,34 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
   const shown = rows.slice(0, page * PAGE);
   const numericFields = fields.filter((x) => ["money", "number"].includes(x.type) && !/budget|followers|daily/.test(x.key));
 
+  // frozen leading columns: the checkbox column plus the first fields named in `freeze`, each stuck at the summed width of those before it
+  const frozen = useMemo(() => {
+    const out: string[] = [];
+    for (const f of fields) {
+      if (!freeze?.includes(f.key)) break;
+      out.push(f.key);
+    }
+    return out;
+  }, [freeze, fields]);
+  const headRef = useRef<HTMLTableRowElement>(null);
+  const [lefts, setLefts] = useState<number[]>([]);
+  useLayoutEffect(() => {
+    if (!frozen.length || !headRef.current) {
+      setLefts((l) => (l.length ? [] : l));
+      return;
+    }
+    let x = 0;
+    const next = ([...headRef.current.children].slice(0, frozen.length + 1) as HTMLElement[]).map((c) => {
+      const left = x;
+      x += c.offsetWidth;
+      return left;
+    });
+    setLefts((l) => (l.length === next.length && l.every((v, i) => v === next[i]) ? l : next));
+  }, [frozen, data, shown.length, rows.length]);
+  // position 0 is the checkbox column, 1.. are the fields
+  const fz = (i: number): { className: string; style?: React.CSSProperties } =>
+    frozen.length && i <= frozen.length ? { className: `frz${i === frozen.length ? " frz-last" : ""}`, style: { left: lefts[i] ?? 0 } } : { className: "" };
+
   const inlineUpdate = async (row: Row, field: Field, value: string) => {
     try {
       await api(`/api/r/${resourceKey}/${row.id}`, "PUT", { [field.key]: value || null });
@@ -150,8 +180,8 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
   };
 
   const exportUrl = (format: string) => `/api/export?resource=${resourceKey}&format=${format}&${qs}`;
-  const th = (key: string, label: string, right?: boolean) => (
-    <th className={right ? "num" : ""}>
+  const th = (key: string, label: string, right?: boolean, frz?: { className: string; style?: React.CSSProperties }) => (
+    <th className={`${right ? "num" : ""} ${frz?.className ?? ""}`.trim()} style={frz?.style}>
       <button
         className="inline-flex items-center gap-1 hover:text-[var(--ink)]"
         onClick={() => setSort((s) => (s?.key === key ? (s.dir === -1 ? { key, dir: 1 } : null) : { key, dir: -1 }))}
@@ -236,8 +266,8 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
       <div className="max-h-[68vh] overflow-auto">
         <table className="data">
           <thead>
-            <tr>
-              <th className="w-8">
+            <tr ref={headRef}>
+              <th className={`w-8 ${fz(0).className}`.trim()} style={fz(0).style}>
                 <input
                   type="checkbox"
                   aria-label="Pilih semua"
@@ -245,7 +275,7 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
                   onChange={(e) => setSel(e.target.checked ? new Set(shown.map((x) => x.id!)) : new Set())}
                 />
               </th>
-              {fields.map((x) => th(x.key, x.label, ["money", "number", "percent"].includes(x.type)))}
+              {fields.map((x, i) => th(x.key, x.label, ["money", "number", "percent"].includes(x.type), fz(i + 1)))}
               {comps.map((c) => th(c.key, c.label, c.format !== "text"))}
               <th className="w-20" />
             </tr>
@@ -277,7 +307,7 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
             )}
             {shown.map((row) => (
               <tr key={row.id} className="cursor-pointer" onClick={() => (onDetail ? onDetail(row) : setEditing(row))}>
-                <td onClick={(e) => e.stopPropagation()}>
+                <td className={fz(0).className} style={fz(0).style} onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
                     aria-label="Pilih baris"
@@ -292,8 +322,8 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
                     }
                   />
                 </td>
-                {fields.map((fd) => (
-                  <td key={fd.key} className={["money", "number", "percent"].includes(fd.type) ? "num" : ""}>
+                {fields.map((fd, i) => (
+                  <td key={fd.key} className={`${["money", "number", "percent"].includes(fd.type) ? "num" : ""} ${fz(i + 1).className}`.trim()} style={fz(i + 1).style}>
                     {fd.type === "select" ? (
                       <InlineSelect value={String(row[fd.key] ?? "")} opts={options[fd.options ?? ""] ?? []} onChange={(v) => inlineUpdate(row, fd, v)} />
                     ) : (

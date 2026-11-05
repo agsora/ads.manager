@@ -37,7 +37,7 @@ export default function LeadsPage() {
         </div>
       )}
       <WaLinkBuilder />
-      <ResourceTable resourceKey="leads" quickFilters={["branch", "pipeline_stage", "source", "segment", "final_status"]} computedCols={["reply_minutes", "age_days", "next_action"]} onChanged={reload} selectionActions={(ids, done) => <StopButton resource="leads" ids={ids} done={() => (done(), reload())} />} />
+      <ResourceTable resourceKey="leads" freeze={["chat_date", "brand", "name"]} quickFilters={["branch", "pipeline_stage", "source", "segment", "final_status"]} computedCols={["reply_minutes", "age_days", "next_action"]} onChanged={reload} selectionActions={(ids, done) => <StopButton resource="leads" ids={ids} done={() => (done(), reload())} />} />
       {a && a.kpis.leads.leads > 0 && (
         <div className="grid gap-4 lg:grid-cols-3">
           <Card title="Sumber Trafik" subtitle="Leads · biaya per lead (CPL)">
