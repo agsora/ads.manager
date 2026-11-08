@@ -96,16 +96,25 @@ function igAccounts() {
 }
 
 /** When Meta says "does not have permission", list what the token really holds so the missing scope is obvious. */
-async function permissionHint(token: string): Promise<string> {
+async function permissionHint(token: string, igUserId: string): Promise<string> {
   if (/^IG/.test(token)) return " | Token Instagram Login: buat ulang dengan izin instagram_business_basic dan instagram_business_manage_insights.";
   try {
     const j: { data?: { permission: string; status: string }[] } = await (await fetch(`${IG_API}/me/permissions?access_token=${token}`, { signal: AbortSignal.timeout(10000) })).json();
     if (!j.data) return "";
     const granted = j.data.filter((p) => p.status === "granted").map((p) => p.permission);
     const missing = ["instagram_basic", "instagram_manage_insights"].filter((p) => !granted.includes(p));
-    return missing.length
-      ? ` | Izin token yang kurang: ${missing.join(", ")}. Buat ulang token dengan izin itu.`
-      : ` | Izin token sudah lengkap (${granted.join(", ")}). Pastikan akun Instagram ini sudah ditetapkan ke pemilik token (Business Settings → Pengguna sistem → Tetapkan aset) dan IG_USER_ID adalah ID akun Instagram, bukan ID Page.`;
+    if (missing.length) return ` | Izin token yang kurang: ${missing.join(", ")}. Buat ulang token dengan izin itu.`;
+    // permissions are fine: show which Instagram accounts the token can really reach, to compare with IG_USER_ID
+    const pages: { data?: { name?: string; instagram_business_account?: { id: string; username?: string } }[] } = await (
+      await fetch(`${IG_API}/me/accounts?fields=name,instagram_business_account{id,username}&limit=50&access_token=${token}`, { signal: AbortSignal.timeout(10000) })
+    ).json();
+    const seen = (pages.data ?? []).filter((p) => p.instagram_business_account).map((p) => ({ id: p.instagram_business_account!.id, label: `@${p.instagram_business_account!.username ?? "?"} (${p.instagram_business_account!.id}, Page ${p.name ?? "?"})` }));
+    const found = seen.some((s) => s.id === igUserId);
+    return (
+      ` | Izin token sudah lengkap. ` +
+      (seen.length ? `Akun Instagram yang bisa dibaca token: ${seen.map((s) => s.label).join("; ")}. ` : `Token tidak melihat Page/akun Instagram apa pun: tetapkan Page dan akun Instagram ke pemilik token di Business Settings → Pengguna sistem → Tetapkan aset. `) +
+      (seen.length ? (found ? `IG_USER_ID ${igUserId} ada di daftar itu, jadi cek lagi apakah akun tersebut memberi akses penuh ke pemilik token.` : `IG_USER_ID ${igUserId} TIDAK ada di daftar itu: ganti dengan ID akun Instagram yang benar.`) : "")
+    );
   } catch {
     return "";
   }
