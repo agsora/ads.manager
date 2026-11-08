@@ -95,6 +95,22 @@ function igAccounts() {
   return list;
 }
 
+/** When Meta says "does not have permission", list what the token really holds so the missing scope is obvious. */
+async function permissionHint(token: string): Promise<string> {
+  if (/^IG/.test(token)) return " | Token Instagram Login: buat ulang dengan izin instagram_business_basic dan instagram_business_manage_insights.";
+  try {
+    const j: { data?: { permission: string; status: string }[] } = await (await fetch(`${IG_API}/me/permissions?access_token=${token}`, { signal: AbortSignal.timeout(10000) })).json();
+    if (!j.data) return "";
+    const granted = j.data.filter((p) => p.status === "granted").map((p) => p.permission);
+    const missing = ["instagram_basic", "instagram_manage_insights"].filter((p) => !granted.includes(p));
+    return missing.length
+      ? ` | Izin token yang kurang: ${missing.join(", ")}. Buat ulang token dengan izin itu.`
+      : ` | Izin token sudah lengkap (${granted.join(", ")}). Pastikan akun Instagram ini sudah ditetapkan ke pemilik token (Business Settings → Pengguna sistem → Tetapkan aset) dan IG_USER_ID adalah ID akun Instagram, bukan ID Page.`;
+  } catch {
+    return "";
+  }
+}
+
 type IgMedia = { id: string; permalink: string; like_count?: number; comments_count?: number };
 
 async function igFind(acc: { token: string; id: string }, code: string): Promise<IgMedia | null> {
@@ -124,7 +140,8 @@ async function instagram(url: string): Promise<Metrics> {
     try {
       media = await igFind(a, code);
     } catch (e) {
-      lastError = `Instagram API (${a.name}): ${(e as Error).message}`;
+      const msg = (e as Error).message;
+      lastError = `Instagram API (${a.name}): ${msg}${/\(#(10|200)\)|permission/i.test(msg) ? await permissionHint(a.token) : ""}`;
       continue;
     }
     if (media) {
