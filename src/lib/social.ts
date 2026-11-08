@@ -150,7 +150,7 @@ async function instagram(url: string): Promise<Metrics> {
       media = await igFind(a, code);
     } catch (e) {
       const msg = (e as Error).message;
-      lastError = `Instagram API (${a.name}): ${msg}${/\(#(10|200)\)|permission/i.test(msg) ? await permissionHint(a.token) : ""}`;
+      lastError = `Instagram API (${a.name}): ${msg}${/\(#(10|200)\)|permission/i.test(msg) ? await permissionHint(a.token, a.id) : ""}`;
       continue;
     }
     if (media) {
