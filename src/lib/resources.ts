@@ -689,9 +689,47 @@ export const RESOURCES: Resource[] = [
       { key: "roi", label: "ROI", format: "percent", fn: (r) => (n(r.fee) && n(r.revenue) ? (n(r.revenue) - n(r.fee)) / n(r.fee) : null) },
     ],
   },
+  {
+    key: "berkas",
+    table: "berkas_in",
+    label: "Berkas In",
+    singular: "Berkas",
+    description: "Berkas pengajuan yang masuk lewat Digital Marketing (nama CMO atau Asal Berkas), dibaca hanya-baca dari database Konvensional dan Syariah.",
+    dateField: "tgl_masuk",
+    titleField: "nama",
+    importKeys: ["source_id"],
+    sheetHints: ["berkas in"],
+    defaultSort: "tgl_masuk",
+    upsertKeys: ["segment", "source_id"],
+    fields: [
+      { key: "tgl_masuk", label: "Tanggal Masuk", type: "date", required: true, aliases: ["tanggal", "tgl masuk", "tanggal berkas"] },
+      { key: "segment", label: "Segmen", type: "text", aliases: ["segmen"] },
+      { key: "source_id", label: "No. Berkas", type: "text", aliases: ["id berkas", "id", "no berkas", "no sbg"] },
+      { key: "nama", label: "Nama Pemohon", type: "text", aliases: ["nama", "debitur", "nama debitur"] },
+      { key: "phone", label: "No. HP", type: "phone", aliases: ["hp", "no hp", "no telp", "telp"] },
+      { key: "jenis", label: "Jenis Pengajuan", type: "text", aliases: ["jenis", "produk"] },
+      { key: "asal", label: "Asal Berkas", type: "text", aliases: ["asal", "asal aplikasi", "sumber"] },
+      { key: "cmo", label: "CMO", type: "text", aliases: ["cmo", "sales"] },
+      { key: "surveyor", label: "Surveyor", type: "text", aliases: ["surveyor"] },
+      { key: "cabang", label: "Cabang", type: "text", aliases: ["cabang", "kota"] },
+      { key: "dealer", label: "Dealer", type: "text", aliases: ["dealer"] },
+      { key: "status", label: "Status", type: "text", aliases: ["status", "status berkas"] },
+      { key: "tgl_keputusan", label: "Tanggal Keputusan", type: "date", aliases: ["tgl approve", "tanggal approve", "tgl keputusan"] },
+      { key: "alasan", label: "Alasan", type: "longtext", aliases: ["alasan", "keterangan"] },
+      { key: "unit", label: "Unit / Agunan", type: "text", aliases: ["unit", "agunan", "kendaraan"] },
+      { key: "harga_pasar", label: "Harga Pasar", type: "money", aliases: ["harga pasar", "harga"] },
+      { key: "dp", label: "DP", type: "money", aliases: ["dp", "uang muka"] },
+      { key: "tenor", label: "Tenor", type: "number", aliases: ["tenor", "lama pinjaman"] },
+      { key: "angsuran", label: "Angsuran", type: "money", aliases: ["angsuran", "angsuran bulan"] },
+      { key: "no_kontrak", label: "No. Kontrak", type: "text", aliases: ["no kontrak", "nomor kontrak", "no sbg"] },
+      { key: "status_kontrak", label: "Status Kontrak", type: "text", aliases: ["status kontrak"] },
+      { key: "tgl_cair", label: "Tanggal Cair", type: "date", aliases: ["tgl cair", "tanggal cair", "tgl pencairan"] },
+      { key: "pokok", label: "Pokok Pembiayaan", type: "money", aliases: ["pokok", "plafon", "nilai pinjaman", "total nilai pinjaman"] },
+    ],
+  },
 ];
 
-export const RESOURCE_MAP = Object.fromEntries(RESOURCES.map((r) => [r.key, r])) as Record<string, Resource>;
+export const RESOURCE_MAP =Object.fromEntries(RESOURCES.map((r) => [r.key, r])) as Record<string, Resource>;
 
 export function getResource(key: string): Resource | undefined {
   return RESOURCE_MAP[key];
