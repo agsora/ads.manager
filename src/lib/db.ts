@@ -1,7 +1,7 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { RESOURCES, type FieldType } from "./resources";
 
-const SCHEMA_VERSION = "26";
+const SCHEMA_VERSION = "27";
 
 // Keep DATE/TIMESTAMP as raw strings (no timezone shifting) and NUMERIC/INT8 as numbers.
 const RAW = (v: string) => v;

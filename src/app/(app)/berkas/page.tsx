@@ -12,39 +12,52 @@ const DONE = ["APPROVED", "DISETUJUI", "APPROVE"];
 const REJECT = ["REJECTED", "DITOLAK", "REJECT"];
 const CANCEL = ["CANCELLED", "BATAL", "CANCEL"];
 const is = (r: Row, list: string[]) => list.includes(String(r.status ?? "").trim().toUpperCase());
+const isReinput = (r: Row) => r.tipe_masuk === "Input ulang";
+
+type Show = "semua" | "dm" | "ulang";
 
 export default function BerkasPage() {
   const f = useFilter();
   const [tick, setTick] = useState(0);
+  const [show, setShow] = useState<Show>("semua");
   const { data } = useFetch<{ rows: Row[] }>(`/api/r/berkas?from=${f.from}&to=${f.to}&_=${tick}`);
   const rows = useMemo(() => data?.rows ?? [], [data]);
 
   const k = useMemo(() => {
-    const approved = rows.filter((r) => is(r, DONE)).length;
-    const rejected = rows.filter((r) => is(r, REJECT)).length;
-    const cancelled = rows.filter((r) => is(r, CANCEL)).length;
-    const cair = rows.filter((r) => r.tgl_cair);
+    const dm = rows.filter((r) => !isReinput(r));
+    const approved = dm.filter((r) => is(r, DONE)).length;
+    const rejected = dm.filter((r) => is(r, REJECT)).length;
+    const cancelled = dm.filter((r) => is(r, CANCEL)).length;
+    const cair = dm.filter((r) => r.tgl_cair);
     const last = rows.map((r) => String(r.updated_at ?? "")).sort().pop();
     return {
-      total: rows.length,
+      total: dm.length,
       approved,
       rejected,
       cancelled,
-      process: rows.length - approved - rejected - cancelled,
+      process: dm.length - approved - rejected - cancelled,
       cair: cair.length,
       pokok: cair.reduce((s, r) => s + n(r.pokok), 0),
-      konven: rows.filter((r) => r.segment === "Konvensional").length,
-      syariah: rows.filter((r) => r.segment === "Syariah").length,
+      ulang: rows.length - dm.length,
+      konven: dm.filter((r) => r.segment === "Konvensional").length,
+      syariah: dm.filter((r) => r.segment === "Syariah").length,
       last,
     };
   }, [rows]);
+
+  const filter = useMemo(() => (show === "semua" ? undefined : (r: Row) => (show === "ulang" ? isReinput(r) : !isReinput(r))), [show]);
+  const pills: { v: Show; t: string }[] = [
+    { v: "semua", t: `Semua (${rows.length})` },
+    { v: "dm", t: `Digital Marketing (${k.total})` },
+    { v: "ulang", t: `Input ulang NIK sama (${k.ulang})` },
+  ];
 
   return (
     <div className="space-y-4">
       <PageHeader
         eyebrow="Berkas In"
         title="Berkas In Digital Marketing"
-        desc="Berkas pengajuan yang masuk lewat Digital Marketing: nama CMO-nya Digital Marketing (Konvensional) atau Asal Berkas-nya Digital Marketing (Syariah). Data dibaca hanya-baca dari database sumber, dan diperbarui lewat sinkronisasi (npm run sync:berkas)."
+        desc="Berkas pengajuan yang masuk lewat Digital Marketing: nama CMO-nya Digital Marketing (Konvensional) atau Asal Berkas-nya Digital Marketing (Syariah). Berkas yang diinput ulang dengan NIK yang sama (pemohon atau pasangan) dalam 30 hari setelahnya ikut ditampilkan sebagai Input ulang. Data dibaca hanya-baca dari database sumber dan diperbarui lewat sinkronisasi (npm run sync:berkas)."
       />
       <div className="stat-grid">
         <Kpi label="Berkas masuk" value={k.total} format="number" />
@@ -54,6 +67,7 @@ export default function BerkasPage() {
         <Kpi label="Dalam proses" value={k.process} format="number" />
         <Kpi label="Sudah cair" value={k.cair} format="number" />
         <Kpi label="Pokok cair" value={k.pokok} format="money" />
+        <Kpi label="Input ulang ≤30 hari" value={k.ulang} format="number" />
       </div>
       <p className="text-[12.5px] text-[var(--muted)]">
         Konvensional {k.konven} · Syariah {k.syariah}
@@ -66,7 +80,14 @@ export default function BerkasPage() {
           </p>
         </Card>
       )}
-      <ResourceTable resourceKey="berkas" freeze={["tgl_masuk", "segment", "source_id", "nama"]} quickFilters={[]} allowCreate={false} onChanged={() => setTick((t) => t + 1)} searchPlaceholder="Cari nama, no. berkas, CMO, cabang…" />
+      <div className="flex flex-wrap gap-1.5">
+        {pills.map((p) => (
+          <button key={p.v} type="button" className="pill" aria-pressed={show === p.v} style={show === p.v ? { borderColor: "var(--ink)", background: "var(--surface-2)" } : undefined} onClick={() => setShow(p.v)}>
+            {p.t}
+          </button>
+        ))}
+      </div>
+      <ResourceTable resourceKey="berkas" freeze={["tgl_masuk", "segment", "tipe_masuk", "source_id", "nama"]} rowFilter={filter} allowCreate={false} onChanged={() => setTick((t) => t + 1)} searchPlaceholder="Cari nama, no. berkas, CMO, cabang…" />
     </div>
   );
 }

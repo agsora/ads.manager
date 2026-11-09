@@ -84,9 +84,53 @@ async function select(seg: Seg, text: string): Promise<Record<string, unknown>[]
 
 const JKT = (col: string) => `(${col} AT TIME ZONE 'Asia/Jakarta')::date`;
 
-/** Konvensional: berkas yang CMO-nya Digital Marketing, dengan data pemohon, CMO/surveyor, cabang, dealer, survei, dan kontrak. */
+/**
+ * Konvensional: (1) berkas yang CMO-nya Digital Marketing, (2) berkas yang diinput ulang SETELAH itu dengan NIK yang sama
+ * (NIK pemohon atau NIK pasangan, silang) dalam 30 hari. Untuk (2) dipakai berkas Digital Marketing terdekat sebelumnya.
+ * Dilengkapi data pemohon, CMO/surveyor, cabang, dealer, survei, dan kontrak.
+ */
 const SQL_KONVEN = `
+  WITH dm AS (
+    SELECT a.id, a."createdAt" AS dibuat,
+           regexp_replace(COALESCE(bu.ktp_number, ''), '\\D', '', 'g') AS nik_p,
+           regexp_replace(COALESCE(a.partner_ktp_number, ''), '\\D', '', 'g') AS nik_s
+    FROM   "Applications" a
+    JOIN   "Users" cmo ON cmo.id = a.surveyor_id AND cmo.full_name ILIKE '%digital marketing%'
+    LEFT   JOIN "Users" bu ON bu.id = a.user_id
+  ),
+  dm_nik AS (
+    SELECT d.id, d.dibuat, v.nik, v.peran
+    FROM   dm d
+    CROSS  JOIN LATERAL (VALUES (d.nik_p, 'pemohon'), (d.nik_s, 'pasangan')) AS v(nik, peran)
+    WHERE  length(v.nik) = 16
+  ),
+  cand AS (
+    SELECT a2.id, a2."createdAt" AS dibuat,
+           regexp_replace(COALESCE(bu2.ktp_number, ''), '\\D', '', 'g') AS nik_p,
+           regexp_replace(COALESCE(a2.partner_ktp_number, ''), '\\D', '', 'g') AS nik_s
+    FROM   "Applications" a2
+    LEFT   JOIN "Users" bu2 ON bu2.id = a2.user_id
+    WHERE  a2."createdAt" >= (SELECT min(dibuat) FROM dm)
+      AND  a2.id NOT IN (SELECT id FROM dm)
+  ),
+  ulang AS (
+    SELECT DISTINCT ON (c.id) c.id, d.id AS ref_dm, d.peran AS peran_dm,
+           CASE WHEN d.nik = c.nik_p THEN 'pemohon' ELSE 'pasangan' END AS peran_baru,
+           GREATEST(c.dibuat::date - d.dibuat::date, 0) AS hari
+    FROM   cand c
+    JOIN   dm_nik d ON c.dibuat > d.dibuat AND c.dibuat <= d.dibuat + interval '30 days'
+                   AND (d.nik = c.nik_p OR d.nik = c.nik_s)
+    ORDER  BY c.id, d.dibuat DESC
+  ),
+  sel AS (
+    SELECT id, 'Digital Marketing' AS tipe, NULL::int AS ref_dm, NULL::int AS hari, NULL::text AS nik_cocok FROM dm
+    UNION ALL
+    SELECT id, 'Input ulang', ref_dm, hari::int, 'NIK ' || peran_baru || ' sama dengan NIK ' || peran_dm || ' berkas Digital Marketing' FROM ulang
+  )
   SELECT a.id::text AS source_id,
+         sel.tipe AS tipe_masuk,
+         CASE WHEN sel.tipe = 'Digital Marketing' THEN 'Digital Marketing' ELSE 'Input ulang NIK sama' END AS asal,
+         sel.ref_dm::text AS ref_dm, sel.hari, sel.nik_cocok,
          ${JKT('a."createdAt"')} AS tgl_masuk,
          a.status,
          a.application_type
@@ -102,8 +146,9 @@ const SQL_KONVEN = `
          ca.contract_number AS no_kontrak, ca.status AS status_kontrak,
          ${JKT("k.contract_date")} AS tgl_cair,
          ca.initial_outstanding AS pokok
-  FROM   "Applications" a
-  JOIN   "Users" cmo ON cmo.id = a.surveyor_id AND cmo.full_name ILIKE '%digital marketing%'
+  FROM   sel
+  JOIN   "Applications" a ON a.id = sel.id
+  LEFT   JOIN "Users"  cmo ON cmo.id = a.surveyor_id
   LEFT   JOIN "Users"  bu  ON bu.id  = a.user_id
   LEFT   JOIN "Users"  rev ON rev.id = a.reviewer_id
   LEFT   JOIN "Cities" ci  ON ci.id  = a.city_id
@@ -162,7 +207,7 @@ async function main() {
       continue;
     }
     const rows = src.map((x) => {
-      const o = cleanInput(r, { ...x, segment: s.label, asal: x.asal || s.asal }, true);
+      const o = cleanInput(r, { ...x, segment: s.label, asal: x.asal || s.asal, tipe_masuk: x.tipe_masuk ?? "Digital Marketing" }, true);
       for (const f of r.fields) if (!(f.key in o)) o[f.key] = null;
       return o;
     });
@@ -173,6 +218,7 @@ async function main() {
     const gone = await q(`DELETE FROM berkas_in WHERE org_id = $1 AND segment = $2 AND NOT (source_id = ANY($3::text[])) RETURNING id`, [org, s.label, ids]);
     notes.push(`${s.label}: ${rows.length} berkas${gone.length ? `, ${gone.length} baris lama dihapus karena tidak cocok lagi` : ""}`);
   }
+  if (notes.every((x) => x.includes("GAGAL dibaca"))) process.exitCode = 1; // jadwal harian harus kelihatan gagal bila tidak ada yang terbaca
   await logActivity(org, "Sinkron Berkas In", "Sinkron berkas", notes.join(" | "));
   console.log(`Selesai (workspace ${org}): ${total} berkas ditulis.\n- ${notes.join("\n- ")}`);
 }
