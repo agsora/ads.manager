@@ -716,6 +716,8 @@ export const RESOURCES: Resource[] = [
       { key: "cmo", label: "CMO", type: "text", aliases: ["cmo", "sales"] },
       { key: "surveyor", label: "Surveyor", type: "text", aliases: ["surveyor"] },
       { key: "cabang", label: "Cabang", type: "text", aliases: ["cabang", "kota"] },
+      { key: "syariah_cek", label: "Cek NIK di Syariah (Aceh)", type: "text", aliases: ["cek syariah"] },
+      { key: "syariah_detail", label: "Detail Syariah (Aceh)", type: "longtext", aliases: ["detail syariah"] },
       { key: "dealer", label: "Dealer", type: "text", aliases: ["dealer"] },
       { key: "status", label: "Status", type: "text", aliases: ["status", "status berkas"] },
       { key: "tgl_keputusan", label: "Tanggal Keputusan", type: "date", aliases: ["tgl approve", "tanggal approve", "tgl keputusan"] },
@@ -729,8 +731,6 @@ export const RESOURCES: Resource[] = [
       { key: "status_kontrak", label: "Status Kontrak", type: "text", aliases: ["status kontrak"] },
       { key: "tgl_cair", label: "Tanggal Cair", type: "date", aliases: ["tgl cair", "tanggal cair", "tgl pencairan"] },
       { key: "pokok", label: "Pokok Pembiayaan", type: "money", aliases: ["pokok", "plafon", "nilai pinjaman", "total nilai pinjaman"] },
-      { key: "syariah_cek", label: "Cek NIK di Syariah (Aceh)", type: "text", aliases: ["cek syariah"] },
-      { key: "syariah_detail", label: "Detail Syariah (Aceh)", type: "longtext", aliases: ["detail syariah"] },
     ],
   },
 ];

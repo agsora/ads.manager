@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/shell";
 import { ResourceTable } from "@/components/resource-table";
-import { api, useFetch, useFilter, useToast } from "@/components/providers";
+import { api, useFetch, useToast } from "@/components/providers";
 import { Card, Kpi } from "@/components/charts";
 import { n, type Row } from "@/lib/resources";
 import { fmtDate } from "@/lib/format";
@@ -18,14 +18,20 @@ const CANCEL = ["CANCELLED", "BATAL", "CANCEL"];
 const is = (r: Row, list: string[]) => list.includes(String(r.status ?? "").trim().toUpperCase());
 const isReinput = (r: Row) => r.tipe_masuk === "Input ulang";
 
-type Show = "semua" | "dm" | "ulang";
+type Show = "semua" | "dm" | "ulang" | "aceh" | "syariah";
+const isAceh = (r: Row) => !!r.syariah_cek; // diisi hanya untuk cabang Aceh
+const inSyariah = (r: Row) => r.syariah_cek === "Ada di Syariah";
+const monthOf = (r: Row) => String(r.tgl_masuk ?? "").slice(0, 7);
 
 export default function BerkasPage() {
-  const f = useFilter();
   const [tick, setTick] = useState(0);
   const [show, setShow] = useState<Show>("semua");
-  const { data } = useFetch<{ rows: Row[] }>(`/api/r/berkas?from=${f.from}&to=${f.to}&_=${tick}`);
-  const rows = useMemo(() => data?.rows ?? [], [data]);
+  const [bulan, setBulan] = useState("semua");
+  // menu ini tidak mengikuti filter periode global: semua berkas hasil sinkron tampil, dipersempit lewat pilihan bulan di halaman
+  const { data } = useFetch<{ rows: Row[] }>(`/api/r/berkas?_=${tick}`);
+  const all = useMemo(() => data?.rows ?? [], [data]);
+  const months = useMemo(() => [...new Set(all.map(monthOf).filter(Boolean))].sort().reverse(), [all]);
+  const rows = useMemo(() => (bulan === "semua" ? all : all.filter((r) => monthOf(r) === bulan)), [all, bulan]);
 
   // tombol Sinkron menaruh permintaan; komputer kantor memeriksanya tiap beberapa menit (sinkron otomatis tetap jam 06:30)
   const toast = useToast();
@@ -70,17 +76,24 @@ export default function BerkasPage() {
       cair: cair.length,
       pokok: cair.reduce((s, r) => s + n(r.pokok), 0),
       ulang: rows.length - dm.length,
+      aceh: rows.filter(isAceh).length,
+      acehAda: rows.filter(inSyariah).length,
       konven: dm.filter((r) => r.segment === "Konvensional").length,
       syariah: dm.filter((r) => r.segment === "Syariah").length,
       last,
     };
   }, [rows]);
 
-  const filter = useMemo(() => (show === "semua" ? undefined : (r: Row) => (show === "ulang" ? isReinput(r) : !isReinput(r))), [show]);
+  const filter = useMemo(
+    () => (r: Row) => (bulan === "semua" || monthOf(r) === bulan) && (show === "semua" ? true : show === "ulang" ? isReinput(r) : show === "dm" ? !isReinput(r) : show === "aceh" ? isAceh(r) : inSyariah(r)),
+    [show, bulan],
+  );
   const pills: { v: Show; t: string }[] = [
     { v: "semua", t: `Semua (${rows.length})` },
     { v: "dm", t: `Digital Marketing (${k.total})` },
     { v: "ulang", t: `Input ulang NIK sama (${k.ulang})` },
+    { v: "aceh", t: `Cabang Aceh (${k.aceh})` },
+    { v: "syariah", t: `Aceh · ada di Syariah (${k.acehAda})` },
   ];
 
   return (
@@ -111,6 +124,8 @@ export default function BerkasPage() {
         <Kpi label="Sudah cair" value={k.cair} format="number" />
         <Kpi label="Pokok cair" value={k.pokok} format="money" />
         <Kpi label="Input ulang ≤30 hari" value={k.ulang} format="number" />
+        <Kpi label="Aceh dicek ke Syariah" value={k.aceh} format="number" />
+        <Kpi label="Aceh ada di Syariah" value={k.acehAda} format="number" />
       </div>
       <p className="text-[12.5px] text-[var(--muted)]">
         Konvensional {k.konven} · Syariah {k.syariah}
@@ -123,14 +138,22 @@ export default function BerkasPage() {
           </p>
         </Card>
       )}
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <select className="input !h-8 !w-auto !text-[13px]" value={bulan} onChange={(e) => setBulan(e.target.value)} aria-label="Bulan">
+          <option value="semua">Semua bulan</option>
+          {months.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
         {pills.map((p) => (
           <button key={p.v} type="button" className="pill" aria-pressed={show === p.v} style={show === p.v ? { borderColor: "var(--ink)", background: "var(--surface-2)" } : undefined} onClick={() => setShow(p.v)}>
             {p.t}
           </button>
         ))}
       </div>
-      <ResourceTable resourceKey="berkas" freeze={["tgl_masuk", "segment", "tipe_masuk", "source_id", "nama"]} rowFilter={filter} allowCreate={false} onChanged={() => setTick((t) => t + 1)} searchPlaceholder="Cari nama, no. berkas, CMO, cabang…" />
+      <ResourceTable resourceKey="berkas" freeze={["tgl_masuk", "segment", "tipe_masuk", "source_id", "nama"]} ignoreDate rowFilter={filter} allowCreate={false} onChanged={() => setTick((t) => t + 1)} searchPlaceholder="Cari nama, no. berkas, CMO, cabang…" />
     </div>
   );
 }
