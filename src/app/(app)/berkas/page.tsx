@@ -20,7 +20,7 @@ const isReinput = (r: Row) => r.tipe_masuk === "Input ulang";
 
 type Show = "semua" | "dm" | "ulang" | "aceh" | "syariah";
 const isAceh = (r: Row) => !!r.syariah_cek; // diisi hanya untuk cabang Aceh
-const inSyariah = (r: Row) => r.syariah_cek === "Ada di Syariah";
+const inSyariah = (r: Row) => !!r.syariah_cek && !/^(Tidak ada|NIK tidak valid)/.test(String(r.syariah_cek)); // NIK ditemukan di Syariah
 const monthOf = (r: Row) => String(r.tgl_masuk ?? "").slice(0, 7);
 
 export default function BerkasPage() {

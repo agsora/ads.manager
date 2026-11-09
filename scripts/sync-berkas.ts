@@ -234,8 +234,8 @@ const dayNum = (iso: unknown) => Date.parse(`${String(iso ?? "").slice(0, 10)}T0
 
 /**
  * Ringkasan Syariah untuk satu berkas Aceh. Hanya kontrak Syariah yang diajukan pada atau setelah tanggal berkas masuk
- * di dashboard, paling lama 30 hari sesudahnya, yang dihitung. Bila ada yang sudah Approve (dan tidak batal) di Syariah,
- * berkas dianggap Approve (approved = true).
+ * di dashboard, paling lama 30 hari sesudahnya, yang dihitung. Approve di Syariah = sudah cair (tgl_cair terisi dan tidak batal);
+ * bila ada yang sudah cair, berkas dianggap Approve (approved = true).
  */
 function syariahSummary(row: Record<string, unknown>, look: Awaited<ReturnType<typeof syariahByNik>>) {
   const p = digits16(row._nik_p);
@@ -267,18 +267,18 @@ function syariahSummary(row: Record<string, unknown>, look: Awaited<ReturnType<t
       const paidOff = Number(k.n_angsuran) > 0 && Number(k.n_bayar) >= Number(k.n_angsuran);
       const late = k.jt_telat ? Math.max(0, Math.floor((Date.now() - Date.parse(`${k.jt_telat}T00:00:00Z`)) / 86400000)) : 0;
       const cancelled = !!k.tgl_batal || k.status_approval === "Batal";
-      const ok = !cancelled && k.status_approval === "Approve";
+      const ok = !cancelled && !!k.tgl_cair; // approve = sudah cair
       if (ok) approved = true;
-      const state = cancelled ? "Batal" : k.tgl_wo ? "WO" : k.tgl_cair && paidOff ? "Lunas" : k.tgl_cair ? "Berjalan" : ok ? "Approve" : String(k.status_approval ?? k.status_data ?? "");
+      const state = cancelled ? "Batal" : k.tgl_wo ? "WO" : k.tgl_cair && paidOff ? "Lunas" : k.tgl_cair ? "Berjalan" : k.status_approval === "Approve" ? "Approve, belum cair" : String(k.status_approval ?? k.status_data ?? "");
       lines.push(
-        `  • SBG ${k.no_sbg} · ${state}${ok ? " (approve)" : ""} · pengajuan ${k.tgl_pengajuan}${k.tgl_cair ? ` · cair ${k.tgl_cair}` : ""} · pinjaman ${rp(k.total_nilai_pinjaman)}${k.tgl_cair ? ` · sisa pokok ${rp(os)}` : ""}` +
+        `  • SBG ${k.no_sbg} · ${state} · pengajuan ${k.tgl_pengajuan}${k.tgl_cair ? ` · cair ${k.tgl_cair}` : ""} · pinjaman ${rp(k.total_nilai_pinjaman)}${k.tgl_cair ? ` · sisa pokok ${rp(os)}` : ""}` +
           (Number(k.n_angsuran) ? ` · ${k.n_bayar}/${k.n_angsuran} angsuran terbayar` : "") +
           (late ? ` · telat ${late} hari` : ""),
       );
     }
   }
-  if (approved) return { cek: "Approve di Syariah", detail: lines.join("\n"), approved: true };
-  if (windowCount) return { cek: "Ada di Syariah, belum approve", detail: lines.join("\n"), approved: false };
+  if (approved) return { cek: "Cair di Syariah (approve)", detail: lines.join("\n"), approved: true };
+  if (windowCount) return { cek: "Ada di Syariah, belum cair", detail: lines.join("\n"), approved: false };
   return { cek: known ? `Ada nasabah Syariah, tidak ada kontrak ≤${WINDOW_DAYS} hari` : "Tidak ada di Syariah", detail: null, approved: false };
 }
 
@@ -358,12 +358,12 @@ async function main() {
           status = "APPROVED";
           statusKonven = x.status;
           approvedN++;
-        } else if (m.cek === "Ada di Syariah, belum approve") pendingN++;
+        } else if (m.cek === "Ada di Syariah, belum cair") pendingN++;
       } else if (isAceh) {
         const old = oldSy.get(String(x.source_id));
         if (old) {
           sy = { syariah_cek: old.syariah_cek, syariah_detail: old.syariah_detail };
-          if (old.syariah_cek === "Approve di Syariah") {
+          if (old.syariah_cek === "Cair di Syariah (approve)") {
             status = "APPROVED";
             statusKonven = old.status_konven ?? x.status;
           }
@@ -378,7 +378,7 @@ async function main() {
     if (rows.length) total += await insertMany(org, r, rows);
     const ids = rows.map((x) => String(x.source_id));
     const gone = await q(`DELETE FROM berkas_in WHERE org_id = $1 AND segment = $2 AND NOT (source_id = ANY($3::text[])) RETURNING id`, [org, s.label, ids]);
-    notes.push(`${s.label}: ${rows.length} berkas${gone.length ? `, ${gone.length} baris lama dihapus karena tidak cocok lagi` : ""}${aceh.length && look ? `; cabang Aceh ${aceh.length} berkas dicek ke Syariah: ${approvedN} approve di Syariah (status jadi APPROVED), ${pendingN} ada kontrak belum approve` : ""}`);
+    notes.push(`${s.label}: ${rows.length} berkas${gone.length ? `, ${gone.length} baris lama dihapus karena tidak cocok lagi` : ""}${aceh.length && look ? `; cabang Aceh ${aceh.length} berkas dicek ke Syariah: ${approvedN} cair di Syariah (status jadi APPROVED), ${pendingN} ada kontrak belum cair` : ""}`);
   }
   const failed = notes.every((x) => x.includes("GAGAL dibaca"));
   if (failed) process.exitCode = 1; // jadwal harian harus kelihatan gagal bila tidak ada yang terbaca
