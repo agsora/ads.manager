@@ -18,8 +18,9 @@ const CANCEL = ["CANCELLED", "BATAL", "CANCEL"];
 const is = (r: Row, list: string[]) => list.includes(String(r.status ?? "").trim().toUpperCase());
 const isReinput = (r: Row) => r.tipe_masuk === "Input ulang";
 
-type Show = "semua" | "dm" | "ulang" | "aceh" | "syariah";
-const isAceh = (r: Row) => !!r.syariah_cek; // diisi hanya untuk cabang Aceh
+type Show = "semua" | "dm" | "ulang" | "aceh" | "syariah" | "via";
+const isAceh = (r: Row) => /aceh/i.test(String(r.area ?? ""));
+const checked = (r: Row) => !!r.syariah_cek; // sudah dicek ke Syariah (belum approve di dashboard maupun lewat input ulang)
 const inSyariah = (r: Row) => !!r.syariah_cek && !/^(Tidak ada|NIK tidak valid)/.test(String(r.syariah_cek)); // NIK ditemukan di Syariah
 const monthOf = (r: Row) => String(r.tgl_masuk ?? "").slice(0, 7);
 
@@ -77,7 +78,11 @@ export default function BerkasPage() {
       pokok: cair.reduce((s, r) => s + n(r.pokok), 0),
       ulang: rows.length - dm.length,
       aceh: rows.filter(isAceh).length,
-      acehAda: rows.filter(inSyariah).length,
+      cek: rows.filter(checked).length,
+      ada: rows.filter(inSyariah).length,
+      viaDash: dm.filter((r) => r.approve_via === "Dashboard").length,
+      viaUlang: dm.filter((r) => r.approve_via === "Input ulang").length,
+      viaSy: dm.filter((r) => r.approve_via === "Syariah").length,
       konven: dm.filter((r) => r.segment === "Konvensional").length,
       syariah: dm.filter((r) => r.segment === "Syariah").length,
       last,
@@ -85,15 +90,16 @@ export default function BerkasPage() {
   }, [rows]);
 
   const filter = useMemo(
-    () => (r: Row) => (bulan === "semua" || monthOf(r) === bulan) && (show === "semua" ? true : show === "ulang" ? isReinput(r) : show === "dm" ? !isReinput(r) : show === "aceh" ? isAceh(r) : inSyariah(r)),
+    () => (r: Row) => (bulan === "semua" || monthOf(r) === bulan) && (show === "semua" ? true : show === "ulang" ? isReinput(r) : show === "dm" ? !isReinput(r) : show === "aceh" ? isAceh(r) : show === "via" ? !!r.approve_via && r.approve_via !== "Dashboard" : inSyariah(r)),
     [show, bulan],
   );
   const pills: { v: Show; t: string }[] = [
     { v: "semua", t: `Semua (${rows.length})` },
     { v: "dm", t: `Digital Marketing (${k.total})` },
     { v: "ulang", t: `Input ulang NIK sama (${k.ulang})` },
-    { v: "aceh", t: `Cabang Aceh (${k.aceh})` },
-    { v: "syariah", t: `Aceh · ada di Syariah (${k.acehAda})` },
+    { v: "aceh", t: `Area Aceh (${k.aceh})` },
+    { v: "via", t: `Approve lewat input ulang / Syariah (${k.viaUlang + k.viaSy})` },
+    { v: "syariah", t: `NIK ada di Syariah (${k.ada})` },
   ];
 
   return (
@@ -124,8 +130,9 @@ export default function BerkasPage() {
         <Kpi label="Sudah cair" value={k.cair} format="number" />
         <Kpi label="Pokok cair" value={k.pokok} format="money" />
         <Kpi label="Input ulang ≤30 hari" value={k.ulang} format="number" />
-        <Kpi label="Aceh dicek ke Syariah" value={k.aceh} format="number" />
-        <Kpi label="Aceh ada di Syariah" value={k.acehAda} format="number" />
+        <Kpi label="Approve langsung" value={k.viaDash} format="number" />
+        <Kpi label="Approve lewat input ulang" value={k.viaUlang} format="number" />
+        <Kpi label="Approve lewat Syariah (cair)" value={k.viaSy} format="number" />
       </div>
       <p className="text-[12.5px] text-[var(--muted)]">
         Konvensional {k.konven} · Syariah {k.syariah}

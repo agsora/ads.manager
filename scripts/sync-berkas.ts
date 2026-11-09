@@ -149,8 +149,8 @@ const SQL_KONVEN = `
          ca.contract_number AS no_kontrak, ca.status AS status_kontrak,
          ${JKT("k.contract_date")} AS tgl_cair,
          ca.initial_outstanding AS pokok,
-         -- hanya dipakai untuk cek ke Syariah (cabang Aceh), tidak disimpan
-         ci.area AS _area,
+         -- NIK hanya dipakai untuk cek ke Syariah, tidak disimpan
+         ci.area AS area,
          regexp_replace(COALESCE(bu.ktp_number, ''), '\\D', '', 'g') AS _nik_p,
          regexp_replace(COALESCE(a.partner_ktp_number, ''), '\\D', '', 'g') AS _nik_s
   FROM   sel
@@ -240,11 +240,12 @@ const dayNum = (iso: unknown) => Date.parse(`${String(iso ?? "").slice(0, 10)}T0
 function syariahSummary(row: Record<string, unknown>, look: Awaited<ReturnType<typeof syariahByNik>>) {
   const p = digits16(row._nik_p);
   const s = digits16(row._nik_s);
-  if (!p && !s) return { cek: "NIK tidak valid, tidak bisa dicek", detail: null as string | null, approved: false };
+  if (!p && !s) return { cek: "NIK tidak valid, tidak bisa dicek", detail: null as string | null, approved: false, sbg: null as string | null };
   const masuk = dayNum(row.tgl_masuk);
   const lines: string[] = [];
   let known = false;
   let approved = false;
+  let sbg: string | null = null;
   let windowCount = 0;
   for (const c of look.customers) {
     const roles: string[] = [];
@@ -268,7 +269,10 @@ function syariahSummary(row: Record<string, unknown>, look: Awaited<ReturnType<t
       const late = k.jt_telat ? Math.max(0, Math.floor((Date.now() - Date.parse(`${k.jt_telat}T00:00:00Z`)) / 86400000)) : 0;
       const cancelled = !!k.tgl_batal || k.status_approval === "Batal";
       const ok = !cancelled && !!k.tgl_cair; // approve = sudah cair
-      if (ok) approved = true;
+      if (ok) {
+        approved = true;
+        sbg ??= String(k.no_sbg);
+      }
       const state = cancelled ? "Batal" : k.tgl_wo ? "WO" : k.tgl_cair && paidOff ? "Lunas" : k.tgl_cair ? "Berjalan" : k.status_approval === "Approve" ? "Approve, belum cair" : String(k.status_approval ?? k.status_data ?? "");
       lines.push(
         `  • SBG ${k.no_sbg} · ${state} · pengajuan ${k.tgl_pengajuan}${k.tgl_cair ? ` · cair ${k.tgl_cair}` : ""} · pinjaman ${rp(k.total_nilai_pinjaman)}${k.tgl_cair ? ` · sisa pokok ${rp(os)}` : ""}` +
@@ -277,9 +281,9 @@ function syariahSummary(row: Record<string, unknown>, look: Awaited<ReturnType<t
       );
     }
   }
-  if (approved) return { cek: "Cair di Syariah (approve)", detail: lines.join("\n"), approved: true };
-  if (windowCount) return { cek: "Ada di Syariah, belum cair", detail: lines.join("\n"), approved: false };
-  return { cek: known ? `Ada nasabah Syariah, tidak ada kontrak ≤${WINDOW_DAYS} hari` : "Tidak ada di Syariah", detail: null, approved: false };
+  if (approved) return { cek: "Cair di Syariah (approve)", detail: lines.join("\n"), approved: true, sbg };
+  if (windowCount) return { cek: "Ada di Syariah, belum cair", detail: lines.join("\n"), approved: false, sbg: null as string | null };
+  return { cek: known ? `Ada nasabah Syariah, tidak ada kontrak ≤${WINDOW_DAYS} hari` : "Tidak ada di Syariah", detail: null, approved: false, sbg: null as string | null };
 }
 
 async function main() {
@@ -329,56 +333,86 @@ async function main() {
       continue;
     }
 
-    // cabang Aceh: cek NIK pemohon/pasangan di database Syariah untuk tahu detailnya
-    const aceh = src.filter((x) => /aceh/i.test(String(x._area ?? "")));
-    const niks = [...new Set(aceh.flatMap((x) => [digits16(x._nik_p), digits16(x._nik_s)]).filter(Boolean))];
+    // Status akhir tiap berkas, berurutan:
+    //   1. status di dashboard (Konvensional) APPROVED → approve
+    //   2. berkas Digital Marketing yang NIK-nya diinput ulang (baris "Input ulang") dan input ulangnya APPROVED → approve lewat input ulang
+    //   3. masih belum: cek NIK di Syariah; sudah cair di Syariah (≤30 hari sejak berkas masuk) → approve di Syariah
+    const childApproved = new Map<string, string>();
+    for (const x of src) if (x.tipe_masuk === "Input ulang" && x.status === "APPROVED" && x.ref_dm && !childApproved.has(String(x.ref_dm))) childApproved.set(String(x.ref_dm), String(x.source_id));
+    type Fin = { status: unknown; statusKonven: unknown; via: string | null; ref: string | null; cek: unknown; detail: unknown };
+    const fin = new Map<string, Fin>();
+    for (const x of src) {
+      const id = String(x.source_id);
+      const asli = x.status;
+      if (asli === "APPROVED") fin.set(id, { status: asli, statusKonven: null, via: "Dashboard", ref: null, cek: null, detail: null });
+      else if (x.tipe_masuk !== "Input ulang" && childApproved.has(id)) fin.set(id, { status: "APPROVED", statusKonven: asli, via: "Input ulang", ref: childApproved.get(id)!, cek: null, detail: null });
+      else fin.set(id, { status: asli, statusKonven: null, via: null, ref: null, cek: null, detail: null });
+    }
+
+    // langkah 3: hanya untuk yang belum approve
+    const need = src.filter((x) => !fin.get(String(x.source_id))!.via);
+    const niks = [...new Set(need.flatMap((x) => [digits16(x._nik_p), digits16(x._nik_s)]).filter(Boolean))];
     let look: Awaited<ReturnType<typeof syariahByNik>> | null = null;
     if (niks.length) {
       try {
         look = await syariahByNik(niks);
       } catch (e) {
-        notes.push(`Cek NIK Aceh ke Syariah GAGAL, hasil lama dipertahankan (${(e as Error).message})`);
+        notes.push(`Cek NIK ke Syariah GAGAL, hasil lama dipertahankan (${(e as Error).message})`);
       }
     }
-    const oldSy = new Map<string, { syariah_cek: unknown; syariah_detail: unknown; status_konven: unknown }>();
-    if (!look && aceh.length)
-      for (const o of await q<{ source_id: string; syariah_cek: unknown; syariah_detail: unknown; status_konven: unknown }>(`SELECT source_id, syariah_cek, syariah_detail, status_konven FROM berkas_in WHERE org_id = $1 AND segment = $2`, [org, s.label])) oldSy.set(o.source_id, o);
-    let approvedN = 0;
-    let pendingN = 0;
-
-    const rows = src.map((x) => {
-      const isAceh = /aceh/i.test(String(x._area ?? ""));
-      let sy: { syariah_cek: unknown; syariah_detail: unknown } = { syariah_cek: null, syariah_detail: null };
-      let status = x.status;
-      let statusKonven: unknown = null; // status asli di Konvensional, hanya diisi bila status diubah karena sudah approve di Syariah
-      if (isAceh && look) {
+    let approvedSy = 0;
+    let pendingSy = 0;
+    if (look) {
+      for (const x of need) {
+        const f = fin.get(String(x.source_id))!;
         const m = syariahSummary(x, look);
-        sy = { syariah_cek: m.cek, syariah_detail: m.detail };
+        f.cek = m.cek;
+        f.detail = m.detail;
         if (m.approved) {
-          status = "APPROVED";
-          statusKonven = x.status;
-          approvedN++;
-        } else if (m.cek === "Ada di Syariah, belum cair") pendingN++;
-      } else if (isAceh) {
-        const old = oldSy.get(String(x.source_id));
-        if (old) {
-          sy = { syariah_cek: old.syariah_cek, syariah_detail: old.syariah_detail };
-          if (old.syariah_cek === "Cair di Syariah (approve)") {
-            status = "APPROVED";
-            statusKonven = old.status_konven ?? x.status;
-          }
+          f.statusKonven = x.status;
+          f.status = "APPROVED";
+          f.via = "Syariah";
+          f.ref = m.sbg ?? null;
+          approvedSy++;
+        } else if (m.cek === "Ada di Syariah, belum cair") pendingSy++;
+      }
+    } else if (need.length) {
+      // Syariah tidak terbaca: pertahankan hasil sinkron sebelumnya
+      for (const o of await q<{ source_id: string; syariah_cek: unknown; syariah_detail: unknown; status_konven: unknown; approve_via: string | null; approve_ref: string | null }>(
+        `SELECT source_id, syariah_cek, syariah_detail, status_konven, approve_via, approve_ref FROM berkas_in WHERE org_id = $1 AND segment = $2`,
+        [org, s.label],
+      )) {
+        const f = fin.get(o.source_id);
+        if (!f || f.via) continue;
+        f.cek = o.syariah_cek;
+        f.detail = o.syariah_detail;
+        if (o.approve_via === "Syariah") {
+          f.statusKonven = o.status_konven ?? src.find((x) => String(x.source_id) === o.source_id)?.status ?? null;
+          f.status = "APPROVED";
+          f.via = "Syariah";
+          f.ref = o.approve_ref;
         }
       }
-      const o = cleanInput(r, { ...x, ...sy, status, status_konven: statusKonven, segment: s.label, asal: x.asal || s.asal, tipe_masuk: x.tipe_masuk ?? "Digital Marketing" }, true);
-      for (const f of r.fields) if (!(f.key in o)) o[f.key] = null;
+    }
+
+    const rows = src.map((x) => {
+      const f = fin.get(String(x.source_id))!;
+      const o = cleanInput(
+        r,
+        { ...x, status: f.status, status_konven: f.statusKonven, approve_via: f.via, approve_ref: f.ref, syariah_cek: f.cek, syariah_detail: f.detail, segment: s.label, asal: x.asal || s.asal, tipe_masuk: x.tipe_masuk ?? "Digital Marketing" },
+        true,
+      );
+      for (const k of r.fields) if (!(k.key in o)) o[k.key] = null;
       return o;
     });
+    const viaCount = (v: string) => rows.filter((x) => x.approve_via === v && x.tipe_masuk === "Digital Marketing").length;
+
     // hanya yang cocok saat ini: baris lama yang sudah tidak masuk kriteria (mis. CMO diganti) ikut dihapus
     await deleteMatching(org, r, rows);
     if (rows.length) total += await insertMany(org, r, rows);
     const ids = rows.map((x) => String(x.source_id));
     const gone = await q(`DELETE FROM berkas_in WHERE org_id = $1 AND segment = $2 AND NOT (source_id = ANY($3::text[])) RETURNING id`, [org, s.label, ids]);
-    notes.push(`${s.label}: ${rows.length} berkas${gone.length ? `, ${gone.length} baris lama dihapus karena tidak cocok lagi` : ""}${aceh.length && look ? `; cabang Aceh ${aceh.length} berkas dicek ke Syariah: ${approvedN} cair di Syariah (status jadi APPROVED), ${pendingN} ada kontrak belum cair` : ""}`);
+    notes.push(`${s.label}: ${rows.length} berkas${gone.length ? `, ${gone.length} baris lama dihapus karena tidak cocok lagi` : ""}${look ? `; approve: ${viaCount("Dashboard")} langsung di dashboard, ${viaCount("Input ulang")} lewat input ulang, ${viaCount("Syariah")} lewat Syariah (cair); ${pendingSy} ada kontrak Syariah belum cair` : ""}`);
   }
   const failed = notes.every((x) => x.includes("GAGAL dibaca"));
   if (failed) process.exitCode = 1; // jadwal harian harus kelihatan gagal bila tidak ada yang terbaca
