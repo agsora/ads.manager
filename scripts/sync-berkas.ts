@@ -82,7 +82,10 @@ async function select(seg: Seg, text: string, params: unknown[] = []): Promise<R
   }
 }
 
-const JKT = (col: string) => `(${col} AT TIME ZONE 'Asia/Jakarta')::date`;
+/** Tanggal WIB sebagai teks YYYY-MM-DD (bukan objek Date, supaya tidak bergeser sehari karena zona waktu). */
+const JKT = (col: string) => `to_char((${col} AT TIME ZONE 'Asia/Jakarta')::date, 'YYYY-MM-DD')`;
+/** Sama untuk kolom timestamp tanpa zona (DB Syariah). */
+const TXT = (col: string) => `to_char(${col}, 'YYYY-MM-DD')`;
 
 /**
  * Konvensional: (1) berkas yang CMO-nya Digital Marketing, (2) berkas yang diinput ulang SETELAH itu dengan NIK yang sama
@@ -165,18 +168,18 @@ const SQL_KONVEN = `
 /** Syariah: kontrak/pengajuan yang Asal Aplikasi-nya Digital Marketing, atau CMO taksirnya bernama Digital Marketing. */
 const SQL_SYARIAH = `
   SELECT p.no_sbg AS source_id,
-         ${JKT("p.tgl_pengajuan")} AS tgl_masuk,
+         ${TXT("p.tgl_pengajuan")} AS tgl_masuk,
          p.status_approval AS status,
          p.status_aplikasi AS jenis,
          p.asal_aplikasi AS asal,
-         COALESCE(${JKT("p.tgl_approve")}, ${JKT("p.tgl_batal")}) AS tgl_keputusan,
+         COALESCE(${TXT("p.tgl_approve")}, ${TXT("p.tgl_batal")}) AS tgl_keputusan,
          p.alasan,
          cu.nm_customer AS nama, cu.no_hp AS phone,
          trim(COALESCE(kc.nm_depan, '') || ' ' || COALESCE(kc.nm_belakang, '')) AS cmo,
          cb.nm_cabang AS cabang,
          p.total_nilai_pinjaman AS pokok, p.lama_pinjaman AS tenor, p.angsuran_bulan AS angsuran,
          p.no_sbg AS no_kontrak, p.status_data AS status_kontrak,
-         ${JKT("p.tgl_cair")} AS tgl_cair
+         ${TXT("p.tgl_cair")} AS tgl_cair
   FROM   data_gadai.tblproduk_cicilan p
   LEFT   JOIN data_gadai.tbltaksir_umum t ON t.no_fatg = p.fk_fatg
   LEFT   JOIN public.tblcustomer cu ON cu.no_cif = t.fk_cif
@@ -196,7 +199,6 @@ const digits16 = (v: unknown) => {
   return d.length === 16 ? d : "";
 };
 const rp = (v: unknown) => `Rp ${Math.round(Number(v) || 0).toLocaleString("id-ID")}`;
-const day = (v: unknown) => (v ? new Date(v as string).toLocaleDateString("sv-SE", { timeZone: "Asia/Jakarta" }) : "");
 
 async function syariahByNik(niks: string[]) {
   const nikC = `regexp_replace(COALESCE(cu.no_id, ''), '\\D', '', 'g')`;
@@ -211,12 +213,13 @@ async function syariahByNik(niks: string[]) {
   if (!customers.length) return { customers, contracts: [] as Record<string, unknown>[] };
   const contracts = await select(
     "syariah",
-    `SELECT t.fk_cif AS no_cif, p.no_sbg, p.status_approval, p.status_data, p.tgl_pengajuan, p.tgl_cair, p.tgl_batal, p.tgl_wo,
+    `SELECT t.fk_cif AS no_cif, p.no_sbg, p.status_approval, p.status_data,
+            ${TXT("p.tgl_pengajuan")} AS tgl_pengajuan, ${TXT("p.tgl_cair")} AS tgl_cair, ${TXT("p.tgl_batal")} AS tgl_batal, ${TXT("p.tgl_wo")} AS tgl_wo,
             p.total_nilai_pinjaman, p.lama_pinjaman, p.angsuran_bulan,
             (SELECT COALESCE(sum(a.pokok_jt), 0) FROM data_fa.tblangsuran a WHERE a.fk_sbg = p.no_sbg AND a.tgl_bayar IS NULL) AS os_pokok,
             (SELECT count(*) FROM data_fa.tblangsuran a WHERE a.fk_sbg = p.no_sbg) AS n_angsuran,
             (SELECT count(*) FROM data_fa.tblangsuran a WHERE a.fk_sbg = p.no_sbg AND a.tgl_bayar IS NOT NULL) AS n_bayar,
-            (SELECT min(a.tgl_jatuh_tempo) FROM data_fa.tblangsuran a WHERE a.fk_sbg = p.no_sbg AND a.tgl_bayar IS NULL AND a.tgl_jatuh_tempo < now()) AS jt_telat
+            (SELECT to_char(min(a.tgl_jatuh_tempo), 'YYYY-MM-DD') FROM data_fa.tblangsuran a WHERE a.fk_sbg = p.no_sbg AND a.tgl_bayar IS NULL AND a.tgl_jatuh_tempo < now()) AS jt_telat
      FROM   data_gadai.tbltaksir_umum t
      JOIN   data_gadai.tblproduk_cicilan p ON p.fk_fatg = t.no_fatg
      WHERE  t.fk_cif = ANY($1)
@@ -226,11 +229,23 @@ async function syariahByNik(niks: string[]) {
   return { customers, contracts };
 }
 
-/** Ringkasan Syariah untuk satu berkas Aceh: { cek, detail }. */
+const WINDOW_DAYS = 30;
+const dayNum = (iso: unknown) => Date.parse(`${String(iso ?? "").slice(0, 10)}T00:00:00Z`) / 86400000;
+
+/**
+ * Ringkasan Syariah untuk satu berkas Aceh. Hanya kontrak Syariah yang diajukan pada atau setelah tanggal berkas masuk
+ * di dashboard, paling lama 30 hari sesudahnya, yang dihitung. Bila ada yang sudah Approve (dan tidak batal) di Syariah,
+ * berkas dianggap Approve (approved = true).
+ */
 function syariahSummary(row: Record<string, unknown>, look: Awaited<ReturnType<typeof syariahByNik>>) {
   const p = digits16(row._nik_p);
   const s = digits16(row._nik_s);
+  if (!p && !s) return { cek: "NIK tidak valid, tidak bisa dicek", detail: null as string | null, approved: false };
+  const masuk = dayNum(row.tgl_masuk);
   const lines: string[] = [];
+  let known = false;
+  let approved = false;
+  let windowCount = 0;
   for (const c of look.customers) {
     const roles: string[] = [];
     if (p && c.nik_c === p) roles.push("pemohon = nasabah Syariah");
@@ -238,22 +253,33 @@ function syariahSummary(row: Record<string, unknown>, look: Awaited<ReturnType<t
     if (s && c.nik_c === s) roles.push("pasangan = nasabah Syariah");
     if (s && c.nik_ps === s) roles.push("pasangan = pasangan nasabah Syariah");
     if (!roles.length) continue;
-    const mine = look.contracts.filter((k) => k.no_cif === c.no_cif);
-    lines.push(`NIK cocok (${roles.join(", ")}): ${c.nm_customer} · CIF ${c.no_cif} · ${mine.length} kontrak Syariah`);
+    known = true;
+    const mine = look.contracts.filter((k) => {
+      if (k.no_cif !== c.no_cif) return false;
+      const d = dayNum(k.tgl_pengajuan) - masuk;
+      return d >= 0 && d <= WINDOW_DAYS;
+    });
+    if (!mine.length) continue;
+    windowCount += mine.length;
+    lines.push(`NIK cocok (${roles.join(", ")}): ${c.nm_customer} · CIF ${c.no_cif} · ${mine.length} kontrak Syariah dalam ${WINDOW_DAYS} hari sejak berkas masuk`);
     for (const k of mine) {
       const os = Number(k.os_pokok) || 0; // sisa pokok = pokok angsuran yang belum dibayar (kolom sisa_pokok kontrak tidak diisi untuk kontrak baru)
       const paidOff = Number(k.n_angsuran) > 0 && Number(k.n_bayar) >= Number(k.n_angsuran);
-      const late = k.jt_telat ? Math.max(0, Math.floor((Date.now() - new Date(k.jt_telat as string).getTime()) / 86400000)) : 0;
-      const state = k.tgl_batal || k.status_approval === "Batal" ? "Batal" : k.tgl_wo ? "WO" : k.tgl_cair && paidOff ? "Lunas" : k.tgl_cair ? "Berjalan" : String(k.status_approval ?? k.status_data ?? "");
+      const late = k.jt_telat ? Math.max(0, Math.floor((Date.now() - Date.parse(`${k.jt_telat}T00:00:00Z`)) / 86400000)) : 0;
+      const cancelled = !!k.tgl_batal || k.status_approval === "Batal";
+      const ok = !cancelled && k.status_approval === "Approve";
+      if (ok) approved = true;
+      const state = cancelled ? "Batal" : k.tgl_wo ? "WO" : k.tgl_cair && paidOff ? "Lunas" : k.tgl_cair ? "Berjalan" : ok ? "Approve" : String(k.status_approval ?? k.status_data ?? "");
       lines.push(
-        `  • SBG ${k.no_sbg} · ${state} · pengajuan ${day(k.tgl_pengajuan)}${k.tgl_cair ? ` · cair ${day(k.tgl_cair)}` : ""} · pinjaman ${rp(k.total_nilai_pinjaman)}${k.tgl_cair ? ` · sisa pokok ${rp(os)}` : ""}` +
+        `  • SBG ${k.no_sbg} · ${state}${ok ? " (approve)" : ""} · pengajuan ${k.tgl_pengajuan}${k.tgl_cair ? ` · cair ${k.tgl_cair}` : ""} · pinjaman ${rp(k.total_nilai_pinjaman)}${k.tgl_cair ? ` · sisa pokok ${rp(os)}` : ""}` +
           (Number(k.n_angsuran) ? ` · ${k.n_bayar}/${k.n_angsuran} angsuran terbayar` : "") +
           (late ? ` · telat ${late} hari` : ""),
       );
     }
   }
-  if (!p && !s) return { cek: "NIK tidak valid, tidak bisa dicek", detail: null as string | null };
-  return lines.length ? { cek: "Ada di Syariah", detail: lines.join("\n") } : { cek: "Tidak ada di Syariah", detail: null };
+  if (approved) return { cek: "Approve di Syariah", detail: lines.join("\n"), approved: true };
+  if (windowCount) return { cek: "Ada di Syariah, belum approve", detail: lines.join("\n"), approved: false };
+  return { cek: known ? `Ada nasabah Syariah, tidak ada kontrak ≤${WINDOW_DAYS} hari` : "Tidak ada di Syariah", detail: null, approved: false };
 }
 
 async function main() {
@@ -314,20 +340,36 @@ async function main() {
         notes.push(`Cek NIK Aceh ke Syariah GAGAL, hasil lama dipertahankan (${(e as Error).message})`);
       }
     }
-    const oldSy = new Map<string, { syariah_cek: unknown; syariah_detail: unknown }>();
+    const oldSy = new Map<string, { syariah_cek: unknown; syariah_detail: unknown; status_konven: unknown }>();
     if (!look && aceh.length)
-      for (const o of await q<{ source_id: string; syariah_cek: unknown; syariah_detail: unknown }>(`SELECT source_id, syariah_cek, syariah_detail FROM berkas_in WHERE org_id = $1 AND segment = $2`, [org, s.label])) oldSy.set(o.source_id, o);
-    let found = 0;
+      for (const o of await q<{ source_id: string; syariah_cek: unknown; syariah_detail: unknown; status_konven: unknown }>(`SELECT source_id, syariah_cek, syariah_detail, status_konven FROM berkas_in WHERE org_id = $1 AND segment = $2`, [org, s.label])) oldSy.set(o.source_id, o);
+    let approvedN = 0;
+    let pendingN = 0;
 
     const rows = src.map((x) => {
       const isAceh = /aceh/i.test(String(x._area ?? ""));
       let sy: { syariah_cek: unknown; syariah_detail: unknown } = { syariah_cek: null, syariah_detail: null };
+      let status = x.status;
+      let statusKonven: unknown = null; // status asli di Konvensional, hanya diisi bila status diubah karena sudah approve di Syariah
       if (isAceh && look) {
         const m = syariahSummary(x, look);
         sy = { syariah_cek: m.cek, syariah_detail: m.detail };
-        if (m.cek === "Ada di Syariah") found++;
-      } else if (isAceh) sy = oldSy.get(String(x.source_id)) ?? sy;
-      const o = cleanInput(r, { ...x, ...sy, segment: s.label, asal: x.asal || s.asal, tipe_masuk: x.tipe_masuk ?? "Digital Marketing" }, true);
+        if (m.approved) {
+          status = "APPROVED";
+          statusKonven = x.status;
+          approvedN++;
+        } else if (m.cek === "Ada di Syariah, belum approve") pendingN++;
+      } else if (isAceh) {
+        const old = oldSy.get(String(x.source_id));
+        if (old) {
+          sy = { syariah_cek: old.syariah_cek, syariah_detail: old.syariah_detail };
+          if (old.syariah_cek === "Approve di Syariah") {
+            status = "APPROVED";
+            statusKonven = old.status_konven ?? x.status;
+          }
+        }
+      }
+      const o = cleanInput(r, { ...x, ...sy, status, status_konven: statusKonven, segment: s.label, asal: x.asal || s.asal, tipe_masuk: x.tipe_masuk ?? "Digital Marketing" }, true);
       for (const f of r.fields) if (!(f.key in o)) o[f.key] = null;
       return o;
     });
@@ -336,7 +378,7 @@ async function main() {
     if (rows.length) total += await insertMany(org, r, rows);
     const ids = rows.map((x) => String(x.source_id));
     const gone = await q(`DELETE FROM berkas_in WHERE org_id = $1 AND segment = $2 AND NOT (source_id = ANY($3::text[])) RETURNING id`, [org, s.label, ids]);
-    notes.push(`${s.label}: ${rows.length} berkas${gone.length ? `, ${gone.length} baris lama dihapus karena tidak cocok lagi` : ""}${aceh.length && look ? `; cabang Aceh ${aceh.length} berkas dicek ke Syariah, ${found} ada di Syariah` : ""}`);
+    notes.push(`${s.label}: ${rows.length} berkas${gone.length ? `, ${gone.length} baris lama dihapus karena tidak cocok lagi` : ""}${aceh.length && look ? `; cabang Aceh ${aceh.length} berkas dicek ke Syariah: ${approvedN} approve di Syariah (status jadi APPROVED), ${pendingN} ada kontrak belum approve` : ""}`);
   }
   const failed = notes.every((x) => x.includes("GAGAL dibaca"));
   if (failed) process.exitCode = 1; // jadwal harian harus kelihatan gagal bila tidak ada yang terbaca

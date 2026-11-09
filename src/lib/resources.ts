@@ -720,6 +720,7 @@ export const RESOURCES: Resource[] = [
       { key: "syariah_detail", label: "Detail Syariah (Aceh)", type: "longtext", aliases: ["detail syariah"] },
       { key: "dealer", label: "Dealer", type: "text", aliases: ["dealer"] },
       { key: "status", label: "Status", type: "text", aliases: ["status", "status berkas"] },
+      { key: "status_konven", label: "Status Asli (Konvensional)", type: "text", aliases: ["status asli"] },
       { key: "tgl_keputusan", label: "Tanggal Keputusan", type: "date", aliases: ["tgl approve", "tanggal approve", "tgl keputusan"] },
       { key: "alasan", label: "Alasan", type: "longtext", aliases: ["alasan", "keterangan"] },
       { key: "unit", label: "Unit / Agunan", type: "text", aliases: ["unit", "agunan", "kendaraan"] },
