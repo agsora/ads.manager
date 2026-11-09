@@ -65,7 +65,7 @@ async function sourceUrl(seg: Seg): Promise<string> {
 }
 
 /** Jalankan satu SELECT hanya-baca di DB sumber. */
-async function select(seg: Seg, text: string): Promise<Record<string, unknown>[]> {
+async function select(seg: Seg, text: string, params: unknown[] = []): Promise<Record<string, unknown>[]> {
   const url = await sourceUrl(seg);
   const c = new Client({
     connectionString: url.replace(/[?&]sslmode=[^&]*/g, ""),
@@ -76,7 +76,7 @@ async function select(seg: Seg, text: string): Promise<Record<string, unknown>[]
   await c.connect();
   try {
     await c.query("SET default_transaction_read_only = on");
-    return (await c.query(text)).rows;
+    return (await c.query(text, params)).rows;
   } finally {
     await c.end().catch(() => {});
   }
@@ -145,7 +145,11 @@ const SQL_KONVEN = `
          COALESCE(ca.tenor, m.tenor) AS tenor, COALESCE(ca.installment, m.installment) AS angsuran, -- kontrak bila sudah ada, kalau belum angka usulan CMO
          ca.contract_number AS no_kontrak, ca.status AS status_kontrak,
          ${JKT("k.contract_date")} AS tgl_cair,
-         ca.initial_outstanding AS pokok
+         ca.initial_outstanding AS pokok,
+         -- hanya dipakai untuk cek ke Syariah (cabang Aceh), tidak disimpan
+         ci.area AS _area,
+         regexp_replace(COALESCE(bu.ktp_number, ''), '\\D', '', 'g') AS _nik_p,
+         regexp_replace(COALESCE(a.partner_ktp_number, ''), '\\D', '', 'g') AS _nik_s
   FROM   sel
   JOIN   "Applications" a ON a.id = sel.id
   LEFT   JOIN "Users"  cmo ON cmo.id = a.surveyor_id
@@ -182,15 +186,107 @@ const SQL_SYARIAH = `
      OR  (COALESCE(kc.nm_depan, '') || ' ' || COALESCE(kc.nm_belakang, '')) ILIKE '%digital marketing%'
   ORDER  BY p.tgl_pengajuan DESC`;
 
+/**
+ * Cek NIK di database Syariah (hanya untuk cabang Aceh): nasabah yang NIK-nya (atau NIK pasangannya) sama dengan NIK pemohon
+ * atau pasangan di berkas, beserta kontrak Syariah-nya: status, tanggal pengajuan/cair, pokok, sisa pokok, angsuran terbayar, keterlambatan.
+ * Query Syariah (PostgreSQL 8.2) sengaja tanpa CTE, unnest, LATERAL, atau fungsi window.
+ */
+const digits16 = (v: unknown) => {
+  const d = String(v ?? "").replace(/\D/g, "");
+  return d.length === 16 ? d : "";
+};
+const rp = (v: unknown) => `Rp ${Math.round(Number(v) || 0).toLocaleString("id-ID")}`;
+const day = (v: unknown) => (v ? new Date(v as string).toLocaleDateString("sv-SE", { timeZone: "Asia/Jakarta" }) : "");
+
+async function syariahByNik(niks: string[]) {
+  const nikC = `regexp_replace(COALESCE(cu.no_id, ''), '\\D', '', 'g')`;
+  const nikP = `regexp_replace(COALESCE(cu.no_ktp_pasangan, ''), '\\D', '', 'g')`;
+  const customers = await select(
+    "syariah",
+    `SELECT cu.no_cif, cu.nm_customer, ${nikC} AS nik_c, ${nikP} AS nik_ps
+     FROM   public.tblcustomer cu
+     WHERE  ${nikC} = ANY($1) OR ${nikP} = ANY($1)`,
+    [niks],
+  );
+  if (!customers.length) return { customers, contracts: [] as Record<string, unknown>[] };
+  const contracts = await select(
+    "syariah",
+    `SELECT t.fk_cif AS no_cif, p.no_sbg, p.status_approval, p.status_data, p.tgl_pengajuan, p.tgl_cair, p.tgl_batal, p.tgl_wo,
+            p.total_nilai_pinjaman, p.lama_pinjaman, p.angsuran_bulan,
+            (SELECT COALESCE(sum(a.pokok_jt), 0) FROM data_fa.tblangsuran a WHERE a.fk_sbg = p.no_sbg AND a.tgl_bayar IS NULL) AS os_pokok,
+            (SELECT count(*) FROM data_fa.tblangsuran a WHERE a.fk_sbg = p.no_sbg) AS n_angsuran,
+            (SELECT count(*) FROM data_fa.tblangsuran a WHERE a.fk_sbg = p.no_sbg AND a.tgl_bayar IS NOT NULL) AS n_bayar,
+            (SELECT min(a.tgl_jatuh_tempo) FROM data_fa.tblangsuran a WHERE a.fk_sbg = p.no_sbg AND a.tgl_bayar IS NULL AND a.tgl_jatuh_tempo < now()) AS jt_telat
+     FROM   data_gadai.tbltaksir_umum t
+     JOIN   data_gadai.tblproduk_cicilan p ON p.fk_fatg = t.no_fatg
+     WHERE  t.fk_cif = ANY($1)
+     ORDER  BY p.tgl_pengajuan DESC`,
+    [customers.map((c) => String(c.no_cif))],
+  );
+  return { customers, contracts };
+}
+
+/** Ringkasan Syariah untuk satu berkas Aceh: { cek, detail }. */
+function syariahSummary(row: Record<string, unknown>, look: Awaited<ReturnType<typeof syariahByNik>>) {
+  const p = digits16(row._nik_p);
+  const s = digits16(row._nik_s);
+  const lines: string[] = [];
+  for (const c of look.customers) {
+    const roles: string[] = [];
+    if (p && c.nik_c === p) roles.push("pemohon = nasabah Syariah");
+    if (p && c.nik_ps === p) roles.push("pemohon = pasangan nasabah Syariah");
+    if (s && c.nik_c === s) roles.push("pasangan = nasabah Syariah");
+    if (s && c.nik_ps === s) roles.push("pasangan = pasangan nasabah Syariah");
+    if (!roles.length) continue;
+    const mine = look.contracts.filter((k) => k.no_cif === c.no_cif);
+    lines.push(`NIK cocok (${roles.join(", ")}): ${c.nm_customer} · CIF ${c.no_cif} · ${mine.length} kontrak Syariah`);
+    for (const k of mine) {
+      const os = Number(k.os_pokok) || 0; // sisa pokok = pokok angsuran yang belum dibayar (kolom sisa_pokok kontrak tidak diisi untuk kontrak baru)
+      const paidOff = Number(k.n_angsuran) > 0 && Number(k.n_bayar) >= Number(k.n_angsuran);
+      const late = k.jt_telat ? Math.max(0, Math.floor((Date.now() - new Date(k.jt_telat as string).getTime()) / 86400000)) : 0;
+      const state = k.tgl_batal || k.status_approval === "Batal" ? "Batal" : k.tgl_wo ? "WO" : k.tgl_cair && paidOff ? "Lunas" : k.tgl_cair ? "Berjalan" : String(k.status_approval ?? k.status_data ?? "");
+      lines.push(
+        `  • SBG ${k.no_sbg} · ${state} · pengajuan ${day(k.tgl_pengajuan)}${k.tgl_cair ? ` · cair ${day(k.tgl_cair)}` : ""} · pinjaman ${rp(k.total_nilai_pinjaman)}${k.tgl_cair ? ` · sisa pokok ${rp(os)}` : ""}` +
+          (Number(k.n_angsuran) ? ` · ${k.n_bayar}/${k.n_angsuran} angsuran terbayar` : "") +
+          (late ? ` · telat ${late} hari` : ""),
+      );
+    }
+  }
+  if (!p && !s) return { cek: "NIK tidak valid, tidak bisa dicek", detail: null as string | null };
+  return lines.length ? { cek: "Ada di Syariah", detail: lines.join("\n") } : { cek: "Tidak ada di Syariah", detail: null };
+}
+
 async function main() {
   const argOrg = process.argv.indexOf("--org");
   const org = Number(argOrg > 0 ? process.argv[argOrg + 1] : process.env.BERKAS_ORG_ID);
   if (!Number.isInteger(org) || org <= 0) throw new Error("Workspace tujuan belum ditentukan: pakai --org <id> atau isi BERKAS_ORG_ID di .env.local");
+  const onlyIfRequested = process.argv.includes("--if-requested");
 
   const { RESOURCE_MAP } = await import("../src/lib/resources");
   const { cleanInput, deleteMatching, insertMany } = await import("../src/lib/repo");
-  const { logActivity, q } = await import("../src/lib/db");
+  const { getSetting, logActivity, q, setSetting } = await import("../src/lib/db");
   const r = RESOURCE_MAP.berkas;
+
+  // status sinkron di database aplikasi: tombol "Sinkron" di menu hanya menaruh permintaan (requestedAt),
+  // komputer kantor yang memeriksanya tiap beberapa menit (--if-requested) lalu menjalankan sinkron ini
+  const statusKey = `berkas_sync:${org}`;
+  const status = async () => {
+    try {
+      return JSON.parse((await getSetting(statusKey)) ?? "{}") as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  };
+  const before = await status();
+  if (onlyIfRequested) {
+    const pending = before.requestedAt && (!before.finishedAt || String(before.finishedAt) < String(before.requestedAt));
+    const busy = before.running && before.startedAt && Date.now() - new Date(String(before.startedAt)).getTime() < 20 * 60_000;
+    if (!pending || busy) {
+      console.log(!pending ? "Tidak ada permintaan sinkron." : "Sinkron sedang berjalan.");
+      return;
+    }
+  }
+  await setSetting(statusKey, JSON.stringify({ ...before, running: true, startedAt: new Date().toISOString() }));
 
   const segments: { seg: Seg; label: string; sql: string; asal: string }[] = [
     { seg: "konvensional", label: "Konvensional", sql: SQL_KONVEN, asal: "Digital Marketing" },
@@ -206,8 +302,32 @@ async function main() {
       notes.push(`${s.label}: GAGAL dibaca, data lama dipertahankan (${(e as Error).message})`);
       continue;
     }
+
+    // cabang Aceh: cek NIK pemohon/pasangan di database Syariah untuk tahu detailnya
+    const aceh = src.filter((x) => /aceh/i.test(String(x._area ?? "")));
+    const niks = [...new Set(aceh.flatMap((x) => [digits16(x._nik_p), digits16(x._nik_s)]).filter(Boolean))];
+    let look: Awaited<ReturnType<typeof syariahByNik>> | null = null;
+    if (niks.length) {
+      try {
+        look = await syariahByNik(niks);
+      } catch (e) {
+        notes.push(`Cek NIK Aceh ke Syariah GAGAL, hasil lama dipertahankan (${(e as Error).message})`);
+      }
+    }
+    const oldSy = new Map<string, { syariah_cek: unknown; syariah_detail: unknown }>();
+    if (!look && aceh.length)
+      for (const o of await q<{ source_id: string; syariah_cek: unknown; syariah_detail: unknown }>(`SELECT source_id, syariah_cek, syariah_detail FROM berkas_in WHERE org_id = $1 AND segment = $2`, [org, s.label])) oldSy.set(o.source_id, o);
+    let found = 0;
+
     const rows = src.map((x) => {
-      const o = cleanInput(r, { ...x, segment: s.label, asal: x.asal || s.asal, tipe_masuk: x.tipe_masuk ?? "Digital Marketing" }, true);
+      const isAceh = /aceh/i.test(String(x._area ?? ""));
+      let sy: { syariah_cek: unknown; syariah_detail: unknown } = { syariah_cek: null, syariah_detail: null };
+      if (isAceh && look) {
+        const m = syariahSummary(x, look);
+        sy = { syariah_cek: m.cek, syariah_detail: m.detail };
+        if (m.cek === "Ada di Syariah") found++;
+      } else if (isAceh) sy = oldSy.get(String(x.source_id)) ?? sy;
+      const o = cleanInput(r, { ...x, ...sy, segment: s.label, asal: x.asal || s.asal, tipe_masuk: x.tipe_masuk ?? "Digital Marketing" }, true);
       for (const f of r.fields) if (!(f.key in o)) o[f.key] = null;
       return o;
     });
@@ -216,9 +336,12 @@ async function main() {
     if (rows.length) total += await insertMany(org, r, rows);
     const ids = rows.map((x) => String(x.source_id));
     const gone = await q(`DELETE FROM berkas_in WHERE org_id = $1 AND segment = $2 AND NOT (source_id = ANY($3::text[])) RETURNING id`, [org, s.label, ids]);
-    notes.push(`${s.label}: ${rows.length} berkas${gone.length ? `, ${gone.length} baris lama dihapus karena tidak cocok lagi` : ""}`);
+    notes.push(`${s.label}: ${rows.length} berkas${gone.length ? `, ${gone.length} baris lama dihapus karena tidak cocok lagi` : ""}${aceh.length && look ? `; cabang Aceh ${aceh.length} berkas dicek ke Syariah, ${found} ada di Syariah` : ""}`);
   }
-  if (notes.every((x) => x.includes("GAGAL dibaca"))) process.exitCode = 1; // jadwal harian harus kelihatan gagal bila tidak ada yang terbaca
+  const failed = notes.every((x) => x.includes("GAGAL dibaca"));
+  if (failed) process.exitCode = 1; // jadwal harian harus kelihatan gagal bila tidak ada yang terbaca
+  const now = new Date().toISOString();
+  await setSetting(statusKey, JSON.stringify({ ...(await status()), running: false, finishedAt: now, ok: !failed, total, note: notes.join(" | ").slice(0, 600) }));
   await logActivity(org, "Sinkron Berkas In", "Sinkron berkas", notes.join(" | "));
   console.log(`Selesai (workspace ${org}): ${total} berkas ditulis.\n- ${notes.join("\n- ")}`);
 }

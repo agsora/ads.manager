@@ -729,6 +729,8 @@ export const RESOURCES: Resource[] = [
       { key: "status_kontrak", label: "Status Kontrak", type: "text", aliases: ["status kontrak"] },
       { key: "tgl_cair", label: "Tanggal Cair", type: "date", aliases: ["tgl cair", "tanggal cair", "tgl pencairan"] },
       { key: "pokok", label: "Pokok Pembiayaan", type: "money", aliases: ["pokok", "plafon", "nilai pinjaman", "total nilai pinjaman"] },
+      { key: "syariah_cek", label: "Cek NIK di Syariah (Aceh)", type: "text", aliases: ["cek syariah"] },
+      { key: "syariah_detail", label: "Detail Syariah (Aceh)", type: "longtext", aliases: ["detail syariah"] },
     ],
   },
 ];

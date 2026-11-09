@@ -1,12 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/shell";
 import { ResourceTable } from "@/components/resource-table";
-import { useFetch, useFilter } from "@/components/providers";
+import { api, useFetch, useFilter, useToast } from "@/components/providers";
 import { Card, Kpi } from "@/components/charts";
 import { n, type Row } from "@/lib/resources";
 import { fmtDate } from "@/lib/format";
+
+type SyncStatus = { requestedAt?: string; startedAt?: string; finishedAt?: string; running?: boolean; ok?: boolean; total?: number; note?: string };
+const hm = (iso?: string) => (iso ? new Date(iso).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
 
 const DONE = ["APPROVED", "DISETUJUI", "APPROVE"];
 const REJECT = ["REJECTED", "DITOLAK", "REJECT"];
@@ -22,6 +26,33 @@ export default function BerkasPage() {
   const [show, setShow] = useState<Show>("semua");
   const { data } = useFetch<{ rows: Row[] }>(`/api/r/berkas?from=${f.from}&to=${f.to}&_=${tick}`);
   const rows = useMemo(() => data?.rows ?? [], [data]);
+
+  // tombol Sinkron menaruh permintaan; komputer kantor memeriksanya tiap beberapa menit (sinkron otomatis tetap jam 06:30)
+  const toast = useToast();
+  const { data: sync, reload: reloadSync } = useFetch<SyncStatus>("/api/berkas/sync");
+  const waiting = !!sync?.requestedAt && (!sync.finishedAt || sync.finishedAt < sync.requestedAt);
+  useEffect(() => {
+    if (!waiting) return;
+    const t = setInterval(() => reloadSync(), 15000);
+    return () => clearInterval(t);
+  }, [waiting, reloadSync]);
+  // when a run finishes while this page is open, load the fresh rows
+  const [seen, setSeen] = useState<string | undefined>();
+  useEffect(() => {
+    if (!sync?.finishedAt) return;
+    if (seen && sync.finishedAt !== seen) setTick((t) => t + 1);
+    setSeen(sync.finishedAt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sync?.finishedAt]);
+  const requestSync = async () => {
+    try {
+      await api("/api/berkas/sync", "POST");
+      toast("Permintaan sinkron dikirim");
+      reloadSync();
+    } catch (e) {
+      toast((e as Error).message, "err");
+    }
+  };
 
   const k = useMemo(() => {
     const dm = rows.filter((r) => !isReinput(r));
@@ -59,6 +90,18 @@ export default function BerkasPage() {
         title="Berkas In Digital Marketing"
         desc="Berkas pengajuan yang masuk lewat Digital Marketing: nama CMO-nya Digital Marketing (Konvensional) atau Asal Berkas-nya Digital Marketing (Syariah). Berkas yang diinput ulang dengan NIK yang sama (pemohon atau pasangan) dalam 30 hari setelahnya ikut ditampilkan sebagai Input ulang. Data dibaca hanya-baca dari database sumber dan diperbarui lewat sinkronisasi (npm run sync:berkas)."
       />
+      <div className="flex flex-wrap items-center gap-3">
+        <button className="btn btn-primary" onClick={requestSync} disabled={waiting}>
+          <RefreshCw size={14} className={waiting ? "animate-spin" : ""} /> {waiting ? (sync?.running ? "Sinkron berjalan…" : "Menunggu komputer kantor…") : "Sinkron sekarang"}
+        </button>
+        <span className="text-[12.5px] text-[var(--muted)]">
+          {waiting
+            ? `Diminta ${hm(sync?.requestedAt)} · diproses dalam beberapa menit bila komputer kantor menyala`
+            : sync?.finishedAt
+              ? `Terakhir sinkron ${hm(sync.finishedAt)}${sync.ok === false ? " (gagal)" : ""} · otomatis tiap hari jam 06:30`
+              : "Otomatis tiap hari jam 06:30"}
+        </span>
+      </div>
       <div className="stat-grid">
         <Kpi label="Berkas masuk" value={k.total} format="number" />
         <Kpi label="Disetujui" value={k.approved} format="number" />
