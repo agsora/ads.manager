@@ -38,6 +38,7 @@ export function Stars({ value }: { value: number }) {
 }
 
 export function renderCell(f: Pick<Field, "type" | "key">, v: unknown) {
+  if (f.key === "db_approval_status") return <Chip value={String(v || "Belum dicek")} tone={v === "Approve" ? "green" : v === "Belum approve" ? "amber" : "gray"} />;
   if (v === null || v === undefined || v === "") return <span className="text-[var(--muted)]">–</span>;
   switch (f.type) {
     case "date":

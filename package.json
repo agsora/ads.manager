@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "db:migrate": "tsx scripts/migrate.ts",
-    "sync:berkas": "tsx scripts/sync-berkas.ts"
+    "sync:berkas": "tsx scripts/sync-berkas.ts",
+    "sync:leads": "tsx scripts/sync-lead-approval.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",

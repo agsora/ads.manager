@@ -201,7 +201,7 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
         </div>
         {quickFilters.map((k) => {
           const fd = r.fields.find((x) => x.key === k)!;
-          const opts = options[fd.options ?? ""] ?? [];
+          const opts = fd.readOnly ? [...new Set((data?.rows ?? []).map((row) => String(row[k] ?? "")).filter(Boolean))].sort() : options[fd.options ?? ""] ?? [];
           return (
             <select key={k} className="input !h-9 !w-auto !text-[13px]" value={qf[k] ?? ""} onChange={(e) => setQf((s) => ({ ...s, [k]: e.target.value }))} aria-label={fd.label}>
               <option value="">{fd.label}: semua</option>
@@ -327,7 +327,7 @@ export function ResourceTable({ resourceKey, quickFilters = [], computedCols, ig
                     {fd.type === "select" ? (
                       <InlineSelect value={String(row[fd.key] ?? "")} opts={options[fd.options ?? ""] ?? []} onChange={(v) => inlineUpdate(row, fd, v)} />
                     ) : (
-                      renderCell(fd, row[fd.key])
+                      fd.key === "db_approval_status" ? <span title={`${row.db_approval_detail || "Belum diperiksa"}${row.db_approval_checked_at ? `\nTerakhir cek: ${row.db_approval_checked_at}` : ""}`}>{renderCell(fd, row[fd.key])}</span> : renderCell(fd, row[fd.key])
                     )}
                   </td>
                 ))}

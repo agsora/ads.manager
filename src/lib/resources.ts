@@ -18,6 +18,8 @@ export type FieldType =
   | "brand";
 
 export interface Field {
+  /** Populated by a trusted worker; never accepted from a form or import. */
+  readOnly?: boolean;
   key: string;
   label: string;
   type: FieldType;
@@ -421,6 +423,12 @@ export const RESOURCES: Resource[] = [
     sheetHints: ["wa leads", "leads", "chat masuk"],
     defaultSort: "chat_date",
     fields: [
+      { key: "db_approval_status", label: "Status Datun (DB)", type: "text", readOnly: true },
+      { key: "db_approval_source", label: "Sumber Status", type: "text", readOnly: true },
+      { key: "db_approval_ref", label: "No. Pengajuan Datun", type: "text", readOnly: true, hideInTable: true },
+      { key: "db_approval_date", label: "Tanggal Pengajuan Datun", type: "date", readOnly: true, hideInTable: true },
+      { key: "db_approval_checked_at", label: "Terakhir Cek Datun", type: "text", readOnly: true, hideInTable: true },
+      { key: "db_approval_detail", label: "Rincian Cek Datun", type: "longtext", readOnly: true, hideInTable: true },
       { key: "chat_date", label: "Tanggal Chat", type: "date", required: true, aliases: ["tanggal chat masuk", "tanggal", "bulan"] },
       { key: "brand", label: "Brand", type: "brand", required: true },
       { key: "name", label: "Nama", type: "text", aliases: ["nama / identitas", "nama"] },

@@ -7,9 +7,33 @@ import { useAnalytics } from "@/components/use-analytics";
 import { BarList, Card, Kpi, KpiSkeleton, MiniTable, SEGMENT_COLORS, SplitBar } from "@/components/charts";
 import { WaLinkBuilder } from "@/components/wa-link-builder";
 import { StopButton } from "@/components/stop-button";
+import { useEffect, useState } from "react";
+import { api, useFetch, useToast } from "@/components/providers";
 
 export default function LeadsPage() {
   const { data: a, reload } = useAnalytics();
+  const toast = useToast();
+  const [tick, setTick] = useState(0);
+  const [requesting, setRequesting] = useState(false);
+  const { data: sync, reload: reloadSync } = useFetch<{ requestedAt?: string; finishedAt?: string; running?: boolean; ok?: boolean; note?: string }>("/api/leads/approval-sync");
+  const waiting = !!sync?.requestedAt && (!sync.finishedAt || sync.requestedAt > sync.finishedAt);
+  useEffect(() => {
+    const timer = setInterval(reloadSync, 15000);
+    return () => clearInterval(timer);
+    // reloadSync uses a functional state update and has no changing captured values.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (sync?.finishedAt) { setTick((t) => t + 1); reload(); }
+    // Refresh the lead table only when a check finishes, not on each poll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sync?.finishedAt]);
+  const check = async () => {
+    setRequesting(true);
+    try { await api("/api/leads/approval-sync", "POST"); reloadSync(); toast("Permintaan cek Datun dikirim ke komputer kantor"); }
+    catch (e) { toast((e as Error).message, "err"); }
+    finally { setRequesting(false); }
+  };
   const k = a?.kpis.leads;
   const p = a?.prevKpis.leads;
   return (
@@ -37,7 +61,11 @@ export default function LeadsPage() {
         </div>
       )}
       <WaLinkBuilder />
-      <ResourceTable resourceKey="leads" freeze={["chat_date", "brand", "name"]} quickFilters={["branch", "pipeline_stage", "source", "segment", "final_status"]} computedCols={["reply_minutes", "age_days", "next_action"]} onChanged={reload} selectionActions={(ids, done) => <StopButton resource="leads" ids={ids} done={() => (done(), reload())} />} />
+      <Card title="Status Datun dari Database" subtitle="Cocokkan NIK atau KK dengan pengajuan Datun di Konvensional dan Syariah, pada hari ke-1 sampai ke-30 setelah Tanggal Chat. Approve mengikuti status persetujuan sumber, termasuk yang belum cair. Status manual lead tetap terpisah." action={<button className="btn btn-sm" disabled={requesting || waiting || sync?.running} onClick={check}>{requesting || waiting || sync?.running ? "Menunggu pemeriksaan…" : "Cek status Datun"}</button>}>
+        <p className="text-xs text-[var(--muted)]">Pemeriksaan diproses melalui komputer kantor saat tersambung. Data baru atau perubahan NIK, KK, dan tanggal akan diperiksa oleh pekerja lokal yang berjalan berkala. Arahkan kursor ke status untuk melihat rincian kecocokan.</p>
+        {sync?.note && <p className={`mt-2 text-sm ${sync.ok === false ? "text-[var(--critical-ink)]" : "text-[var(--muted)]"}`}>{sync.note}</p>}
+      </Card>
+      <ResourceTable resourceKey="leads" freeze={["db_approval_status", "db_approval_source", "chat_date", "brand", "name"]} reloadKey={tick} quickFilters={["db_approval_status", "db_approval_source", "branch", "pipeline_stage", "source", "segment", "final_status"]} computedCols={["reply_minutes", "age_days", "next_action"]} onChanged={reload} selectionActions={(ids, done) => <StopButton resource="leads" ids={ids} done={() => (done(), reload())} />} />
       {a && a.kpis.leads.leads > 0 && (
         <div className="grid gap-4 lg:grid-cols-3">
           <Card title="Sumber Trafik" subtitle="Leads · biaya per lead (CPL)">

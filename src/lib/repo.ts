@@ -39,8 +39,12 @@ export async function listRows(orgId: number, r: Resource, f: ListFilter = {}): 
 export function cleanInput(r: Resource, body: Record<string, unknown>, fromImport = false) {
   const out: Record<string, unknown> = {};
   for (const f of r.fields) {
+    if (f.readOnly) continue;
     if (!(f.key in body)) continue;
     out[f.key] = coerce(f, body[f.key], fromImport);
+  }
+  if (r.key === "leads" && ["nik", "kk", "chat_date"].some((key) => key in out)) {
+    for (const key of ["db_approval_status", "db_approval_source", "db_approval_ref", "db_approval_date", "db_approval_detail", "db_approval_checked_at"]) out[key] = null;
   }
   return out;
 }
@@ -102,7 +106,7 @@ export async function insertRow(orgId: number, r: Resource, data: Record<string,
 
 export async function insertMany(orgId: number, r: Resource, rows: Record<string, unknown>[]) {
   if (!rows.length) return 0;
-  const keys = r.fields.map((f) => f.key);
+  const keys = r.fields.filter((f) => !f.readOnly).map((f) => f.key);
   const cols = ["org_id", ...keys];
   let count = 0;
   for (let i = 0; i < rows.length; i += 200) {

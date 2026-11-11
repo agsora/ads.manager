@@ -151,8 +151,9 @@ function StandardResourceForm({ resource, row, onClose, onSaved, defaults, group
     }
     return o;
   });
-  const groups = [...new Set(resource.fields.map((f) => f.group ?? ""))].filter((g) => !onlyGroups || onlyGroups.includes(g));
-  const shown = resource.fields.filter((f) => groups.includes(f.group ?? ""));
+  const editableFields = resource.fields.filter((f) => !f.readOnly);
+  const groups = [...new Set(editableFields.map((f) => f.group ?? ""))].filter((g) => !onlyGroups || onlyGroups.includes(g));
+  const shown = editableFields.filter((f) => groups.includes(f.group ?? ""));
 
   const [pulling, setPulling] = useState(false);
   const link = resource.key === "content" ? vals.post_link || vals.brief_link : "";
@@ -176,7 +177,7 @@ function StandardResourceForm({ resource, row, onClose, onSaved, defaults, group
     try {
       const body: Record<string, unknown> = {};
       // only send the visible part of the record, so editing results never overwrites the plan (and vice versa)
-      for (const f of row?.id ? shown : resource.fields) body[f.key] = vals[f.key] === "" ? null : vals[f.key];
+      for (const f of row?.id ? shown : editableFields) body[f.key] = vals[f.key] === "" ? null : vals[f.key];
       if (row?.id) await api(`/api/r/${resource.key}/${row.id}`, "PUT", body);
       else await api(`/api/r/${resource.key}`, "POST", body);
       toast(row?.id ? "Perubahan disimpan" : `${resource.singular} ditambahkan`);
@@ -213,7 +214,7 @@ function StandardResourceForm({ resource, row, onClose, onSaved, defaults, group
           <fieldset key={g} className="mb-4">
             {g && <legend className="mb-3 text-[12px] font-bold uppercase tracking-wider text-[var(--muted)]">{g}</legend>}
             <div className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2">
-              {resource.fields
+              {editableFields
                 .filter((f) => (f.group ?? "") === g)
                 .map((f) => (
                   <div key={f.key} className={f.type === "longtext" ? "sm:col-span-2" : ""}>

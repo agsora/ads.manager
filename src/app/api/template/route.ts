@@ -6,8 +6,9 @@ import { addResourceSheet, addTableSheet, toBuffer } from "@/lib/excel";
 
 export const GET = handle(async (req: Request) => {
   const s = await requireSession();
-  const r = getResource(new URL(req.url).searchParams.get("resource") ?? "");
-  if (!r) throw new HttpError(404, "Modul tidak ditemukan");
+  const resource = getResource(new URL(req.url).searchParams.get("resource") ?? "");
+  if (!resource) throw new HttpError(404, "Modul tidak ditemukan");
+  const r = { ...resource, fields: resource.fields.filter((f) => !f.readOnly) };
   const options = await getOptions(s.org);
   const wb = new ExcelJS.Workbook();
   const ws = addResourceSheet(wb, r, [], { computed: false });
