@@ -436,6 +436,7 @@ export const RESOURCES: Resource[] = [
       { key: "pipeline_stage", label: "Tahap Pembiayaan", type: "select", options: "pipeline_stage", aliases: ["tahap", "tahapan", "stage", "status"] },
       { key: "final_status", label: "Status Akhir", type: "select", options: "final_status" },
       { key: "manual_followup", label: "Follow Up Manual", type: "select", options: "manual_followup", hideInTable: true },
+      { key: "manual_followup_date", label: "Tanggal Follow Up Manual", type: "date", hideInTable: true },
       { key: "deal_value", label: "Nilai Deal / Pencairan", type: "money", aliases: ["nilai transaksi", "omzet", "nilai pencairan", "pencairan"] },
       { key: "pic", label: "PIC/CS", type: "text" },
     ],

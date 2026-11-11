@@ -53,10 +53,13 @@ export default function FollowUpBoard() {
           const age = diffDays(String(r.chat_date).slice(0, 10), today);
           const natural = !r.followup_1 ? 1 : !r.followup_2 ? 2 : !r.followup_3 ? 3 : 4;
           // lead yang dipilih ke Follow Up Manual keluar dari kolom tahapnya
-          return { r, age, stage: isManual(r) ? MANUAL : natural, due: age >= COLS[natural - 1].due };
+          const manual = isManual(r);
+          const fuDate = manual && r.manual_followup_date ? String(r.manual_followup_date).slice(0, 10) : "";
+          // di kolom manual, jatuh tempo mengikuti tanggal yang diisi sendiri (bukan umur lead)
+          return { r, age, stage: manual ? MANUAL : natural, due: manual ? !!fuDate && fuDate <= today : age >= COLS[natural - 1].due, fuDate };
         })
         .filter((x) => !onlyDue || x.due)
-        .sort((a, b) => Number(b.due) - Number(a.due) || (String(b.r.segment).toUpperCase() === "HOT" ? 1 : 0) - (String(a.r.segment).toUpperCase() === "HOT" ? 1 : 0) || b.age - a.age),
+        .sort((a, b) => Number(b.due) - Number(a.due) || (a.stage === MANUAL && b.stage === MANUAL ? (a.fuDate || "9999").localeCompare(b.fuDate || "9999") : 0) || (String(b.r.segment).toUpperCase() === "HOT" ? 1 : 0) - (String(a.r.segment).toUpperCase() === "HOT" ? 1 : 0) || b.age - a.age),
     [data, today, onlyDue],
   );
 
@@ -67,12 +70,27 @@ export default function FollowUpBoard() {
   );
   const setManual = async (r: Row, on: boolean) => {
     try {
-      await api(`/api/r/leads/${r.id}`, "PUT", { manual_followup: on ? "Ya" : null });
+      await api(`/api/r/leads/${r.id}`, "PUT", on ? { manual_followup: "Ya" } : { manual_followup: null, manual_followup_date: null });
       toast(on ? `${r.name ?? "Lead"} masuk Follow Up Manual` : `${r.name ?? "Lead"} dikeluarkan dari Follow Up Manual`);
       reload();
     } catch (e) {
       toast((e as Error).message, "err");
     }
+  };
+
+  const setFuDate = async (r: Row, date: string) => {
+    try {
+      await api(`/api/r/leads/${r.id}`, "PUT", { manual_followup_date: date || null });
+      toast(date ? `${r.name ?? "Lead"}: follow up ${fmtDate(date)}` : "Tanggal follow up dihapus");
+      reload();
+    } catch (e) {
+      toast((e as Error).message, "err");
+    }
+  };
+  /** hitung mundur ke tanggal follow up manual */
+  const countdown = (date: string) => {
+    const d = diffDays(today, date);
+    return d > 0 ? { text: `${d} hari lagi`, late: false } : d === 0 ? { text: "Hari ini", late: true } : { text: `Terlambat ${-d} hari`, late: true };
   };
 
   const close = async (r: Row, status: string) => {
@@ -125,7 +143,7 @@ export default function FollowUpBoard() {
                 </select>
               )}
               <div className="space-y-2.5">
-                {items.slice(0, 60).map(({ r, age, due }) => {
+                {items.slice(0, 60).map(({ r, age, due, fuDate }) => {
                   const stopped = stopSet.has(normPhone(r.phone));
                   const wa = stopped ? "" : String(r.phone ?? "").replace(/\D/g, "").replace(/^0/, "62");
                   return (
@@ -143,6 +161,24 @@ export default function FollowUpBoard() {
                       </div>
                       {r.need ? <div className="mt-1.5 line-clamp-2 text-[12.5px]">{String(r.need)}</div> : null}
                       {r.followup_1 ? <div className="mt-1.5 line-clamp-2 text-[12px] text-[var(--muted)]">Terakhir: {String(r.followup_3 ?? r.followup_2 ?? r.followup_1)}</div> : null}
+                      {c.stage === MANUAL && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <label className="text-[12px] text-[var(--muted)]" htmlFor={`fu-${r.id}`}>FU kembali</label>
+                          <input
+                            id={`fu-${r.id}`}
+                            type="date"
+                            className="input !h-7 !w-[140px] !px-1.5 !text-[12px]"
+                            min={today}
+                            value={fuDate}
+                            onChange={(e) => setFuDate(r, e.target.value)}
+                          />
+                          {fuDate ? (
+                            <span className={`chip ${countdown(fuDate).late ? "!border-[#e4b7ab] !bg-[#fbefec] !text-[var(--critical-ink)]" : ""}`}>{countdown(fuDate).text}</span>
+                          ) : (
+                            <span className="text-[11.5px] text-[var(--muted)]">belum dijadwalkan</span>
+                          )}
+                        </div>
+                      )}
                       <div className="mt-2.5 flex flex-wrap gap-1.5">
                         {stopped && <span className="chip !border-[#e4b7ab] !bg-[#fbefec] !text-[var(--critical-ink)]">Jangan dihubungi</span>}
                         {wa && (
