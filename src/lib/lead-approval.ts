@@ -14,11 +14,12 @@ export const approvalPhone = (v: unknown) => {
 export const leadApprovalNiks = (lead: Row) => [...new Set([identity16(lead.nik), identity16(lead.nik_penjamin)].filter(Boolean))];
 export const fallbackApprovalPhone = (lead: Row) => !leadApprovalNiks(lead).length && !identity16(lead.kk) ? approvalPhone(lead.phone) : "";
 export type ApprovalContact = { role: "Pemohon" | "Pasangan" | "Penjamin"; nik?: string; kk?: string; phone?: string };
+export type ApprovalIdentityLink = { niks: string[]; kks: string[] };
 export type ApprovalCandidate = {
   source: "Konvensional" | "Syariah"; reference: string; date: string; submittedAt?: string; status: string;
   nik: string; kk: string; phone?: string; contacts?: ApprovalContact[]; datun: boolean; cancelled?: boolean;
 };
-export function approvalMatchReason(lead: Row, candidate: ApprovalCandidate): string | null {
+export function approvalMatchReason(lead: Row, candidate: ApprovalCandidate, link?: ApprovalIdentityLink): string | null {
   const contacts: ApprovalContact[] = [{ role: "Pemohon", nik: candidate.nik, kk: candidate.kk, phone: candidate.phone }, ...(candidate.contacts || [])];
   for (const contact of contacts) {
     const nik = identity16(contact.nik);
@@ -28,24 +29,28 @@ export function approvalMatchReason(lead: Row, candidate: ApprovalCandidate): st
   for (const contact of contacts) if (kk && identity16(contact.kk) === kk) return `KK → ${contact.role}`;
   const phone = fallbackApprovalPhone(lead);
   for (const contact of contacts) if (phone && approvalPhone(contact.phone) === phone) return `Telepon (cadangan) → ${contact.role}`;
+  if (phone && link) {
+    for (const contact of contacts) if (identity16(contact.nik) && link.niks.includes(identity16(contact.nik))) return `Telepon → NIK sumber → ${contact.role}`;
+    for (const contact of contacts) if (identity16(contact.kk) && link.kks.includes(identity16(contact.kk))) return `Telepon → KK sumber → ${contact.role}`;
+  }
   return null;
 }
-export function leadApproval(lead: Row, candidates: ApprovalCandidate[]) {
+export function leadApproval(lead: Row, candidates: ApprovalCandidate[], link?: ApprovalIdentityLink) {
   const niks = leadApprovalNiks(lead), kk = identity16(lead.kk);
   const phone = fallbackApprovalPhone(lead);
   const input = String(lead.chat_date || "").slice(0, 10);
   if ((!niks.length && !kk && !phone) || !/^\d{4}-\d{2}-\d{2}$/.test(input) || !Number.isFinite(Date.parse(input))) return { status: "Data belum lengkap", source: null, reference: null, date: null, detail: "Isi Tanggal Chat dan NIK/KK yang valid (16 digit), atau nomor telepon seluler jika NIK dan KK belum tersedia." };
   const matches = candidates.filter((c) => {
     const days = diffDays(input, c.date);
-    return c.datun && days > 0 && days <= 30 && !!approvalMatchReason(lead, c);
+    return c.datun && days >= 0 && days <= 30 && !!approvalMatchReason(lead, c, link);
   }).sort((a, b) => (b.submittedAt || `${b.date}T00:00:00`).localeCompare(a.submittedAt || `${a.date}T00:00:00`) || b.reference.localeCompare(a.reference, "en", { numeric: true }) || a.source.localeCompare(b.source));
   // Inspect every eligible application across both sources. The newest non-cancelled
   // approval wins even if a newer application is pending; otherwise use the newest status.
   const approved = matches.filter((c) => !c.cancelled && ["approve", "approved"].includes(c.status.trim().toLowerCase()));
   const result = approved[0] || matches[0];
-  if (!result) return { status: "Tidak ditemukan", source: null, reference: null, date: null, detail: `Tidak ditemukan pengajuan Datun dengan ${phone ? "nomor telepon" : "NIK/KK"} yang sama pada hari ke-1 sampai ke-30 setelah Tanggal Chat.` };
+  if (!result) return { status: "Tidak ditemukan", source: null, reference: null, date: null, detail: `Tidak ditemukan pengajuan Datun dengan ${phone ? "nomor telepon atau identitas yang ditautkan" : "NIK/KK"} yang sama pada hari ke-0 sampai ke-30 sejak Tanggal Chat.` };
   return {
     status: approved.length ? "Approve" : result.cancelled ? "Batal" : result.status.trim() || "Status belum diisi", source: result.source, reference: result.reference, date: result.date,
-    detail: [...new Set(matches.map((c) => `${c.source} · ${c.reference} · pengajuan ${c.date} · status ${c.status}${c.cancelled ? " (batal)" : ""} · cocok lewat ${approvalMatchReason(lead, c)}`))].join("\n"),
+    detail: [...new Set(matches.map((c) => `${c.source} · ${c.reference} · pengajuan ${c.date} · status ${c.status}${c.cancelled ? " (batal)" : ""} · cocok lewat ${approvalMatchReason(lead, c, link)}`))].join("\n"),
   };
 }

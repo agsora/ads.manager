@@ -3,6 +3,7 @@ import { loadSourceEnv, sourceQuery, closeSourceTunnels } from "./source-db";
 import { identity16, leadApprovalNiks, fallbackApprovalPhone, leadApproval, type ApprovalCandidate } from "../src/lib/lead-approval";
 import { addDays } from "../src/lib/format";
 import type { Row } from "../src/lib/resources";
+import { findLeadIdentityLinks, normalizedSourcePhone } from "./lead-identity-links";
 
 loadSourceEnv();
 const dryRun = process.argv.includes("--dry-run");
@@ -13,16 +14,14 @@ if (orgFilter !== null && (!Number.isInteger(orgFilter) || orgFilter <= 0)) thro
 
 async function candidates(leads: Row[]) {
   const valid = leads.filter((l) => (leadApprovalNiks(l).length || identity16(l.kk) || fallbackApprovalPhone(l)) && l.chat_date);
-  if (!valid.length) return [];
-  const niks = [...new Set(valid.flatMap(leadApprovalNiks))];
-  const kks = [...new Set(valid.map((l) => identity16(l.kk)).filter(Boolean))];
   const phones = [...new Set(valid.map(fallbackApprovalPhone).filter(Boolean))];
+  const links = await findLeadIdentityLinks(phones);
+  if (!valid.length) return { rows: [] as ApprovalCandidate[], links };
+  const niks = [...new Set([...valid.flatMap(leadApprovalNiks), ...[...links.values()].flatMap((l) => l.niks)])];
+  const kks = [...new Set([...valid.map((l) => identity16(l.kk)).filter(Boolean), ...[...links.values()].flatMap((l) => l.kks)])];
   const dates = valid.map((l) => String(l.chat_date).slice(0, 10)).sort();
   const params = [niks, kks, dates[0], addDays(dates[dates.length - 1], 30), phones];
-  const normalizedPhone = (column: string) => {
-    const d = `regexp_replace(COALESCE(${column},''), '\\D', '', 'g')`;
-    return `(CASE WHEN ${d} LIKE '0062%' THEN '0'||substring(${d} FROM 5) WHEN ${d} LIKE '62%' THEN '0'||substring(${d} FROM 3) WHEN ${d} LIKE '8%' THEN '0'||${d} ELSE ${d} END)`;
-  };
+  const normalizedPhone = normalizedSourcePhone;
   const [konven, syariah] = await Promise.all([
     sourceQuery("konvensional", `SELECT a.id::text AS reference,
       to_char((a."createdAt" AT TIME ZONE 'Asia/Jakarta')::date, 'YYYY-MM-DD') AS date, a.status,
@@ -32,7 +31,7 @@ async function candidates(leads: Row[]) {
       a.partner_ktp_number AS partner_nik, a.partner_phone AS partner_phone
       FROM "Applications" a LEFT JOIN "Users" u ON u.id=a.user_id
       WHERE a.application_type='Dana Tunai'
-      AND (a."createdAt" AT TIME ZONE 'Asia/Jakarta')::date > $3::date
+      AND (a."createdAt" AT TIME ZONE 'Asia/Jakarta')::date >= $3::date
       AND (a."createdAt" AT TIME ZONE 'Asia/Jakarta')::date <= $4::date
       AND (regexp_replace(COALESCE(u.ktp_number,''), '\\D', '', 'g')=ANY($1::text[])
         OR regexp_replace(COALESCE(a.kk_number,''), '\\D', '', 'g')=ANY($2::text[])
@@ -54,7 +53,7 @@ async function candidates(leads: Row[]) {
         AND length(regexp_replace(COALESCE(c.no_id_penjamin,''), '\\D', '', 'g'))=16
         AND regexp_replace(COALESCE(c.no_id_penjamin,''), '\\D', '', 'g')<>'0000000000000000'
       WHERE (upper(trim(t.status_barang))='DATUN' OR p.fk_produk IN ('22','42','44'))
-      AND p.tgl_pengajuan::date > $3::date AND p.tgl_pengajuan::date <= $4::date
+      AND p.tgl_pengajuan::date >= $3::date AND p.tgl_pengajuan::date <= $4::date
       AND (regexp_replace(COALESCE(c.no_id,''), '\\D', '', 'g')=ANY($1::text[])
         OR regexp_replace(COALESCE(c.no_kk,''), '\\D', '', 'g')=ANY($2::text[])
         OR regexp_replace(COALESCE(c.no_ktp_pasangan,''), '\\D', '', 'g')=ANY($1::text[])
@@ -68,7 +67,7 @@ async function candidates(leads: Row[]) {
     { role: "Pasangan", nik: String(r.partner_nik || ""), phone: String(r.partner_phone || "") },
     { role: "Penjamin", nik: String(r.guarantor_nik || ""), phone: String(r.guarantor_phone || ""), kk: String(r.guarantor_kk || "") },
   ], cancelled: r.cancelled === true || r.cancelled === "t", datun: true }));
-  return [...convert(konven, "Konvensional"), ...convert(syariah, "Syariah")];
+  return { rows: [...convert(konven, "Konvensional"), ...convert(syariah, "Syariah")], links };
 }
 
 async function main() {
@@ -104,7 +103,7 @@ async function main() {
       for (let start = 0; start < mine.length; start += 150) {
         const batch = mine.slice(start, start + 150);
         const found = await candidates(batch);
-        for (const lead of batch) results.push({ lead, result: leadApproval(lead, found) });
+        for (const lead of batch) results.push({ lead, result: leadApproval(lead, found.rows, found.links.get(fallbackApprovalPhone(lead))) });
       }
       const totals: Record<string, number> = {};
       let updated = 0;
