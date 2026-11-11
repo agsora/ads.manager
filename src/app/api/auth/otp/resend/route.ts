@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { handle, HttpError } from "@/lib/auth";
+import { MailError } from "@/lib/mailer";
 import { OTP_COOKIE, OtpError, maskEmail, resendOtp } from "@/lib/otp";
 
 export const POST = handle(async (req: Request) => {
@@ -15,6 +16,7 @@ export const POST = handle(async (req: Request) => {
       if (err.restart) res.cookies.delete(OTP_COOKIE);
       return res;
     }
+    if (err instanceof MailError) throw new HttpError(502, `Kode gagal dikirim. ${err.message}`);
     console.error("[otp] gagal kirim ulang:", err);
     throw new HttpError(502, "Kode gagal dikirim ke email. Coba lagi sebentar.");
   }

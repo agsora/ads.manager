@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { handle, HttpError } from "@/lib/auth";
+import { MailError } from "@/lib/mailer";
 import { OTP_COOKIE, OTP_TTL_MIN, OtpError, maskEmail, otpAvailable, startOtp } from "@/lib/otp";
 
 const clientIp = (req: Request) => (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || null;
@@ -17,6 +18,7 @@ export const POST = handle(async (req: Request) => {
     return res;
   } catch (err) {
     if (err instanceof OtpError) throw new HttpError(err.status, err.message);
+    if (err instanceof MailError) throw new HttpError(502, `Kode gagal dikirim. ${err.message}`);
     console.error("[otp] gagal kirim kode:", err);
     throw new HttpError(502, "Kode gagal dikirim ke email. Coba lagi sebentar.");
   }
