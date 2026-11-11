@@ -12,8 +12,11 @@ type Quota = { month: { used: number; limit: number }; day: { used: number; limi
 type Patch = Record<string, string>;
 type Kind = "ktp" | "kk" | "stnk";
 
-/** Kecilkan foto (sisi terpanjang 1600 px, JPEG) sampai di bawah ~900 KB supaya lolos batas 1 MB OCR. */
-async function shrink(file: File): Promise<Blob> {
+/**
+ * Kecilkan foto (JPEG) sampai di bawah ~900 KB supaya lolos batas 1 MB OCR. Dokumen berhuruf kecil (STNK, KK) dipertahankan
+ * lebih besar; STNK juga dijadikan hitam-putih dengan kontras sedikit dinaikkan supaya huruf kecil dan latar bermotif lebih terbaca.
+ */
+async function shrink(file: File, maxSide = 1600, enhance = false): Promise<Blob> {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((ok, no) => {
@@ -22,13 +25,15 @@ async function shrink(file: File): Promise<Blob> {
       i.onerror = () => no(new Error("Foto tidak bisa dibuka"));
       i.src = url;
     });
-    let side = Math.min(1600, Math.max(img.width, img.height));
+    let side = Math.min(maxSide, Math.max(img.width, img.height));
     for (let q = 0.85; ; q -= 0.1) {
       const scale = Math.min(1, side / Math.max(img.width, img.height));
       const c = document.createElement("canvas");
       c.width = Math.round(img.width * scale);
       c.height = Math.round(img.height * scale);
-      c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+      const ctx = c.getContext("2d")!;
+      if (enhance && "filter" in ctx) ctx.filter = "grayscale(1) contrast(1.25)"; // browser lama tanpa filter kanvas: foto dikirim apa adanya
+      ctx.drawImage(img, 0, 0, c.width, c.height);
       const blob = await new Promise<Blob | null>((ok) => c.toBlob(ok, "image/jpeg", Math.max(q, 0.4)));
       if (!blob) throw new Error("Foto tidak bisa dikecilkan");
       if (blob.size <= 900_000 || (q <= 0.45 && side <= 900)) return blob;
@@ -41,7 +46,7 @@ async function shrink(file: File): Promise<Blob> {
 
 async function read(kind: Kind, file: File) {
   const fd = new FormData();
-  fd.set("file", await shrink(file), "foto.jpg");
+  fd.set("file", await shrink(file, kind === "stnk" ? 2200 : kind === "kk" ? 2000 : 1600, kind === "stnk"), "foto.jpg");
   fd.set("kind", kind);
   const res = await fetch("/api/ocr/id", { method: "POST", body: fd });
   const j = await res.json().catch(() => ({}));

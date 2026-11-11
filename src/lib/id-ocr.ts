@@ -98,6 +98,70 @@ function labelValue(lines: string[], label: RegExp, ok: (v: string) => boolean =
   return "";
 }
 
+const NAME = /^[A-Za-z .'\-]{3,60}$/;
+
+/** Label yang dikenali di STNK. Semuanya dipakai sebagai batas: nilai sebuah label berakhir di label berikutnya, termasuk yang ada di baris yang sama. */
+const STNK_LABELS: [string, RegExp][] = [
+  ["plat", /N[O0](?:MOR|\.)?\s*(?:REGISTRASI|REG\.?|POLISI)/gi],
+  ["nama", /NAMA\s*PEMILIK/gi],
+  ["alamat", /ALAMAT/gi],
+  ["merk", /MERK|MEREK/gi],
+  ["tipe", /TYPE|TIPE/gi],
+  ["jenis", /JENIS/gi],
+  ["model", /MODEL/gi],
+  ["tahun", /TAHUN\s*PEMB(?:UATAN|\.)?/gi],
+  ["tahunreg", /TAHUN\s*REGISTRASI/gi],
+  ["silinder", /ISI\s*SILINDER/gi],
+  ["warna", /WARNA(?:\s*TNKB)?/gi],
+  ["bbm", /BAHAN\s*BAKAR/gi],
+  ["rangka", /N[O0](?:MOR|\.)?\s*RANGKA(?:\s*\/\s*NIK\s*\/\s*VIN)?|N[O0]\.?\s*RANGKA/gi],
+  ["mesin", /N[O0](?:MOR|\.)?\s*MESIN/gi],
+  ["bpkb", /N[O0](?:MOR|\.)?\s*BPKB/gi],
+  ["lokasi", /KODE\s*LOKASI/gi],
+  ["urut", /N[O0](?:MOR|\.)?\s*URUT\s*PENDAFTARAN/gi],
+  ["berlaku", /BERLAKU\s*(?:S\/D|SAMPAI|HINGGA)/gi],
+];
+
+/** Pecah teks OCR menjadi pasangan label → nilai, apa pun tata letaknya (satu label per baris, dua label sejajar, atau nilai di baris bawah). */
+export function stnkFields(text: string): Record<string, string> {
+  const flat = text.replace(/\r/g, "").replace(/[\t\n]+/g, " ⏎ ");
+  const hits: { key: string; start: number; end: number }[] = [];
+  for (const [key, re] of STNK_LABELS) for (const m of flat.matchAll(re)) hits.push({ key, start: m.index ?? 0, end: (m.index ?? 0) + m[0].length });
+  hits.sort((a, b) => a.start - b.start || b.end - a.end);
+  // label yang saling tumpang tindih: ambil yang terpanjang
+  const kept: typeof hits = [];
+  for (const h of hits) if (!kept.length || h.start >= kept[kept.length - 1].end) kept.push(h);
+  const out: Record<string, string> = {};
+  kept.forEach((h, i) => {
+    const raw = flat.slice(h.end, kept[i + 1]?.start ?? flat.length);
+    const v = raw.replace(/⏎/g, " ").replace(/^[\s:.;,\-]+/, "").replace(/\s+/g, " ").trim();
+    if (v && !(h.key in out)) out[h.key] = v;
+  });
+  return out;
+}
+
+const toDigits = (s: string) => s.replace(/[OoQDIli|ZzSsB]/g, (c) => ({ O: "0", o: "0", Q: "0", D: "0", I: "1", l: "1", i: "1", "|": "1", Z: "2", z: "2", S: "5", s: "5", B: "8" })[c] ?? c);
+const toLetters = (s: string) => s.replace(/[0158]/g, (c) => ({ "0": "O", "1": "I", "5": "S", "8": "B" })[c] ?? c);
+
+/** Plat: 1–2 huruf wilayah · 1–4 angka · 0–3 huruf seri. Huruf yang tertukar dengan angka (dan sebaliknya) diperbaiki per bagian. */
+export function normPlat(v: string): string | null {
+  const t = v.toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim();
+  const parts = t.split(/\s+/);
+  let area = "";
+  let num = "";
+  let seri = "";
+  if (parts.length >= 2) {
+    area = toLetters(parts[0]);
+    num = toDigits(parts[1]);
+    seri = toLetters(parts.slice(2).join(""));
+  } else {
+    const m = t.match(/^([A-Z0-9]{1,2}?)([A-Z0-9]{1,4}?)([A-Z]{0,3})$/);
+    if (!m) return null;
+    [area, num, seri] = [toLetters(m[1]), toDigits(m[2]), m[3]];
+  }
+  return /^[A-Z]{1,2}$/.test(area) && /^\d{1,4}$/.test(num) && /^[A-Z]{0,3}$/.test(seri) ? [area, num, seri].filter(Boolean).join(" ") : null;
+}
+
 export interface StnkResult {
   plat: string | null;
   nama: string | null;
@@ -107,33 +171,28 @@ export interface StnkResult {
   mesin: string | null;
 }
 
-const PLAT = /^[A-Za-z]{1,2}\s?\d{1,4}\s?[A-Za-z]{0,3}$/;
-const NAME = /^[A-Za-z .'\-]{3,60}$/;
-
 /** STNK: No. Registrasi (plat), Nama Pemilik, Merk, Type, Tahun Pembuatan, No. Rangka, No. Mesin. Semua hasil perlu dicek petugas. */
 export function parseStnk(text: string): StnkResult {
-  const lines = text.split(/\r?\n/);
+  const f = stnkFields(text);
   const alnum = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  const plat = labelValue(lines, /\b(NO\.?\s*(REGISTRASI|POLISI)|NOMOR\s*(REGISTRASI|POLISI))\b/i, (v) => PLAT.test(v.trim()))
-    .toUpperCase()
-    .replace(/\s+/g, " ")
-    .trim();
-  let rangka = alnum(labelValue(lines, /\bNO\.?\s*RANGKA\b[^:]*/i, (v) => alnum(v).length >= 10));
+  // nilai nomor rangka bisa memuat sisa label ("NIK/VIN") bila OCR memotongnya
+  let rangka = alnum((f.rangka ?? "").replace(/^(?:\/?\s*NIK\s*\/?\s*VIN)/i, ""));
   if (rangka.length === 17) rangka = rangka.replace(/[OQ]/g, "0").replace(/I/g, "1"); // nomor rangka (VIN) tidak memakai huruf I, O, Q
-  const mesin = alnum(labelValue(lines, /\bNO\.?\s*MESIN\b/i, (v) => alnum(v).length >= 6));
-  const tahun = labelValue(lines, /\bTAHUN\s*(PEMBUATAN)?\b/i, (v) => /(19|20)\d{2}/.test(v)).match(/(19|20)\d{2}/)?.[0] ?? "";
-  const merk = labelValue(lines, /^\s*MERK\b/i);
-  const tipe = labelValue(lines, /^\s*(TYPE|TIPE)\b/i);
-  const nama = labelValue(lines, /\bNAMA\s*PEMILIK\b/i, (v) => NAME.test(v)).toUpperCase();
+  const mesin = alnum(f.mesin ?? "");
+  const tahun = toDigits(f.tahun ?? "").match(/(19|20)\d{2}/)?.[0] ?? "";
+  const nama = NAME.test(f.nama ?? "") ? (f.nama as string).toUpperCase() : "";
+  const merk = [f.merk, f.tipe].filter(Boolean).join(" ").toUpperCase();
   return {
-    plat: plat || null,
+    plat: f.plat ? normPlat(f.plat) : null,
     nama: nama || null,
-    merk: [merk, tipe].filter(Boolean).join(" ").toUpperCase() || null,
+    merk: merk || null,
     tahun: tahun || null,
-    rangka: rangka.length >= 10 ? rangka : null,
-    mesin: mesin.length >= 6 ? mesin : null,
+    rangka: rangka.length >= 10 && rangka.length <= 20 ? rangka : null,
+    mesin: mesin.length >= 6 && mesin.length <= 15 ? mesin : null,
   };
 }
+
+const stnkScore = (r: StnkResult) => Object.values(r).filter(Boolean).length;
 
 export interface KkResult {
   kk: IdNumber | null;
@@ -190,13 +249,15 @@ async function ocr(file: Blob, name: string, key: string, engine: 2 | 3, table: 
  */
 export async function readIdPhoto(file: Blob, name: string, kind: "ktp" | "kk" | "stnk", key: string, gate?: (engine: 2 | 3) => Promise<boolean>) {
   const table = kind === "kk";
-  const good = (t: string) => (kind === "ktp" ? parseKtp(t).nik?.valid : kind === "kk" ? parseKk(t).kk?.valid : !!(parseStnk(t).plat && (parseStnk(t).rangka || parseStnk(t).mesin)));
+  // nilai mutu bacaan: KTP/KK 10 bila nomornya valid, 5 bila terbaca tapi janggal; STNK = jumlah dari 6 data yang berhasil dibaca
+  const score = (t: string) => (kind === "ktp" ? (parseKtp(t).nik?.valid ? 10 : parseKtp(t).nik ? 5 : 0) : kind === "kk" ? (parseKk(t).kk?.valid ? 10 : parseKk(t).kk ? 5 : 0) : stnkScore(parseStnk(t)));
+  const enough = (t: string) => score(t) >= (kind === "stnk" ? 5 : 10);
   if (gate && !(await gate(2))) throw new OcrQuotaError("Kuota gratis OCR habis");
   let text = await ocr(file, name, key, 2, table);
-  if (!good(text) && (!gate || (await gate(3)))) {
+  if (!enough(text) && (!gate || (await gate(3)))) {
     try {
       const t3 = await ocr(file, name, key, 3, table);
-      if (good(t3) || !good(text)) text = good(t3) ? t3 : text.length >= t3.length ? text : t3;
+      if (score(t3) > score(text)) text = t3;
     } catch (e) {
       if (e instanceof OcrQuotaError) throw e;
       /* Engine 3 sedang sibuk: pakai hasil Engine 2 */
