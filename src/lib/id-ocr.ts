@@ -67,7 +67,7 @@ export interface KtpResult {
 /** Label di KTP; dipakai sebagai batas: nilai "Nama" berakhir di label berikutnya, termasuk yang ada di baris yang sama. */
 const KTP_LABELS: [string, RegExp][] = [
   ["nik", /\bNIK\b/gi],
-  ["nama", /\bNAMA\b/gi],
+  ["nama", /\bN[A4](?:M|RN|N)[A4]\b/gi],
   ["ttl", /TEMPAT\s*\/?\s*(?:TGL|TANGGAL)\.?\s*LAHIR|TEMPAT\s*LAHIR|TGL\.?\s*LAHIR/gi],
   ["jk", /JENIS\s*KELAMIN/gi],
   ["goldar", /GOL\.?\s*DARAH/gi],
@@ -81,13 +81,15 @@ const KTP_LABELS: [string, RegExp][] = [
   ["wn", /KEWARGANEGARAAN/gi],
   ["berlaku", /BERLAKU\s*HINGGA/gi],
 ];
-const KTP_WORDS = /TEMPAT|LAHIR|JENIS|KELAMIN|DARAH|ALAMAT|AGAMA|STATUS|KAWIN|PEKERJAAN|KEWARGANEGARAAN|BERLAKU|PROVINSI|KOTA|KABUPATEN|KECAMATAN|KELURAHAN|NIK|ISLAM|KRISTEN|KATOLIK|HINDU|BUDHA|WNI|SEUMUR|LAKI|PEREMPUAN|PELAJAR|MAHASISWA|KARYAWAN|WIRASWASTA|PETANI|BURUH|MENGURUS|RUMAH|TANGGA|BELUM|SWASTA|PEGAWAI|NEGERI|TNI|POLRI/i;
+const KTP_WORDS = /\b(?:TEMPAT|LAHIR|JENIS|KELAMIN|DARAH|ALAMAT|AGAMA|STATUS|KAWIN|PEKERJAAN|KEWARGANEGARAAN|BERLAKU|PROVINSI|KOTA|KABUPATEN|KECAMATAN|KELURAHAN|NIK|ISLAM|KRISTEN|KATOLIK|HINDU|BUDHA|WNI|SEUMUR|LAKI|PEREMPUAN|PELAJAR|MAHASISWA|KARYAWAN|WIRASWASTA|PETANI|BURUH|MENGURUS|RUMAH|TANGGA|BELUM|SWASTA|PEGAWAI|NEGERI|TNI|POLRI)/i;
 
 /** Nama di KTP: dari nilai label "Nama" (apa pun letaknya), atau - bila labelnya terpisah dari nilainya - baris huruf pertama setelah NIK. */
 export function ktpName(text: string, nikLineHint?: string): string | null {
   const clean = (v: string) => {
     // nama tidak memuat angka; potong di angka pertama (mis. tanggal lahir yang ikut terbaca)
-    const cut = v.replace(/^[\s:.;,\-]+/, "").split(/[0-9]/)[0].replace(/[^A-Za-z .,'\-]/g, " ").replace(/\s+/g, " ").trim().replace(/[ ,.\-]+$/, "");
+    // angka tunggal yang menempel pada huruf adalah salah baca (AR1FIN, SUS4NTI); angka berderet (tanggal) tetap memotong
+    const fixed = v.replace(/(?<![0-9])[0-9](?![0-9])/g, (d, off: number, str: string) => (/[A-Za-z]/.test(str[off - 1] ?? "") || /[A-Za-z]/.test(str[off + 1] ?? "") ? ({ "0": "O", "1": "I", "2": "Z", "4": "A", "5": "S", "6": "G", "8": "B" } as Record<string, string>)[d] ?? d : d));
+    const cut = fixed.replace(/^[\s:.;,\-]+/, "").split(/[0-9]/)[0].replace(/[^A-Za-z .,'\-]/g, " ").replace(/\s+/g, " ").trim().replace(/[ ,.\-]+$/, "");
     return /^[A-Za-z][A-Za-z .,'\-]{2,59}$/.test(cut) && !KTP_WORDS.test(cut) ? cut.toUpperCase() : null;
   };
   // 1) label "Nama" dan nilainya (di baris yang sama, atau di bawahnya)
