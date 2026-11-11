@@ -5,10 +5,10 @@ import { RESOURCE_MAP } from "../src/lib/resources";
 const lead = { chat_date: "2026-11-01", nik: "1234567890123456", kk: "2234567890123456" };
 const base: ApprovalCandidate = { source: "Konvensional", reference: "A1", date: "2026-11-02", status: "APPROVED", nik: lead.nik, kk: "", datun: true };
 assert.equal(leadApproval(lead, [base]).status, "Approve");
-for (const [date, reason] of [["2026-10-31", "sebelum Tanggal Chat"], ["2026-12-02", "lewat 30 hari"]]) assert.equal(leadApproval(lead, [{ ...base, date }]).status, `Riwayat APPROVED (${reason})`, "Older and day 31 approvals are informational history, not current approval");
+for (const date of ["2026-10-31", "2026-12-02"]) assert.equal(leadApproval(lead, [{ ...base, date }]).status, "Tidak ditemukan", "Out-of-window approvals must not appear");
 assert.equal(leadApproval(lead, [{ ...base, date: "2026-11-01" }]).status, "Approve", "Same-day applications are included");
 assert.equal(leadApproval(lead, [{ ...base, date: "2026-12-01" }]).status, "Approve", "Day 30 is included");
-assert.equal(leadApproval(lead, [{ ...base, datun: false }]).status, "Riwayat APPROVED (non-Datun)");
+assert.equal(leadApproval(lead, [{ ...base, datun: false }]).status, "Tidak ditemukan");
 assert.equal(leadApproval(lead, [{ ...base, nik: "9999999999999999" }]).status, "Tidak ditemukan");
 assert.equal(leadApproval(lead, [{ ...base, source: "Syariah", nik: "", kk: lead.kk, status: "Approve" }]).source, "Syariah", "KK alone can match across sources");
 assert.equal(leadApproval(lead, [{ ...base, status: "PENDING" }]).status, "PENDING");
@@ -30,9 +30,9 @@ for (const phone of ["081234567890", "+62 812-3456-7890", "6281234567890", "8123
 assert.equal(leadApproval({ ...phoneLead, nik: lead.nik }, [{ ...base, nik: "9999999999999999", phone: phoneLead.phone }]).status, "Tidak ditemukan", "A valid NIK prevents phone fallback from overriding a different identity");
 assert.equal(leadApproval({ ...phoneLead, kk: lead.kk }, [{ ...base, nik: "", kk: "9999999999999999", phone: phoneLead.phone }]).status, "Tidak ditemukan", "A valid KK must also take precedence over phone");
 assert.equal(leadApproval(phoneLead, [{ ...base, nik: "", phone: "081234567891" }]).status, "Tidak ditemukan", "Phones must match in full");
-for (const [date, reason] of [["2026-10-31", "sebelum Tanggal Chat"], ["2026-12-02", "lewat 30 hari"]]) assert.equal(leadApproval(phoneLead, [{ ...base, nik: "", phone: phoneLead.phone, date }]).status, `Riwayat APPROVED (${reason})`);
+for (const date of ["2026-10-31", "2026-12-02"]) assert.equal(leadApproval(phoneLead, [{ ...base, nik: "", phone: phoneLead.phone, date }]).status, "Tidak ditemukan");
 assert.equal(leadApproval(phoneLead, [{ ...base, nik: "", phone: phoneLead.phone, date: "2026-12-01" }]).status, "Approve");
-assert.equal(leadApproval(phoneLead, [{ ...base, nik: "", phone: phoneLead.phone, datun: false }]).status, "Riwayat APPROVED (non-Datun)");
+assert.equal(leadApproval(phoneLead, [{ ...base, nik: "", phone: phoneLead.phone, datun: false }]).status, "Tidak ditemukan");
 assert.equal(leadApproval(phoneLead, [{ ...base, source: "Syariah", nik: "", phone: phoneLead.phone, status: "Approve", cancelled: true }]).status, "Batal");
 for (const phone of ["", "0812", "0000000000", "1234567890"]) assert.equal(approvalPhone(phone), "");
 assert.equal(cleanInput(RESOURCE_MAP.leads, { phone: "081234567891" }).db_approval_status, null, "Phone edits invalidate the old result");
@@ -42,8 +42,8 @@ for (const role of ["Pasangan", "Penjamin"] as const) {
   assert.match(leadApproval(lead, [contact]).detail, new RegExp(role));
   assert.equal(leadApproval(phoneLead, [contact]).status, "Approve");
   assert.match(leadApproval(phoneLead, [contact]).detail, new RegExp(`Telepon.*${role}`));
-  assert.equal(leadApproval(lead, [{ ...contact, date: "2026-10-31" }]).status, "Riwayat APPROVED (sebelum Tanggal Chat)");
-  assert.equal(leadApproval(lead, [{ ...contact, datun: false }]).status, "Riwayat APPROVED (non-Datun)");
+  assert.equal(leadApproval(lead, [{ ...contact, date: "2026-10-31" }]).status, "Tidak ditemukan");
+  assert.equal(leadApproval(lead, [{ ...contact, datun: false }]).status, "Tidak ditemukan");
 }
 const guarantorLead = { chat_date: lead.chat_date, nik_penjamin: lead.nik };
 assert.equal(leadApproval(guarantorLead, [base]).status, "Approve", "A lead guarantor NIK can match a source applicant");
@@ -81,13 +81,23 @@ assert.equal(leadApproval(phoneLead, [changedPhoneApproval], link).status, "Appr
 assert.match(leadApproval(phoneLead, [changedPhoneApproval], link).detail, /Telepon → NIK sumber → Pemohon/);
 assert.equal(leadApproval({ ...phoneLead, nik: lead.nik }, [changedPhoneApproval], link).status, "Tidak ditemukan", "Source identity links cannot override an explicit lead identity");
 assert.equal(leadApproval(phoneLead, [changedPhoneApproval], { niks: ["4234567890123456"], kks: [] }).status, "Identitas ditemukan", "Identity links must remain isolated per phone: an unrelated approval is not attached");
-assert.equal(leadApproval(phoneLead, [{ ...changedPhoneApproval, date: "2026-12-02" }], link).status, "Riwayat Approve (lewat 30 hari)");
-assert.equal(leadApproval(phoneLead, [{ ...changedPhoneApproval, datun: false }], link).status, "Riwayat Approve (non-Datun)");
+assert.equal(leadApproval(phoneLead, [{ ...changedPhoneApproval, date: "2026-12-02" }], link).status, "Identitas ditemukan");
+assert.equal(leadApproval(phoneLead, [{ ...changedPhoneApproval, datun: false }], link).status, "Identitas ditemukan");
 assert.equal(leadApproval(phoneLead, [{ ...base, nik: "", phone: phoneLead.phone, status: "PENDING", date: "2026-11-01" }, changedPhoneApproval], link).reference, "linked-approved");
 assert.equal(leadApproval(phoneLead, [{ ...changedPhoneApproval, nik: "", kk: lead.kk }], { niks: [], kks: [lead.kk] }).status, "Approve", "A source KK obtained through the phone can also locate financing");
 const historicalApproval = { ...base, reference: "old-approved", date: "2026-10-31" };
 assert.equal(leadApproval(lead, [historicalApproval, { ...base, status: "PENDING" }]).status, "PENDING", "A historical approval must never override an eligible pending application");
 assert.equal(leadApproval(phoneLead, [], link).status, "Identitas ditemukan");
 assert.equal(leadApproval(phoneLead, [], { niks: [], kks: [] }).status, "Tidak ditemukan");
-assert.match(leadApproval(lead, [historicalApproval]).detail, /tidak dihitung/);
-console.log("Contact matching, eligible statuses, approval priority and informational history checks passed");
+for (const excluded of [historicalApproval, { ...base, date: "2026-12-02" }, { ...base, datun: false }]) {
+  const result = leadApproval(lead, [excluded]);
+  assert.equal(result.reference, null);
+  assert.equal(result.date, null);
+  assert.equal(result.source, null);
+  assert.doesNotMatch(result.status, /Riwayat|Approve/i);
+  assert.ok(!result.detail.includes(excluded.reference), "Excluded applications cannot leak into the detail");
+}
+const withExcluded = leadApproval(lead, [historicalApproval, { ...base, reference: "in-range", status: "PENDING" }]);
+assert.ok(!withExcluded.detail.includes("old-approved"));
+assert.ok(withExcluded.detail.includes("in-range"));
+console.log("Contact matching, strict 0–30 day display and approval priority checks passed");

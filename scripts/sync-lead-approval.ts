@@ -26,7 +26,6 @@ async function candidates(leads: Row[]) {
     sourceQuery("konvensional", `SELECT a.id::text AS reference,
       to_char((a."createdAt" AT TIME ZONE 'Asia/Jakarta')::date, 'YYYY-MM-DD') AS date, a.status,
       to_char(a."createdAt" AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD"T"HH24:MI:SS.US') AS submitted_at,a.application_type AS financing_type,
-      ((a."createdAt" AT TIME ZONE 'Asia/Jakarta')::date BETWEEN $3::date AND $4::date) AS in_batch_period,
       regexp_replace(COALESCE(u.ktp_number,''), '\\D', '', 'g') AS nik,
       regexp_replace(COALESCE(a.kk_number,''), '\\D', '', 'g') AS kk, u.phone_number AS phone,
       a.partner_ktp_number AS partner_nik, a.partner_phone AS partner_phone,
@@ -34,7 +33,9 @@ async function candidates(leads: Row[]) {
       FROM "Applications" a LEFT JOIN "Users" u ON u.id=a.user_id
       LEFT JOIN (SELECT DISTINCT ON(application_id) application_id,partner_ktp_number,partner_phone FROM "SalesAdditionalData" ORDER BY application_id,id DESC) s ON s.application_id=a.id
       LEFT JOIN (SELECT DISTINCT ON(application_id) application_id,kk_number FROM "SurveyorAdditionalData" ORDER BY application_id,id DESC) v ON v.application_id=a.id
-      WHERE (regexp_replace(COALESCE(u.ktp_number,''), '\\D', '', 'g')=ANY($1::text[])
+      WHERE a.application_type='Dana Tunai'
+      AND (a."createdAt" AT TIME ZONE 'Asia/Jakarta')::date BETWEEN $3::date AND $4::date
+      AND (regexp_replace(COALESCE(u.ktp_number,''), '\\D', '', 'g')=ANY($1::text[])
         OR regexp_replace(COALESCE(a.kk_number,''), '\\D', '', 'g')=ANY($2::text[])
         OR regexp_replace(COALESCE(a.partner_ktp_number,''), '\\D', '', 'g')=ANY($1::text[])
         OR ${normalizedPhone("u.phone_number")}=ANY($5::text[])
@@ -46,7 +47,6 @@ async function candidates(leads: Row[]) {
     sourceQuery("syariah", `SELECT p.no_sbg AS reference, to_char(p.tgl_pengajuan,'YYYY-MM-DD') AS date,
       to_char(p.tgl_pengajuan, 'YYYY-MM-DD"T"HH24:MI:SS.US') AS submitted_at,
       t.status_barang AS financing_type,p.fk_produk AS product,
-      (p.tgl_pengajuan::date BETWEEN $3::date AND $4::date) AS in_batch_period,
       p.status_approval AS status, p.tgl_batal IS NOT NULL AS cancelled,
       regexp_replace(COALESCE(c.no_id,''), '\\D', '', 'g') AS nik,
       regexp_replace(COALESCE(c.no_kk,''), '\\D', '', 'g') AS kk, c.no_hp AS phone,
@@ -58,7 +58,9 @@ async function candidates(leads: Row[]) {
       LEFT JOIN public.tblcustomer g ON regexp_replace(COALESCE(g.no_id,''), '\\D', '', 'g')=regexp_replace(COALESCE(c.no_id_penjamin,''), '\\D', '', 'g')
         AND length(regexp_replace(COALESCE(c.no_id_penjamin,''), '\\D', '', 'g'))=16
         AND regexp_replace(COALESCE(c.no_id_penjamin,''), '\\D', '', 'g')<>'0000000000000000'
-      WHERE (regexp_replace(COALESCE(c.no_id,''), '\\D', '', 'g')=ANY($1::text[])
+      WHERE (upper(trim(t.status_barang))='DATUN' OR p.fk_produk IN ('22','42','44'))
+      AND p.tgl_pengajuan::date BETWEEN $3::date AND $4::date
+      AND (regexp_replace(COALESCE(c.no_id,''), '\\D', '', 'g')=ANY($1::text[])
         OR regexp_replace(COALESCE(c.no_kk,''), '\\D', '', 'g')=ANY($2::text[])
         OR regexp_replace(COALESCE(c.no_ktp_pasangan,''), '\\D', '', 'g')=ANY($1::text[])
         OR regexp_replace(COALESCE(c.no_id_penjamin,''), '\\D', '', 'g')=ANY($1::text[])

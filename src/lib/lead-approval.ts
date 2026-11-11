@@ -40,8 +40,7 @@ export function leadApproval(lead: Row, candidates: ApprovalCandidate[], link?: 
   const phone = fallbackApprovalPhone(lead);
   const input = String(lead.chat_date || "").slice(0, 10);
   if ((!niks.length && !kk && !phone) || !/^\d{4}-\d{2}-\d{2}$/.test(input) || !Number.isFinite(Date.parse(input))) return { status: "Data belum lengkap", source: null, reference: null, date: null, detail: "Isi Tanggal Chat dan NIK/KK yang valid (16 digit), atau nomor telepon seluler jika NIK dan KK belum tersedia." };
-  const related = candidates.filter((c) => !!approvalMatchReason(lead, c, link));
-  const matches = related.filter((c) => {
+  const matches = candidates.filter((c) => {
     const days = diffDays(input, c.date);
     return c.datun && days >= 0 && days <= 30 && !!approvalMatchReason(lead, c, link);
   }).sort((a, b) => (b.submittedAt || `${b.date}T00:00:00`).localeCompare(a.submittedAt || `${a.date}T00:00:00`) || b.reference.localeCompare(a.reference, "en", { numeric: true }) || a.source.localeCompare(b.source));
@@ -50,16 +49,8 @@ export function leadApproval(lead: Row, candidates: ApprovalCandidate[], link?: 
   const approved = matches.filter((c) => !c.cancelled && ["approve", "approved"].includes(c.status.trim().toLowerCase()));
   const result = approved[0] || matches[0];
   if (!result) {
-    const history = related.filter((c) => /^\d{4}-\d{2}-\d{2}$/.test(c.date)).sort((a, b) => Number(b.datun) - Number(a.datun) || b.date.localeCompare(a.date) || b.reference.localeCompare(a.reference, "en", { numeric: true }));
-    if (history.length) {
-      const c = history[0];
-      const reason = !c.datun ? "non-Datun" : diffDays(input, c.date) < 0 ? "sebelum Tanggal Chat" : "lewat 30 hari";
-      const state = c.cancelled ? "Batal" : c.status.trim() || "Status belum diisi";
-      return { status: `Riwayat ${state} (${reason})`, source: c.source, reference: c.reference, date: c.date,
-        detail: "Identitas ditemukan, tetapi tidak ada pengajuan Datun yang memenuhi hari ke-0 sampai ke-30. Riwayat di bawah hanya informasi pendukung dan tidak dihitung sebagai hasil Datun periode ini.\n" + [...new Set(history.map((h) => `${h.source} · ${h.reference} · pengajuan ${h.date} · ${h.datun ? "Datun" : h.financingType || "non-Datun"} · status ${h.status}${h.cancelled ? " (batal)" : ""} · cocok lewat ${approvalMatchReason(lead, h, link)}`))].join("\n") };
-    }
-    if (phone && link && (link.niks.length || link.kks.length)) return { status: "Identitas ditemukan", source: null, reference: null, date: null, detail: "Nomor telepon terdaftar pada identitas di sumber, tetapi belum ditemukan pengajuan pembiayaan yang cocok. NIK/KK lead tidak diubah." };
-    return { status: "Tidak ditemukan", source: null, reference: null, date: null, detail: `Belum ditemukan identitas atau pengajuan melalui ${phone ? "nomor telepon dan NIK/KK sumber yang ditautkan" : "NIK/KK"} pada database yang diperiksa.` };
+    if (phone && link && (link.niks.length || link.kks.length)) return { status: "Identitas ditemukan", source: null, reference: null, date: null, detail: "Nomor telepon terdaftar pada identitas di sumber, tetapi belum ditemukan pengajuan Datun pada hari ke-0 sampai ke-30 sejak Tanggal Chat. Pengajuan di luar kriteria tidak ditampilkan. NIK/KK lead tidak diubah." };
+    return { status: "Tidak ditemukan", source: null, reference: null, date: null, detail: `Belum ditemukan pengajuan Datun melalui ${phone ? "nomor telepon dan NIK/KK sumber yang ditautkan" : "NIK/KK"} pada hari ke-0 sampai ke-30 sejak Tanggal Chat.` };
   }
   return {
     status: approved.length ? "Approve" : result.cancelled ? "Batal" : result.status.trim() || "Status belum diisi", source: result.source, reference: result.reference, date: result.date,
