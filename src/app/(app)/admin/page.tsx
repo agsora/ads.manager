@@ -257,7 +257,7 @@ function MailTest() {
     }
   };
   return (
-    <Card title="Tes pengiriman email" subtitle="Kirim email uji ke alamat Anda sendiri dan lihat jawaban server Gmail. Dipakai untuk melacak kenapa tautan masuk tidak sampai.">
+    <Card title="Tes pengiriman email" subtitle="Kirim email uji ke alamat Anda sendiri dan lihat jawaban server Gmail. Dipakai untuk melacak kenapa kode masuk tidak sampai.">
       <button className="btn" onClick={run} disabled={busy}>
         {busy ? "Mengirim…" : "Kirim email uji ke saya"}
       </button>

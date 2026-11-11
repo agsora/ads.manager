@@ -132,7 +132,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           {mode === "login" && status?.otp && usePassword && (
             <p className="mt-4 text-center text-[13px]">
               <button type="button" className="text-[var(--ink-2)] hover:underline" onClick={() => setUsePassword(false)}>
-                Masuk dengan tautan email
+                Masuk dengan kode email
               </button>
             </p>
           )}
