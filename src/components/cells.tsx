@@ -38,7 +38,7 @@ export function Stars({ value }: { value: number }) {
 }
 
 export function renderCell(f: Pick<Field, "type" | "key">, v: unknown) {
-  if (f.key === "db_approval_status") return <Chip value={String(v || "Belum dicek")} tone={v === "Approve" ? "green" : v === "Belum approve" ? "amber" : "gray"} />;
+  if (f.key === "db_approval_status") return <Chip value={String(v || "Belum dicek")} tone={v === "Approve" ? "green" : /rejected|cancel|batal|not.recommend/i.test(String(v || "")) ? "red" : /pending|approval|assigned|survey|recommend|waiting|filled|belum approve/i.test(String(v || "")) ? "amber" : "gray"} />;
   if (v === null || v === undefined || v === "") return <span className="text-[var(--muted)]">–</span>;
   switch (f.type) {
     case "date":

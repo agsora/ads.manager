@@ -435,7 +435,7 @@ export const RESOURCES: Resource[] = [
       { key: "phone", label: "No. WhatsApp", type: "phone", aliases: ["nomor whatsapp", "no wa", "whatsapp", "no telp", "no telepon", "telp"] },
       { key: "nik", label: "NIK", type: "text", aliases: ["nik", "no ktp", "nomor ktp", "ktp"] },
       { key: "kk", label: "No. KK", type: "text", aliases: ["kk", "no kk", "nomor kk", "kartu keluarga"] },
-      { key: "nik_penjamin", label: "NIK Penjamin", type: "text", aliases: ["nik penjamin", "ktp penjamin", "nik pasangan"] },
+      { key: "nik_penjamin", label: "NIK Pasangan / Penjamin", type: "text", aliases: ["nik penjamin", "ktp penjamin", "nik pasangan"] },
       { key: "plat", label: "No. Polisi (STNK)", type: "text", aliases: ["no polisi", "nopol", "plat", "plat nomor", "no registrasi"] },
       { key: "stnk_nama", label: "Nama di STNK", type: "text", aliases: ["nama stnk", "nama pemilik"] },
       { key: "stnk_merk", label: "Merk / Tipe (STNK)", type: "text", aliases: ["merk", "merk tipe", "tipe kendaraan"] },

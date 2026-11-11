@@ -10,8 +10,8 @@ assert.equal(leadApproval(lead, [{ ...base, date: "2026-12-01" }]).status, "Appr
 assert.equal(leadApproval(lead, [{ ...base, datun: false }]).status, "Tidak ditemukan");
 assert.equal(leadApproval(lead, [{ ...base, nik: "9999999999999999" }]).status, "Tidak ditemukan");
 assert.equal(leadApproval(lead, [{ ...base, source: "Syariah", nik: "", kk: lead.kk, status: "Approve" }]).source, "Syariah", "KK alone can match across sources");
-assert.equal(leadApproval(lead, [{ ...base, status: "PENDING" }]).status, "Belum approve");
-assert.equal(leadApproval(lead, [{ ...base, cancelled: true }]).status, "Belum approve");
+assert.equal(leadApproval(lead, [{ ...base, status: "PENDING" }]).status, "PENDING");
+assert.equal(leadApproval(lead, [{ ...base, cancelled: true }]).status, "Batal");
 assert.equal(leadApproval(lead, [{ ...base, status: "CANCELLED", date: "2026-11-04" }, { ...base, source: "Syariah", status: "Approve" }]).status, "Approve", "An approved match wins over another cancelled application");
 assert.equal(leadApproval({ chat_date: lead.chat_date, nik: "123" }, [base]).status, "Data belum lengkap");
 assert.equal(identity16("'1234 5678 9012 3456"), lead.nik);
@@ -32,7 +32,23 @@ assert.equal(leadApproval(phoneLead, [{ ...base, nik: "", phone: "081234567891" 
 for (const date of ["2026-11-01", "2026-12-02"]) assert.equal(leadApproval(phoneLead, [{ ...base, nik: "", phone: phoneLead.phone, date }]).status, "Tidak ditemukan");
 assert.equal(leadApproval(phoneLead, [{ ...base, nik: "", phone: phoneLead.phone, date: "2026-12-01" }]).status, "Approve");
 assert.equal(leadApproval(phoneLead, [{ ...base, nik: "", phone: phoneLead.phone, datun: false }]).status, "Tidak ditemukan");
-assert.equal(leadApproval(phoneLead, [{ ...base, source: "Syariah", nik: "", phone: phoneLead.phone, status: "Approve", cancelled: true }]).status, "Belum approve");
+assert.equal(leadApproval(phoneLead, [{ ...base, source: "Syariah", nik: "", phone: phoneLead.phone, status: "Approve", cancelled: true }]).status, "Batal");
 for (const phone of ["", "0812", "0000000000", "1234567890"]) assert.equal(approvalPhone(phone), "");
 assert.equal(cleanInput(RESOURCE_MAP.leads, { phone: "081234567891" }).db_approval_status, null, "Phone edits invalidate the old result");
-console.log("Lead approval and fallback phone checks passed");
+for (const role of ["Pasangan", "Penjamin"] as const) {
+  const contact = { ...base, nik: "", contacts: [{ role, nik: lead.nik, phone: phoneLead.phone }] };
+  assert.equal(leadApproval(lead, [contact]).status, "Approve");
+  assert.match(leadApproval(lead, [contact]).detail, new RegExp(role));
+  assert.equal(leadApproval(phoneLead, [contact]).status, "Approve");
+  assert.match(leadApproval(phoneLead, [contact]).detail, new RegExp(`Telepon.*${role}`));
+  assert.equal(leadApproval(lead, [{ ...contact, date: "2026-11-01" }]).status, "Tidak ditemukan");
+  assert.equal(leadApproval(lead, [{ ...contact, datun: false }]).status, "Tidak ditemukan");
+}
+const guarantorLead = { chat_date: lead.chat_date, nik_penjamin: lead.nik };
+assert.equal(leadApproval(guarantorLead, [base]).status, "Approve", "A lead guarantor NIK can match a source applicant");
+assert.match(leadApproval(guarantorLead, [base]).detail, /NIK pasangan\/penjamin lead → Pemohon/);
+assert.equal(leadApproval({ ...phoneLead, nik_penjamin: lead.nik }, [{ ...base, nik: "9999999999999999", phone: phoneLead.phone }]).status, "Tidak ditemukan", "Guarantor identity also takes precedence over phone fallback");
+assert.equal(cleanInput(RESOURCE_MAP.leads, { nik_penjamin: lead.nik }).db_approval_status, null);
+for (const status of ["ASSIGNED", "SURVEYED", "REJECTED", "CANCELLED", "Need Approval", "Batal"]) assert.equal(leadApproval(lead, [{ ...base, status }]).status, status, "Unapproved applications show their actual source status");
+assert.equal(leadApproval(lead, [{ ...base, status: "PENDING", date: "2026-11-02" }, { ...base, status: "SURVEYED", date: "2026-11-03", reference: "A2" }]).status, "SURVEYED", "Show the latest application status when none is approved");
+console.log("Applicant, partner, guarantor, phone and source-status checks passed");

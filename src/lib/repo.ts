@@ -43,7 +43,7 @@ export function cleanInput(r: Resource, body: Record<string, unknown>, fromImpor
     if (!(f.key in body)) continue;
     out[f.key] = coerce(f, body[f.key], fromImport);
   }
-  if (r.key === "leads" && ["nik", "kk", "phone", "chat_date"].some((key) => key in out)) {
+  if (r.key === "leads" && ["nik", "nik_penjamin", "kk", "phone", "chat_date"].some((key) => key in out)) {
     for (const key of ["db_approval_status", "db_approval_source", "db_approval_ref", "db_approval_date", "db_approval_detail", "db_approval_checked_at"]) out[key] = null;
   }
   return out;
