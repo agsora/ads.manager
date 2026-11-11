@@ -85,16 +85,6 @@ export default function FollowUpBoard() {
     return d <= 0 ? "!border-[#e4b7ab] !bg-[#fbefec] !text-[var(--critical-ink)]" : d <= 2 ? "!border-[#e8d3a0] !bg-[#fbf1dc] !text-[#8a5a12]" : "!border-[#c9dbc0] !bg-[#eef5e9] !text-[var(--good-ink)]";
   };
 
-  const close = async (r: Row, status: string) => {
-    try {
-      await api(`/api/r/leads/${r.id}`, "PUT", { final_status: status });
-      toast(`${r.name ?? "Lead"} → ${status}`);
-      reload();
-    } catch (e) {
-      toast((e as Error).message, "err");
-    }
-  };
-
   return (
     <div className="space-y-4">
       <PageHeader eyebrow="Leads" title="Papan Follow Up" desc="Semua lead terbuka 90 hari terakhir, dikelompokkan berdasarkan tahap follow up. Kartu merah = sudah jatuh tempo. Klik ✎ untuk menulis hasil follow up dan mengubah status lead.">
@@ -174,14 +164,6 @@ export default function FollowUpBoard() {
                           <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="btn btn-sm !h-8 w-full !justify-center !text-[12.5px] text-[var(--good-ink)]">
                             <MessageCircle size={14} /> Chat WhatsApp
                           </a>
-                        )}
-                        {c.stage === MANUAL && (
-                          <div className="grid grid-cols-2 gap-1.5">
-                            <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => close(r, "Deal")}>Deal</button>
-                            <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => setManual(r, false)}>Keluarkan</button>
-                            <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => close(r, "Ghosting")}>Ghosting</button>
-                            <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => close(r, "Cancel")}>Cancel</button>
-                          </div>
                         )}
                       </div>
                     </div>
