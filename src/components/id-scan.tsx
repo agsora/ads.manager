@@ -75,14 +75,40 @@ function Slot({ title, hint, kind, onRead, onQuota, onPick }: { title: string; h
       if (input.current) input.current.value = "";
     }
   };
+  const [over, setOver] = useState(false);
+  // foto boleh diseret ke kotak ini, ditempel (Ctrl+V), atau dipilih lewat tombol
+  const accept = (files?: FileList | null) => {
+    const f = [...(files ?? [])].find((x) => /^image\/(jpeg|png|webp)$/.test(x.type));
+    if (f) run(f);
+    else if (files?.length) setMsg({ ok: false, text: "Format harus foto JPG, PNG, atau WebP." });
+  };
   return (
-    <div className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-3">
+    <div
+      className={`rounded-lg border bg-[var(--surface)] p-3 outline-none transition-colors ${over ? "border-dashed border-[var(--ink)] bg-[var(--surface-2)]" : "border-[var(--line)]"}`}
+      tabIndex={0}
+      onDragEnter={(e) => (e.preventDefault(), setOver(true))}
+      onDragOver={(e) => {
+        e.preventDefault(); // tanpa ini browser menolak drop dan malah membuka fotonya
+        e.dataTransfer.dropEffect = "copy";
+        setOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setOver(false);
+        if (!busy) accept(e.dataTransfer.files);
+      }}
+      onPaste={(e) => !busy && accept(e.clipboardData.files)}
+    >
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="text-[13px] font-semibold">{title}</div>
           {hint && <div className="text-[11.5px] text-[var(--muted)]">{hint}</div>}
+          <div className="text-[11px] text-[var(--muted)]">{over ? "Lepas foto di sini" : "Seret foto ke sini, tempel (Ctrl+V), atau pilih"}</div>
         </div>
-        <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={(e) => e.target.files?.[0] && run(e.target.files[0])} />
+        <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => accept(e.target.files)} />
         <button type="button" className="btn btn-sm shrink-0" disabled={busy} onClick={() => input.current?.click()}>
           {busy ? <Loader2 size={14} className="animate-spin" /> : done ? <Check size={14} /> : <Camera size={14} />} {busy ? "Membaca…" : done ? "Ganti foto" : "Pilih foto"}
         </button>
