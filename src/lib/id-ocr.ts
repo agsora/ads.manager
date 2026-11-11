@@ -134,19 +134,6 @@ export function parseKtp(text: string): KtpResult {
   return { nik: null, nama, others: all.map(checkNik) };
 }
 
-/** Nilai di sebelah label ("Nama : BUDI") atau di baris berikutnya bila labelnya sendirian; kosong bila tidak ada yang lolos cek. */
-function labelValue(lines: string[], label: RegExp, ok: (v: string) => boolean = () => true): string {
-  for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(label);
-    if (!m) continue;
-    const same = lines[i].slice((m.index ?? 0) + m[0].length).replace(/^[\s:.;,\-]+/, "").trim();
-    if (same && ok(same)) return same;
-    const next = (lines[i + 1] ?? "").replace(/^[\s:.;,\-]+/, "").trim();
-    if (next && ok(next)) return next;
-  }
-  return "";
-}
-
 const NAME = /^[A-Za-z .'\-]{3,60}$/;
 
 /** Label yang dikenali di STNK. Semuanya dipakai sebagai batas: nilai sebuah label berakhir di label berikutnya, termasuk yang ada di baris yang sama. */
