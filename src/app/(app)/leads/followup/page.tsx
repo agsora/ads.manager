@@ -110,7 +110,7 @@ export default function FollowUpBoard() {
 
   return (
     <div className="space-y-4">
-      <PageHeader eyebrow="Leads" title="Papan Follow Up" desc="Semua lead terbuka 90 hari terakhir, dikelompokkan berdasarkan tahap follow up. Kartu merah = sudah jatuh tempo. Klik ✎ untuk menulis hasil follow up; tombol status untuk menutup lead.">
+      <PageHeader eyebrow="Leads" title="Papan Follow Up" desc="Semua lead terbuka 90 hari terakhir, dikelompokkan berdasarkan tahap follow up. Kartu merah = sudah jatuh tempo. Klik ✎ untuk menulis hasil follow up dan mengubah status lead.">
         <label className="flex items-center gap-2 text-[13px]">
           <input type="checkbox" checked={onlyDue} onChange={(e) => setOnlyDue(e.target.checked)} /> Hanya yang jatuh tempo
         </label>
@@ -206,14 +206,14 @@ export default function FollowUpBoard() {
                             ))}
                           </select>
                         )}
-                        <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => close(r, "Deal")}>Deal</button>
-                        {c.stage === MANUAL ? (
-                          <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => setManual(r, false)}>Keluarkan</button>
-                        ) : (
-                          <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => close(r, "Pending")}>Pending</button>
+                        {c.stage === MANUAL && (
+                          <>
+                            <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => close(r, "Deal")}>Deal</button>
+                            <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => setManual(r, false)}>Keluarkan</button>
+                            <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => close(r, "Ghosting")}>Ghosting</button>
+                            <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => close(r, "Cancel")}>Cancel</button>
+                          </>
                         )}
-                        <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => close(r, "Ghosting")}>Ghosting</button>
-                        <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => close(r, "Cancel")}>Cancel</button>
                       </div>
                     </div>
                   );
