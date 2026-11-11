@@ -27,6 +27,7 @@ export default function FollowUpBoard() {
   const { options } = useMeta();
   const today = todayISO();
   const [reasonOpen, setReasonOpen] = useState<number | null>(null);
+  const [draft, setDraft] = useState("");
   const { data: stopData } = useFetch<{ rows: Row[] }>("/api/r/optouts");
   const stopSet = useMemo(() => new Set((stopData?.rows ?? []).map((o) => normPhone(o.phone))), [stopData]);
   const bq = f.brand ? `&brand=${encodeURIComponent(f.brand)}` : "";
@@ -73,6 +74,7 @@ export default function FollowUpBoard() {
       await api(`/api/r/leads/${r.id}`, "PUT", { [`followup_${step}`]: `${fmtDate(today)}: ${reason}` });
       toast(`${r.name ?? "Lead"}: Follow Up ${step} dicatat`);
       setReasonOpen(null);
+      setDraft("");
       reload();
     } catch (e) {
       toast((e as Error).message, "err");
@@ -180,7 +182,10 @@ export default function FollowUpBoard() {
                         )}
                         {natural <= 3 && (
                           <div>
-                            <button className="btn btn-sm !h-8 w-full !justify-between !text-[12.5px]" onClick={() => setReasonOpen(reasonOpen === Number(r.id) ? null : Number(r.id))} aria-expanded={reasonOpen === Number(r.id)}>
+                            <button className="btn btn-sm !h-8 w-full !justify-between !text-[12.5px]" onClick={() => {
+                              setDraft("");
+                              setReasonOpen(reasonOpen === Number(r.id) ? null : Number(r.id));
+                            }} aria-expanded={reasonOpen === Number(r.id)}>
                               <span>Alasan Follow Up {natural}</span>
                               <ChevronDown size={14} className={reasonOpen === Number(r.id) ? "rotate-180" : ""} />
                             </button>
@@ -191,9 +196,18 @@ export default function FollowUpBoard() {
                                     {t}
                                   </button>
                                 ))}
-                                <button className="w-full rounded-md px-2 py-1 text-left text-[12px] text-[var(--muted)] hover:bg-white" onClick={() => setEditing(r)}>
-                                  Tulis sendiri…
-                                </button>
+                                <form
+                                  className="flex items-center gap-1.5 pt-0.5"
+                                  onSubmit={(e) => {
+                                    e.preventDefault();
+                                    if (draft.trim()) logFu(r, natural, draft.trim());
+                                  }}
+                                >
+                                  <input className="input !h-8 min-w-0 flex-1 !px-2 !text-[12.5px]" placeholder="Ketik alasan sendiri…" value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="Alasan follow up" />
+                                  <button type="submit" className="btn btn-sm btn-accent !h-8 !px-3 !text-[12.5px]" disabled={!draft.trim()}>
+                                    Kirim
+                                  </button>
+                                </form>
                               </div>
                             )}
                           </div>
