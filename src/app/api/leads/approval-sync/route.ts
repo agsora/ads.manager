@@ -14,7 +14,7 @@ export const POST = handle(async () => {
   if (!waiting) {
     status.requestedAt = new Date().toISOString();
     await setSetting(key(s.org), JSON.stringify(status));
-    await logActivity(s.org, s.name, "Minta cek status Datun", "WA Leads · NIK/KK · hari ke-1 sampai ke-30");
+    await logActivity(s.org, s.name, "Minta cek status Datun", "WA Leads · NIK/KK atau telepon cadangan · hari ke-1 sampai ke-30");
   }
   return NextResponse.json(status);
 });

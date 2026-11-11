@@ -1,6 +1,6 @@
 /** Local office worker. Source databases are strictly read-only; only status columns in the app are updated. */
 import { loadSourceEnv, sourceQuery, closeSourceTunnels } from "./source-db";
-import { identity16, leadApproval, type ApprovalCandidate } from "../src/lib/lead-approval";
+import { identity16, fallbackApprovalPhone, leadApproval, type ApprovalCandidate } from "../src/lib/lead-approval";
 import { addDays } from "../src/lib/format";
 import type { Row } from "../src/lib/resources";
 
@@ -12,37 +12,44 @@ const orgFilter = arg >= 0 ? Number(process.argv[arg + 1]) : null;
 if (orgFilter !== null && (!Number.isInteger(orgFilter) || orgFilter <= 0)) throw new Error("Workspace tidak valid");
 
 async function candidates(leads: Row[]) {
-  const valid = leads.filter((l) => (identity16(l.nik) || identity16(l.kk)) && l.chat_date);
+  const valid = leads.filter((l) => (identity16(l.nik) || identity16(l.kk) || fallbackApprovalPhone(l)) && l.chat_date);
   if (!valid.length) return [];
   const niks = [...new Set(valid.map((l) => identity16(l.nik)).filter(Boolean))];
   const kks = [...new Set(valid.map((l) => identity16(l.kk)).filter(Boolean))];
+  const phones = [...new Set(valid.map(fallbackApprovalPhone).filter(Boolean))];
   const dates = valid.map((l) => String(l.chat_date).slice(0, 10)).sort();
-  const params = [niks, kks, dates[0], addDays(dates[dates.length - 1], 30)];
+  const params = [niks, kks, dates[0], addDays(dates[dates.length - 1], 30), phones];
+  const normalizedPhone = (column: string) => {
+    const d = `regexp_replace(COALESCE(${column},''), '\\D', '', 'g')`;
+    return `(CASE WHEN ${d} LIKE '0062%' THEN '0'||substring(${d} FROM 5) WHEN ${d} LIKE '62%' THEN '0'||substring(${d} FROM 3) WHEN ${d} LIKE '8%' THEN '0'||${d} ELSE ${d} END)`;
+  };
   const [konven, syariah] = await Promise.all([
     sourceQuery("konvensional", `SELECT a.id::text AS reference,
       to_char((a."createdAt" AT TIME ZONE 'Asia/Jakarta')::date, 'YYYY-MM-DD') AS date, a.status,
       regexp_replace(COALESCE(u.ktp_number,''), '\\D', '', 'g') AS nik,
-      regexp_replace(COALESCE(a.kk_number,''), '\\D', '', 'g') AS kk
+      regexp_replace(COALESCE(a.kk_number,''), '\\D', '', 'g') AS kk, u.phone_number AS phone
       FROM "Applications" a LEFT JOIN "Users" u ON u.id=a.user_id
       WHERE a.application_type='Dana Tunai'
       AND (a."createdAt" AT TIME ZONE 'Asia/Jakarta')::date > $3::date
       AND (a."createdAt" AT TIME ZONE 'Asia/Jakarta')::date <= $4::date
       AND (regexp_replace(COALESCE(u.ktp_number,''), '\\D', '', 'g')=ANY($1::text[])
-        OR regexp_replace(COALESCE(a.kk_number,''), '\\D', '', 'g')=ANY($2::text[]))`, params),
+        OR regexp_replace(COALESCE(a.kk_number,''), '\\D', '', 'g')=ANY($2::text[])
+        OR ${normalizedPhone("u.phone_number")}=ANY($5::text[]))`, params),
     // Compatible with PostgreSQL 8.2: no CTE, unnest, LATERAL, or window functions.
     sourceQuery("syariah", `SELECT p.no_sbg AS reference, to_char(p.tgl_pengajuan,'YYYY-MM-DD') AS date,
       p.status_approval AS status, p.tgl_batal IS NOT NULL AS cancelled,
       regexp_replace(COALESCE(c.no_id,''), '\\D', '', 'g') AS nik,
-      regexp_replace(COALESCE(c.no_kk,''), '\\D', '', 'g') AS kk
+      regexp_replace(COALESCE(c.no_kk,''), '\\D', '', 'g') AS kk, c.no_hp AS phone
       FROM data_gadai.tblproduk_cicilan p
       JOIN data_gadai.tbltaksir_umum t ON t.no_fatg=p.fk_fatg
       JOIN public.tblcustomer c ON c.no_cif=t.fk_cif
       WHERE (upper(trim(t.status_barang))='DATUN' OR p.fk_produk IN ('22','42','44'))
       AND p.tgl_pengajuan::date > $3::date AND p.tgl_pengajuan::date <= $4::date
       AND (regexp_replace(COALESCE(c.no_id,''), '\\D', '', 'g')=ANY($1::text[])
-        OR regexp_replace(COALESCE(c.no_kk,''), '\\D', '', 'g')=ANY($2::text[]))`, params),
+        OR regexp_replace(COALESCE(c.no_kk,''), '\\D', '', 'g')=ANY($2::text[])
+        OR ${normalizedPhone("c.no_hp")}=ANY($5::text[]))`, params),
   ]);
-  const convert = (rows: Record<string, unknown>[], source: ApprovalCandidate["source"]): ApprovalCandidate[] => rows.map((r) => ({ source, reference: String(r.reference), date: String(r.date), status: String(r.status || ""), nik: String(r.nik || ""), kk: String(r.kk || ""), cancelled: r.cancelled === true || r.cancelled === "t", datun: true }));
+  const convert = (rows: Record<string, unknown>[], source: ApprovalCandidate["source"]): ApprovalCandidate[] => rows.map((r) => ({ source, reference: String(r.reference), date: String(r.date), status: String(r.status || ""), nik: String(r.nik || ""), kk: String(r.kk || ""), phone: String(r.phone || ""), cancelled: r.cancelled === true || r.cancelled === "t", datun: true }));
   return [...convert(konven, "Konvensional"), ...convert(syariah, "Syariah")];
 }
 
@@ -88,12 +95,12 @@ async function main() {
       }
       if (!dryRun) {
         for (let start = 0; start < results.length; start += 150) {
-          const payload = results.slice(start, start + 150).map(({ lead, result }) => ({ id: lead.id, chat_date: lead.chat_date, nik: lead.nik ?? null, kk: lead.kk ?? null, ...result }));
+          const payload = results.slice(start, start + 150).map(({ lead, result }) => ({ id: lead.id, chat_date: lead.chat_date, nik: lead.nik ?? null, kk: lead.kk ?? null, phone: lead.phone ?? null, ...result }));
           const changed = await q(`UPDATE leads l SET db_approval_status=x.status, db_approval_source=x.source,
             db_approval_ref=x.reference, db_approval_date=x.date::date, db_approval_detail=x.detail, db_approval_checked_at=$3
-            FROM jsonb_to_recordset($2::jsonb) AS x(id int, chat_date text, nik text, kk text, status text, source text, reference text, date text, detail text)
+            FROM jsonb_to_recordset($2::jsonb) AS x(id int, chat_date text, nik text, kk text, phone text, status text, source text, reference text, date text, detail text)
             WHERE l.org_id=$1 AND l.id=x.id AND l.chat_date IS NOT DISTINCT FROM x.chat_date::date
-            AND l.nik IS NOT DISTINCT FROM x.nik AND l.kk IS NOT DISTINCT FROM x.kk RETURNING l.id`, [org, JSON.stringify(payload), startedAt]);
+            AND l.nik IS NOT DISTINCT FROM x.nik AND l.kk IS NOT DISTINCT FROM x.kk AND l.phone IS NOT DISTINCT FROM x.phone RETURNING l.id`, [org, JSON.stringify(payload), startedAt]);
           updated += changed.length;
         }
       }

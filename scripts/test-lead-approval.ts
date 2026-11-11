@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { identity16, leadApproval, type ApprovalCandidate } from "../src/lib/lead-approval";
+import { identity16, approvalPhone, leadApproval, type ApprovalCandidate } from "../src/lib/lead-approval";
 import { cleanInput } from "../src/lib/repo";
 import { RESOURCE_MAP } from "../src/lib/resources";
 const lead = { chat_date: "2026-11-01", nik: "1234567890123456", kk: "2234567890123456" };
@@ -19,4 +19,20 @@ assert.equal(identity16("0000000000000000"), "");
 assert.deepEqual(cleanInput(RESOURCE_MAP.leads, { db_approval_status: "Approve", db_approval_ref: "fake" }), {}, "Clients cannot forge source status");
 assert.equal(cleanInput(RESOURCE_MAP.leads, { nik: lead.nik, db_approval_status: "Approve" }).db_approval_status, null, "Identity edits invalidate cached status");
 assert.equal(cleanInput(RESOURCE_MAP.leads, { chat_date: "2026-11-02" }).db_approval_checked_at, null);
-console.log("Lead approval checks passed");
+const phoneLead = { chat_date: lead.chat_date, nik: null, kk: null, phone: "081234567890" };
+for (const phone of ["081234567890", "+62 812-3456-7890", "6281234567890", "81234567890", "006281234567890"]) {
+  assert.equal(approvalPhone(phone), phoneLead.phone);
+  const matched = leadApproval(phoneLead, [{ ...base, phone, nik: "", kk: "" }]);
+  assert.equal(matched.status, "Approve");
+  assert.match(matched.detail, /Telepon \(cadangan\)/);
+}
+assert.equal(leadApproval({ ...phoneLead, nik: lead.nik }, [{ ...base, nik: "9999999999999999", phone: phoneLead.phone }]).status, "Tidak ditemukan", "A valid NIK prevents phone fallback from overriding a different identity");
+assert.equal(leadApproval({ ...phoneLead, kk: lead.kk }, [{ ...base, nik: "", kk: "9999999999999999", phone: phoneLead.phone }]).status, "Tidak ditemukan", "A valid KK must also take precedence over phone");
+assert.equal(leadApproval(phoneLead, [{ ...base, nik: "", phone: "081234567891" }]).status, "Tidak ditemukan", "Phones must match in full");
+for (const date of ["2026-11-01", "2026-12-02"]) assert.equal(leadApproval(phoneLead, [{ ...base, nik: "", phone: phoneLead.phone, date }]).status, "Tidak ditemukan");
+assert.equal(leadApproval(phoneLead, [{ ...base, nik: "", phone: phoneLead.phone, date: "2026-12-01" }]).status, "Approve");
+assert.equal(leadApproval(phoneLead, [{ ...base, nik: "", phone: phoneLead.phone, datun: false }]).status, "Tidak ditemukan");
+assert.equal(leadApproval(phoneLead, [{ ...base, source: "Syariah", nik: "", phone: phoneLead.phone, status: "Approve", cancelled: true }]).status, "Belum approve");
+for (const phone of ["", "0812", "0000000000", "1234567890"]) assert.equal(approvalPhone(phone), "");
+assert.equal(cleanInput(RESOURCE_MAP.leads, { phone: "081234567891" }).db_approval_status, null, "Phone edits invalidate the old result");
+console.log("Lead approval and fallback phone checks passed");
