@@ -186,9 +186,10 @@ const STNK_LABELS: [string, RegExp][] = [
   ["model", /MODEL/gi],
   ["tahun", /(?:TAHU[NI]|TH\.?)\s*PEMB(?:UATAN|\.)?(?:\s*\/\s*PERAKITAN)?/gi],
   ["tahunreg", /TAHUN\s*REGISTRASI/gi],
-  ["silinder", /ISI\s*SILINDER/gi],
+  ["silinder", /ISI\s*SILINDER(?:\s*\/\s*DAYA\s*LISTRIK)?/gi],
+  ["nikid", /NIK\s*\/\s*TDP/gi],
   ["warna", /WARNA(?:\s*TNKB)?/gi],
-  ["bbm", /BAHAN\s*BAKAR/gi],
+  ["bbm", /BAHAN\s*BAKAR(?:\s*\/\s*SUMBER\s*ENERGI)?/gi],
   ["rangka", /N[O0](?:MOR|\.)?\s*RANGKA(?:\s*\/\s*NIK)?(?:\s*\/\s*VIN)?/gi],
   ["mesin", /N[O0](?:MOR|\.)?\s*MESIN/gi],
   ["bpkb", /N[O0](?:MOR|\.)?\s*BPKB/gi],
@@ -196,7 +197,7 @@ const STNK_LABELS: [string, RegExp][] = [
   ["urut", /N[O0](?:MOR|\.)?\s*URUT\s*PENDAFTARAN/gi],
   ["berlaku", /BERLAKU\s*(?:S\/D|SAMPAI|HINGGA)/gi],
   // sublabel bahasa Inggris di bawah tiap label: bukan nilai, tapi harus jadi batas supaya tidak ikut terbaca sebagai nilai
-  ["en", /[NE]AME\s*OF\s*OWNER|\bBRAND\b|\bCATEGORY\b|\bCOLOR\b|VEHICLE\s*REGISTRATION\s*NUMBER|VEHICLE\s*IDENTITY\s*NUMBER|ENGINE\s*NUMBER|MANUFACTURE\s*YEAR|REGISTRATION\s*YEAR|LICENSE\s*PLATE\s*COLOR|FUEL\s*\/?\s*ENERGY\s*SOURCES?|DATE\s*OF\s*EXPIRE|LOCATION\s*CODE|CYLINDER\s*CAPACITY|ID\s*CARD\s*NUMBER|COMPANY\s*REGISTRATION\s*NUMBER|REGISTRATION\s*QUEUE\s*NUMBER|OWNERSHIP\s*DOCUMENT\s*NUMBER/gi],
+  ["en", /[NE]AME\s*OF\s*OWNER|\bOWNER\b|\bA?D?DRESS\b|\bBRAND\b|\bCATEGORY\b|\bCOLOR\b|VEHICLE\s*REGISTRATION\s*NUMBER|VEHICLE\s*IDENTITY\s*NUMBER|ENGINE\s*NUMBER|MANUFACTURE\s*YEAR|REGISTRATION\s*YEAR|LICENSE\s*PLATE\s*COLOR|FUEL\s*\/?\s*ENERGY\s*SOURCES?|DATE\s*OF\s*EXPIRE|LOCATION\s*CODE|CYLINDER\s*CAPACITY|ID\s*CARD\s*NUMBER|COMPANY\s*REGISTRATION\s*NUMBER|REGISTRATION\s*QUEUE\s*NUMBER|OWNERSHIP\s*DOCUMENT\s*NUMBER/gi],
 ];
 
 /** Pecah teks OCR menjadi pasangan label → nilai, apa pun tata letaknya (satu label per baris, dua label sejajar, atau nilai di baris bawah). */
@@ -217,6 +218,35 @@ export function stnkFields(text: string): Record<string, string> {
     const first = raw.split("⏎").map((x) => x.replace(/^[\s:.;,\-\/*•·]+/, "").replace(/\s+/g, " ").trim()).find(Boolean);
     if (first && !((h.key + "_1") in out)) out[h.key + "_1"] = first;
   });
+  return out;
+}
+
+/**
+ * Tata letak dua kolom yang dibaca OCR sebagai dua blok: semua label dulu, lalu semua nilai yang diawali ":" (urutannya sama).
+ * Label yang kosong dipasangkan berurutan dengan baris nilai berawalan ":".
+ */
+export function columnValues(text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const pending: string[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const l = raw.replace(/[\t ]+/g, " ").trim();
+    if (!l) continue;
+    if (l.startsWith(":")) {
+      const key = pending.shift();
+      const v = l.replace(/^[\s:.;,\-\/*•·]+/, "").trim();
+      if (key && v && !(key in out)) out[key] = v;
+      continue;
+    }
+    if (STNK_LABELS.some(([k, re]) => k === "en" && new RegExp(re.source, "i").test(l))) continue;
+    for (const [key, re] of STNK_LABELS) {
+      if (key === "en") continue;
+      const m = new RegExp(re.source, "i").exec(l);
+      if (m && !l.slice((m.index ?? 0) + m[0].length).replace(/[\s:.\-\/]+/g, "")) {
+        if (!pending.includes(key)) pending.push(key); // sublabel Inggris ("TYPE", "MODEL") di bawah label tidak dihitung dua kali
+        break;
+      }
+    }
+  }
   return out;
 }
 
@@ -287,7 +317,7 @@ const BRANDS = [
   "TOYOTA", "DAIHATSU", "MITSUBISHI", "NISSAN", "ISUZU", "MAZDA", "HYUNDAI", "KIA", "WULING", "DFSK", "CHERY", "BMW", "MERCEDES", "FORD", "CHEVROLET", "DATSUN", "SUBARU", "LEXUS", "VOLKSWAGEN", "MG", "HINO", "FUSO", "SUZUKI",
 ];
 const NOT_NAME =
-  /CARD|NUMB|COMPANY|REGIST|TDP|KITAS|KITAP|BRAND|CATEGORY|NPWP|NOPD|SAMSAT|PROVINSI|POKOK|SANKSI|JUMLAH|ALAMAT|SEPEDA|MOTOR|MOBIL|BENSIN|HITAM|PUTIH|MERAH|BIRU|SOLO|MODEL|JENIS|NOMOR|SURAT|KEPOLISIAN|PERUM|JALAN|KELURAHAN|KECAMATAN|KOTA|KABUPATEN|KEPALA|REGISTRASI|PEMILIK|NAME|OWNER|ADDRESS|VEHICLE|NUMBER|CERTIFICATE|POLICE|INDONESIA|NEGARA|REPUBLIK|TANDA|KENDARAAN|FASILITAS|BARU|DIREKTUR|BERLAKU|LOKASI|DATE|EXPIRE|VALIDATION|PENGESAHAN/;
+  /CARD|NUMB|COMPANY|REGIST|TDP|KITAS|KITAP|BRAND|CATEGORY|\bOF\b|NPWP|NOPD|SAMSAT|PROVINSI|POKOK|SANKSI|JUMLAH|ALAMAT|SEPEDA|MOTOR|MOBIL|BENSIN|HITAM|PUTIH|MERAH|BIRU|SOLO|MODEL|JENIS|NOMOR|SURAT|KEPOLISIAN|PERUM|JALAN|KELURAHAN|KECAMATAN|KOTA|KABUPATEN|KEPALA|REGISTRASI|PEMILIK|NAME|OWNER|ADDRESS|VEHICLE|NUMBER|CERTIFICATE|POLICE|INDONESIA|NEGARA|REPUBLIK|TANDA|KENDARAAN|FASILITAS|BARU|DIREKTUR|BERLAKU|LOKASI|DATE|EXPIRE|VALIDATION|PENGESAHAN/;
 const BPKB = /^[A-Z]\d{8}$/; // nomor BPKB: satu huruf lalu 8 angka; bukan nomor mesin
 const looksLikeBrand = (v: string) => BRANDS.includes(v.toUpperCase().split(/[ \/]/)[0]);
 const alnumOnly = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -308,6 +338,10 @@ const vinShape = (c: string) => c.length === 17 && /[A-Z]/.test(c) && /^M/.test(
 /** Hasil dari label saja. Nilai yang jelas sampah (terlalu panjang, bukan merk dikenal, mirip nomor BPKB) dibuang. */
 function labelStnk(text: string): StnkResult {
   const f = stnkFields(text);
+  for (const [k, v] of Object.entries(columnValues(text))) {
+    if (!f[k]) f[k] = v;
+    if (!f[k + "_1"]) f[k + "_1"] = v;
+  }
   const short = (v?: string) => (v && v.length <= 60 ? v : "");
   const noLabel = (v: string) => v.replace(/^(?:\/?\s*NIK\s*\/?\s*)?(?:VIN)?\s*/i, "");
   let rangka = alnumOnly(noLabel(short(f.rangka)));
