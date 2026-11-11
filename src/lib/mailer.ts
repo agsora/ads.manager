@@ -46,7 +46,15 @@ export async function sendMailOne(m: { to: string; subject: string; html: string
   const kind = mailKind();
   if (kind === "smtp") {
     try {
-      await transporter().sendMail({ from: process.env.MAIL_FROM ?? `"Ads Manager" <${smtpUser()}>`, to: m.to, subject: m.subject, html: m.html, text: m.text });
+      await transporter().sendMail({
+        // nama pengirim yang tampil di kotak masuk: "No Reply" (ubah lewat MAIL_FROM_NAME); alamat Gmail pengirim tetap yang dipakai SMTP
+        from: process.env.MAIL_FROM ?? `"${process.env.MAIL_FROM_NAME || "No Reply"}" <${smtpUser()}>`,
+        to: m.to,
+        subject: m.subject,
+        html: m.html,
+        text: m.text,
+        headers: { "Auto-Submitted": "auto-generated", "X-Auto-Response-Suppress": "All" },
+      });
     } catch (e) {
       console.error("[mail] SMTP gagal:", (e as Error).message);
       throw new MailError(explain(e));

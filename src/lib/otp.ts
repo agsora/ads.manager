@@ -50,7 +50,7 @@ async function mailCode(to: string, name: string, code: string) {
 <div style="font-family:Georgia,serif;font-size:22px;color:#1f1e1d">Kode masuk Anda</div>
 <p style="margin:12px 0 0;font-size:14px;line-height:1.6;color:#5e5d59">Halo ${esc(name)}, gunakan kode berikut untuk masuk. Kode berlaku <b>${OTP_TTL_MIN} menit</b> dan hanya bisa dipakai sekali.</p>
 <div style="margin:20px 0;padding:16px;background:#faf9f5;border:1px solid #e5e2d8;border-radius:8px;text-align:center;font-family:'Courier New',monospace;font-size:32px;letter-spacing:10px;font-weight:bold;color:#1f1e1d">${code}</div>
-<p style="margin:0;font-size:12.5px;line-height:1.6;color:#8a8880">Jangan berikan kode ini kepada siapa pun. Jika Anda tidak meminta kode ini, abaikan email ini.</p>
+<p style="margin:0;font-size:12.5px;line-height:1.6;color:#8a8880">Jangan berikan kode ini kepada siapa pun. Jika Anda tidak meminta kode ini, abaikan email ini. Email ini dikirim otomatis, mohon tidak membalas.</p>
 </td></tr></table></td></tr></table></body></html>`;
   await sendMailOne({
     to,
