@@ -64,6 +64,55 @@ export interface KtpResult {
   others: IdNumber[];
 }
 
+/** Label di KTP; dipakai sebagai batas: nilai "Nama" berakhir di label berikutnya, termasuk yang ada di baris yang sama. */
+const KTP_LABELS: [string, RegExp][] = [
+  ["nik", /\bNIK\b/gi],
+  ["nama", /\bNAMA\b/gi],
+  ["ttl", /TEMPAT\s*\/?\s*(?:TGL|TANGGAL)\.?\s*LAHIR|TEMPAT\s*LAHIR|TGL\.?\s*LAHIR/gi],
+  ["jk", /JENIS\s*KELAMIN/gi],
+  ["goldar", /GOL\.?\s*DARAH/gi],
+  ["alamat", /ALAMAT/gi],
+  ["rtrw", /\bRT\s*\/\s*RW\b/gi],
+  ["kel", /KEL\s*\/\s*DESA|KELURAHAN/gi],
+  ["kec", /KECAMATAN/gi],
+  ["agama", /AGAMA/gi],
+  ["status", /STATUS\s*PERKAWINAN/gi],
+  ["kerja", /PEKERJAAN/gi],
+  ["wn", /KEWARGANEGARAAN/gi],
+  ["berlaku", /BERLAKU\s*HINGGA/gi],
+];
+const KTP_WORDS = /TEMPAT|LAHIR|JENIS|KELAMIN|DARAH|ALAMAT|AGAMA|STATUS|KAWIN|PEKERJAAN|KEWARGANEGARAAN|BERLAKU|PROVINSI|KOTA|KABUPATEN|KECAMATAN|KELURAHAN|NIK|ISLAM|KRISTEN|KATOLIK|HINDU|BUDHA|WNI|SEUMUR|LAKI|PEREMPUAN|PELAJAR|MAHASISWA|KARYAWAN|WIRASWASTA|PETANI|BURUH|MENGURUS|RUMAH|TANGGA|BELUM|SWASTA|PEGAWAI|NEGERI|TNI|POLRI/i;
+
+/** Nama di KTP: dari nilai label "Nama" (apa pun letaknya), atau - bila labelnya terpisah dari nilainya - baris huruf pertama setelah NIK. */
+export function ktpName(text: string, nikLineHint?: string): string | null {
+  const clean = (v: string) => {
+    // nama tidak memuat angka; potong di angka pertama (mis. tanggal lahir yang ikut terbaca)
+    const cut = v.replace(/^[\s:.;,\-]+/, "").split(/[0-9]/)[0].replace(/[^A-Za-z .,'\-]/g, " ").replace(/\s+/g, " ").trim().replace(/[ ,.\-]+$/, "");
+    return /^[A-Za-z][A-Za-z .,'\-]{2,59}$/.test(cut) && !KTP_WORDS.test(cut) ? cut.toUpperCase() : null;
+  };
+  // 1) label "Nama" dan nilainya (di baris yang sama, atau di bawahnya)
+  const flat = text.replace(/\r/g, "").replace(/[\t\n]+/g, " ⏎ ");
+  const hits: { key: string; start: number; end: number }[] = [];
+  for (const [key, re] of KTP_LABELS) for (const m of flat.matchAll(re)) hits.push({ key, start: m.index ?? 0, end: (m.index ?? 0) + m[0].length });
+  hits.sort((a, b) => a.start - b.start || b.end - a.end);
+  const kept: typeof hits = [];
+  for (const h of hits) if (!kept.length || h.start >= kept[kept.length - 1].end) kept.push(h);
+  const i = kept.findIndex((h) => h.key === "nama");
+  if (i >= 0) {
+    const v = clean(flat.slice(kept[i].end, kept[i + 1]?.start ?? flat.length).replace(/⏎/g, " "));
+    if (v) return v;
+  }
+  // 2) tata letak bertumpuk: label dulu, nilai belakangan. Nilai pertama setelah NIK berupa huruf saja adalah nama.
+  const lines = text.split(/\r?\n/).map((l) => l.replace(/[\t ]+/g, " ").trim()).filter(Boolean);
+  let at = lines.findIndex((l) => sixteenDigit(l).length > 0 && !/^\s*NIK\b\s*[:.]?\s*$/i.test(l));
+  if (at < 0 && nikLineHint) at = lines.findIndex((l) => l.includes(nikLineHint));
+  for (const l of lines.slice(at >= 0 ? at + 1 : 0, at >= 0 ? at + 5 : lines.length)) {
+    const v = clean(l);
+    if (v && v.length >= 3) return v;
+  }
+  return null;
+}
+
 export function parseKtp(text: string): KtpResult {
   const lines = text.split(/\r?\n/);
   let labelled: string | null = null;
@@ -78,7 +127,7 @@ export function parseKtp(text: string): KtpResult {
   }
   const all = [...new Set(lines.flatMap(sixteenDigit))];
   // di KTP, angka 16 digit yang tertulis setelah label NIK dipakai lebih dulu; bila tak ada, hanya bila persis satu kandidat valid
-  const nama = labelValue(lines, /^\s*NAMA\b/i, (v) => NAME.test(v)).toUpperCase() || null;
+  const nama = ktpName(text, labelled ?? undefined);
   if (labelled) return { nik: checkNik(labelled), nama, others: all.filter((x) => x !== labelled).map(checkNik) };
   const valid = all.filter((x) => checkNik(x).valid);
   if (valid.length === 1) return { nik: checkNik(valid[0]), nama, others: all.filter((x) => x !== valid[0]).map(checkNik) };
