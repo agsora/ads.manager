@@ -96,7 +96,7 @@ export default function SimulasiPage() {
   // both
   const [otrManual, setOtrManual] = useState("");
   const [ltv, setLtv] = useState("80");
-  const [share, setShare] = useState<number[]>([12, 24, 36]);
+  const [share, setShare] = useState<number[]>(() => [...new Set([...CAR_TENORS, ...MOTOR_TENORS])]);
   const [phone, setPhone] = useState("");
   const [ref, setRef] = useState("");
 
@@ -171,7 +171,7 @@ export default function SimulasiPage() {
   const ltvNow = otr ? usedLoan / otr : null;
   const over = otr > 0 && usedLoan > otr * ltvMax + 1;
 
-  const wa = (isCar ? tenors : tenors).filter((t) => share.includes(t));
+  const wa = tenors.filter((t) => share.includes(t));
   const waRows = wa.map((t) => quoteFor(usedLoan, t)).filter((q): q is Quote => !!q);
   const text =
     (usedLoan ? `Simulasi dana tunai (perkiraan, bukan penawaran mengikat)\nUnit: ${unitLabel}\nPinjaman: ${fmtMoney(usedLoan)}\n` +
