@@ -5,6 +5,7 @@ import { cleanInput, deleteRows, updateRow, validate } from "@/lib/repo";
 import { logActivity, q } from "@/lib/db";
 import { recordEvent } from "@/lib/events";
 import type { Resource, Row } from "@/lib/resources";
+import { validateKpi } from "@/lib/kpi-engine";
 
 const getRow = async (org: number, r: Resource, id: number) => (await q<Row>(`SELECT * FROM ${r.table} WHERE org_id = $1 AND id = $2`, [org, id]))[0] ?? null;
 
@@ -31,6 +32,12 @@ export const PUT = handle(async (req: Request, ctx: Ctx) => {
   const err = validate({ ...r, fields: r.fields.filter((f) => f.key in body) }, data);
   if (err) throw new HttpError(400, err);
   const old = await getRow(s.org, r, Number(p.id));
+  if (!old) throw new HttpError(404, "Data tidak ditemukan");
+  if (r.key === "kpi" && old.review_locked) throw new HttpError(409, "Evaluasi KPI terkunci. Admin harus membukanya sebelum mengubah target.");
+  if (r.key === "kpi") {
+    const error = validateKpi({ ...old, ...data });
+    if (error) throw new HttpError(400, error);
+  }
   const row = await updateRow(s.org, r, Number(p.id), data);
   if (!row) throw new HttpError(404, "Data tidak ditemukan");
   await logActivity(s.org, s.name, `Ubah ${r.singular}`, String(row[r.titleField] ?? ""));

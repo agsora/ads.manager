@@ -9,6 +9,7 @@ import type { Field, Resource, Row } from "@/lib/resources";
 import { api, useMeta, useToast } from "./providers";
 import { FileAttachments } from "./file-attachments";
 import { todayISO } from "@/lib/format";
+import { KpiForm } from "./kpi-form";
 
 /** Dialog. "drawer" slides in from the right (forms), "center" is a classic modal (details, imports). */
 export function Modal({ title, subtitle, onClose, children, wide, variant = "center" }: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode; wide?: boolean; variant?: "center" | "drawer" }) {
@@ -135,6 +136,11 @@ export function FieldInput({ f, value, onChange }: { f: Field; value: string; on
 }
 
 export function ResourceForm({ resource, row, onClose, onSaved, defaults, groups: onlyGroups, title }: { resource: Resource; row?: Row | null; onClose: () => void; onSaved: () => void; defaults?: Record<string, unknown>; groups?: string[]; title?: string }) {
+  if (resource.key === "kpi") return <KpiForm row={row} defaults={defaults} onClose={onClose} onSaved={onSaved} />;
+  return <StandardResourceForm resource={resource} row={row} onClose={onClose} onSaved={onSaved} defaults={defaults} groups={onlyGroups} title={title} />;
+}
+
+function StandardResourceForm({ resource, row, onClose, onSaved, defaults, groups: onlyGroups, title }: { resource: Resource; row?: Row | null; onClose: () => void; onSaved: () => void; defaults?: Record<string, unknown>; groups?: string[]; title?: string }) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
   const [vals, setVals] = useState<Record<string, string>>(() => {

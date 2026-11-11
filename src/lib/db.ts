@@ -1,7 +1,7 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { RESOURCES, type FieldType } from "./resources";
 
-const SCHEMA_VERSION = "36";
+const SCHEMA_VERSION = "37";
 
 // Keep DATE/TIMESTAMP as raw strings (no timezone shifting) and NUMERIC/INT8 as numbers.
 const RAW = (v: string) => v;
@@ -149,6 +149,10 @@ export function schemaStatements(): string[] {
   // when the numbers were last read from the post link, and why the last attempt failed (if it did)
   s.push(`ALTER TABLE content_plans ADD COLUMN IF NOT EXISTS metrics_at timestamptz`);
   s.push(`ALTER TABLE content_plans ADD COLUMN IF NOT EXISTS metrics_note text`);
+  s.push(`ALTER TABLE kpi_targets ADD COLUMN IF NOT EXISTS review_locked boolean NOT NULL DEFAULT false`);
+  s.push(`ALTER TABLE kpi_targets ADD COLUMN IF NOT EXISTS review_snapshot jsonb`);
+  s.push(`ALTER TABLE kpi_targets ADD COLUMN IF NOT EXISTS reviewed_at timestamptz`);
+  s.push(`ALTER TABLE kpi_targets ADD COLUMN IF NOT EXISTS reviewed_by text`);
   return s;
 }
 

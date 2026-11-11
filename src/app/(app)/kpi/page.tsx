@@ -1,40 +1,43 @@
 "use client";
 
 import { PageHeader } from "@/components/shell";
-import { ResourceTable } from "@/components/resource-table";
-import { monthStart, todayISO } from "@/lib/format";
-import { useFetch, useFilter } from "@/components/providers";
+import { api, useFetch, useFilter, useMeta, useToast } from "@/components/providers";
 import { Card } from "@/components/charts";
 import { useState } from "react";
-import type { ContentKpiProgress } from "@/lib/kpi-content";
+import { KpiBoard } from "@/components/kpi-board";
+import { KpiForm } from "@/components/kpi-form";
+import { ImportDialog } from "@/components/import-dialog";
+import type { KpiScorecard } from "@/lib/kpi-engine";
+import type { Row } from "@/lib/resources";
 
 export default function KpiPage() {
   const f = useFilter();
-  const [tick, setTick] = useState(0);
-  const { data, error, loading, reload } = useFetch<{ rows: ContentKpiProgress }>(`/api/kpi/progress?brand=${encodeURIComponent(f.brand || "")}&_=${tick}`);
+  const { session } = useMeta();
+  const toast = useToast();
+  const [editing, setEditing] = useState<Row | null | undefined>(undefined);
+  const [importing, setImporting] = useState(false);
+  const { data, error, loading, reload } = useFetch<{ scorecards: KpiScorecard[] }>(`/api/kpi/progress?brand=${encodeURIComponent(f.brand || "")}`);
+  const remove = async (row: Row) => {
+    if (!confirm(`Hapus KPI "${row.title || row.brand}"?`)) return;
+    try { await api(`/api/r/kpi/${row.id}`, "DELETE"); toast("KPI dihapus"); reload(); }
+    catch (e) { toast((e as Error).message, "err"); }
+  };
+  const review = async (row: Row, action: "lock" | "unlock") => {
+    if (!confirm(action === "lock" ? "Kunci evaluasi? Hasil bulan ini akan disimpan dan target tidak dapat diedit sebelum dibuka kembali oleh admin." : "Buka evaluasi? Hasil akan kembali dihitung dari data terbaru.")) return;
+    try { await api(`/api/kpi/${row.id}/review`, "POST", { action }); toast(action === "lock" ? "Evaluasi dikunci" : "Evaluasi dibuka"); reload(); }
+    catch (e) { toast((e as Error).message, "err"); }
+  };
   return (
     <div className="space-y-4">
-      <PageHeader eyebrow="Konten" title="Target KPI Bulanan" desc="Atur target per bulan dan brand. Untuk target konten, pilih kategori, jenis konten, serta cabang; kosong berarti semua. Pilihan dropdown dikelola di Pengaturan → Daftar Pilihan." />
-      <ResourceTable resourceKey="kpi" ignoreDate defaults={{ period: monthStart(todayISO()) }} quickFilters={["content_category", "content_type", "branch"]} onChanged={() => setTick((t) => t + 1)} />
-      <Card title="Progres Target Konten" subtitle="Diunggah: satu konten dengan file lampiran, dihitung pada bulan unggahan pertama. Tayang: status Posted, berdasarkan tanggal aktual atau tanggal posting. Konten Cancel tidak dihitung." action={<button className="btn btn-sm" onClick={reload}>Perbarui</button>}>
-        {error ? <p role="alert">{error}</p> : loading ? <p>Memuat progres…</p> : !data?.rows.length ? <p className="text-sm text-[var(--muted)]">Isi Target Konten Diunggah atau Target Jumlah Posting untuk melihat progres otomatis.</p> : (
-          <div className="grid gap-3 md:grid-cols-2">
-            {data.rows.map((r) => (
-              <div key={r.id} className="rounded-lg border border-[var(--grid)] p-3">
-                <h3 className="font-semibold">{r.title}</h3>
-                <p className="mb-3 text-xs text-[var(--muted)]">{[r.month, r.brand, r.category || "Semua kategori", r.contentType || "Semua jenis", r.branch || "Semua cabang"].filter(Boolean).join(" · ")}</p>
-                {[{ label: "Diunggah", actual: r.uploaded, target: r.targetUploads }, { label: "Tayang", actual: r.posted, target: r.targetPosts }].filter((x) => x.target > 0).map((x) => (
-                  <div key={x.label} className="mt-2">
-                    <div className="flex justify-between text-sm"><span>{x.label}</span><span>{x.actual} / {x.target} · {Math.round(x.actual / x.target * 100)}%</span></div>
-                    <progress className="mt-1 h-2 w-full accent-[var(--accent)]" value={Math.min(x.actual, x.target)} max={x.target} aria-label={`${x.label}: ${r.title}`} />
-                    <p className="text-xs text-[var(--muted)]">{x.actual >= x.target ? "Target tercapai" : `Kurang ${x.target - x.actual} konten`}</p>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
+      <PageHeader eyebrow="Kinerja" title="Target & Evaluasi KPI" desc="Pantau pencapaian per kategori, brand, cabang, dan PIC. Pilih indikator jumlah, persen, rupiah, atau rating. Kategori KPI dan konten dikelola di Pengaturan → Daftar Pilihan." />
+      <div className="flex flex-wrap gap-2"><button className="btn btn-accent" onClick={() => setEditing(null)}>+ Tambah KPI</button><button className="btn" onClick={() => setImporting(true)}>Impor KPI</button><button className="btn" onClick={reload} disabled={loading}>{loading ? "Memuat…" : "Perbarui"}</button></div>
+      <Card title="Pencapaian per Kategori" subtitle="Hanya indikator dan informasi yang diisi yang ditampilkan. Penilaian mengikuti target minimal atau batas maksimal.">
+        {error && <p role="alert">{error}</p>}
+        {loading && <p role="status" className="mb-3 text-sm text-[var(--muted)]">Memuat evaluasi KPI…</p>}
+        {data && <KpiBoard cards={data.scorecards} onEdit={setEditing} onDelete={session?.role && session.role !== "staff" ? remove : undefined} onReview={session?.role && session.role !== "staff" ? review : undefined} />}
       </Card>
+      {editing !== undefined && <KpiForm row={editing} defaults={{ brand: f.brand || "" }} onClose={() => setEditing(undefined)} onSaved={reload} />}
+      {importing && <ImportDialog resourceKey="kpi" onClose={() => setImporting(false)} onDone={reload} />}
     </div>
   );
 }

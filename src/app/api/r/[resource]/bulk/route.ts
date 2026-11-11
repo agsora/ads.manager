@@ -12,6 +12,7 @@ export const POST = handle(async (req: Request, ctx: Ctx) => {
   const s = await requireSession();
   const r = getResource((await ctx.params).resource);
   if (!r) throw new HttpError(404, "Modul tidak ditemukan");
+  if (r.key === "kpi") throw new HttpError(400, "Edit KPI satu per satu agar satuan, sumber data, dan penguncian evaluasi tetap konsisten.");
   const { ids, data } = (await req.json()) as { ids: number[]; data: Record<string, unknown> };
   const clean = cleanInput(r, data ?? {});
   const keys = Object.keys(clean);

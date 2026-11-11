@@ -1,5 +1,5 @@
 import { listRows } from "./repo";
-import { loadContentKpiProgress } from "./kpi-content-repo";
+import { loadKpiScorecards } from "./kpi-scorecard-repo";
 import { RESOURCE_MAP, isFinishedLead, n, type Row } from "./resources";
 import { normPhone } from "./phone";
 import { coordsForBranch, regionForBranch } from "./regions";
@@ -730,16 +730,15 @@ export async function buildAnalytics(orgId: number, p: AnalyticsParams) {
     const xs = kpiInRange.filter((r) => n(r[k]) > 0);
     return xs.length ? xs.reduce((s, r) => s + n(r[k]), 0) / xs.length : 0;
   };
-  const contentTargets = await loadContentKpiProgress(orgId, { from, to, brand });
-  const scopedContentTargets = contentTargets.flatMap((t) => {
-    const label = [t.title, t.month, t.category, t.contentType, t.branch].filter(Boolean).join(" · ");
-    const metrics = [];
-    if (t.targetUploads > 0) metrics.push({ metric: `Konten diunggah · ${label}`, target: t.targetUploads, actual: t.uploaded, format: "number", higherBetter: true });
-    if (t.targetPosts > 0 && (t.category || t.contentType || t.branch)) metrics.push({ metric: `Konten tayang · ${label}`, target: t.targetPosts, actual: t.posted, format: "number", higherBetter: true });
-    return metrics;
-  });
+  const scorecards = await loadKpiScorecards(orgId, { from, to, brand });
+  const scopedContentTargets = scorecards.flatMap((c) => c.metrics.filter((m) => m.actual !== null && (c.row.metric_source || m.key === "target_uploads" || (m.key === "target_posts" && (c.row.content_category || c.row.content_type || c.row.branch || c.row.pic)))).map((m) => ({
+    metric: [m.label, c.row.title, c.month, c.row.brand, c.row.content_category, c.row.content_type, c.row.branch, c.row.pic].filter(Boolean).join(" · "),
+    target: m.unit === "percent" ? m.target / 100 : m.target,
+    actual: m.unit === "percent" ? m.actual! / 100 : m.actual!,
+    format: m.unit === "rating" ? "decimal" : m.unit, higherBetter: !m.lower,
+  })));
   const kpiProgress = [
-    { metric: "Jumlah Posting", target: kpiInRange.filter((t) => !t.content_category && !t.content_type && !t.branch).reduce((s, t) => s + n(t.target_posts), 0), actual: kpis.content.posted, format: "number", higherBetter: true },
+    { metric: "Jumlah Posting", target: kpiInRange.filter((t) => !t.content_category && !t.content_type && !t.branch && !t.pic).reduce((s, t) => s + n(t.target_posts), 0), actual: kpis.content.posted, format: "number", higherBetter: true },
     ...scopedContentTargets,
     { metric: "Engagement Rate", target: tavg("target_er"), actual: kpis.content.avgER ?? 0, format: "percent", higherBetter: true },
     { metric: "Leads", target: tsum("target_leads"), actual: kpis.leads.leads, format: "number", higherBetter: true },

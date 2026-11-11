@@ -1,6 +1,7 @@
 import { q } from "./db";
 import { coerce } from "./coerce";
 import { DEFAULT_OPTIONS, type Resource, type Row } from "./resources";
+import { validateKpi } from "./kpi-engine";
 
 export interface ListFilter {
   from?: string | null;
@@ -71,6 +72,10 @@ export async function deleteMatching(orgId: number, r: Resource, rows: Record<st
 const MAY_BE_NEGATIVE = new Set(["opening_balance", "lat", "lng"]);
 
 export function validate(r: Resource, data: Record<string, unknown>): string | null {
+  if (r.key === "kpi" && data.metric_source && data.period && data.brand) {
+    const error = validateKpi(data);
+    if (error) return error;
+  }
   for (const f of r.fields) {
     const v = data[f.key];
     if (f.required && (v === null || v === undefined || v === "")) return `${f.label} wajib diisi`;
@@ -122,7 +127,7 @@ export async function updateRow(orgId: number, r: Resource, id: number, data: Re
   if (!keys.length) throw new Error("Tidak ada data yang diubah");
   const sets = keys.map((k, i) => `${k} = $${i + 3}`);
   const rows = await q<Row>(
-    `UPDATE ${r.table} SET ${sets.join(", ")}, updated_at = now() WHERE org_id = $1 AND id = $2 RETURNING *`,
+    `UPDATE ${r.table} SET ${sets.join(", ")}, updated_at = now() WHERE org_id = $1 AND id = $2 ${r.key === "kpi" ? "AND review_locked=false" : ""} RETURNING *`,
     [orgId, id, ...keys.map((k) => data[k])],
   );
   return rows[0];
@@ -130,7 +135,7 @@ export async function updateRow(orgId: number, r: Resource, id: number, data: Re
 
 export async function deleteRows(orgId: number, r: Resource, ids: number[]) {
   if (!ids.length) return 0;
-  const rows = await q(`DELETE FROM ${r.table} WHERE org_id = $1 AND id = ANY($2::int[]) RETURNING id`, [orgId, ids]);
+  const rows = await q(`DELETE FROM ${r.table} WHERE org_id = $1 AND id = ANY($2::int[]) ${r.key === "kpi" ? "AND review_locked=false" : ""} RETURNING id`, [orgId, ids]);
   return rows.length;
 }
 

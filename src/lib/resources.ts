@@ -250,6 +250,19 @@ export const RESOURCES: Resource[] = [
     defaultSort: "period",
     fields: [
       { key: "title", label: "Judul KPI", type: "text", aliases: ["judul", "judul kpi", "nama kpi", "kpi"] },
+      { key: "kpi_category", label: "Kategori KPI", type: "select", options: "kpi_category" },
+      { key: "metric_source", label: "Indikator", type: "text", hideInTable: true },
+      { key: "metric_unit", label: "Satuan", type: "text", hideInTable: true },
+      { key: "target_value", label: "Nilai Target", type: "number" },
+      { key: "actual_value", label: "Aktual Manual", type: "number", hideInTable: true },
+      { key: "actual_numerator", label: "Jumlah Berhasil", type: "number", hideInTable: true },
+      { key: "actual_denominator", label: "Jumlah Keseluruhan", type: "number", hideInTable: true },
+      { key: "manual_mode", label: "Cara Isi Aktual", type: "text", hideInTable: true },
+      { key: "direction", label: "Arah Target", type: "text", hideInTable: true },
+      { key: "weight", label: "Bobot", type: "number" },
+      { key: "mandatory", label: "KPI Wajib", type: "text", hideInTable: true },
+      { key: "pic", label: "PIC", type: "text", suggest: "users" },
+      { key: "notes", label: "Catatan / Rencana Perbaikan", type: "longtext", hideInTable: true },
       { key: "content_category", label: "Kategori Konten", type: "select", options: "content_category" },
       { key: "content_type", label: "Jenis Konten", type: "select", options: "content_type" },
       { key: "branch", label: "Cabang", type: "select", options: "branch" },
@@ -745,6 +758,7 @@ export function getResource(key: string): Resource | undefined {
 
 /** Default editable option lists (seeded from the original Excel template). */
 export const DEFAULT_OPTIONS: Record<string, { label: string; values: string[] }> = {
+  kpi_category: { label: "Kategori KPI", values: ["Produksi Konten", "Kualitas Konten", "Leads & Penjualan", "Operasional", "Lainnya"] },
   content_category: { label: "Kategori Konten (KPI & Konten)", values: ["Produk", "Promo", "Edukasi", "Testimoni", "Aktivitas Cabang"] },
   platform: { label: "Platform Iklan", values: ["Meta", "TikTok", "Google Ads", "YouTube", "Lainnya"] },
   ad_objective: { label: "Jenis Campaign", values: ["Awareness", "Traffic", "Prospek", "Engagement", "Penjualan", "Video Views", "Pesan WhatsApp"] },
