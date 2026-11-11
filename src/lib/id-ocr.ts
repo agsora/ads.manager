@@ -196,7 +196,7 @@ const STNK_LABELS: [string, RegExp][] = [
   ["urut", /N[O0](?:MOR|\.)?\s*URUT\s*PENDAFTARAN/gi],
   ["berlaku", /BERLAKU\s*(?:S\/D|SAMPAI|HINGGA)/gi],
   // sublabel bahasa Inggris di bawah tiap label: bukan nilai, tapi harus jadi batas supaya tidak ikut terbaca sebagai nilai
-  ["en", /[NE]AME\s*OF\s*OWNER|VEHICLE\s*REGISTRATION\s*NUMBER|VEHICLE\s*IDENTITY\s*NUMBER|ENGINE\s*NUMBER|MANUFACTURE\s*YEAR|REGISTRATION\s*YEAR|LICENSE\s*PLATE\s*COLOR|FUEL\s*\/?\s*ENERGY\s*SOURCES?|DATE\s*OF\s*EXPIRE|LOCATION\s*CODE|CYLINDER\s*CAPACITY|ID\s*CARD\s*NUMBER|COMPANY\s*REGISTRATION\s*NUMBER|REGISTRATION\s*QUEUE\s*NUMBER|OWNERSHIP\s*DOCUMENT\s*NUMBER/gi],
+  ["en", /[NE]AME\s*OF\s*OWNER|\bBRAND\b|\bCATEGORY\b|\bCOLOR\b|VEHICLE\s*REGISTRATION\s*NUMBER|VEHICLE\s*IDENTITY\s*NUMBER|ENGINE\s*NUMBER|MANUFACTURE\s*YEAR|REGISTRATION\s*YEAR|LICENSE\s*PLATE\s*COLOR|FUEL\s*\/?\s*ENERGY\s*SOURCES?|DATE\s*OF\s*EXPIRE|LOCATION\s*CODE|CYLINDER\s*CAPACITY|ID\s*CARD\s*NUMBER|COMPANY\s*REGISTRATION\s*NUMBER|REGISTRATION\s*QUEUE\s*NUMBER|OWNERSHIP\s*DOCUMENT\s*NUMBER/gi],
 ];
 
 /** Pecah teks OCR menjadi pasangan label → nilai, apa pun tata letaknya (satu label per baris, dua label sejajar, atau nilai di baris bawah). */
@@ -287,7 +287,7 @@ const BRANDS = [
   "TOYOTA", "DAIHATSU", "MITSUBISHI", "NISSAN", "ISUZU", "MAZDA", "HYUNDAI", "KIA", "WULING", "DFSK", "CHERY", "BMW", "MERCEDES", "FORD", "CHEVROLET", "DATSUN", "SUBARU", "LEXUS", "VOLKSWAGEN", "MG", "HINO", "FUSO", "SUZUKI",
 ];
 const NOT_NAME =
-  /NPWP|NOPD|SAMSAT|PROVINSI|POKOK|SANKSI|JUMLAH|ALAMAT|SEPEDA|MOTOR|MOBIL|BENSIN|HITAM|PUTIH|MERAH|BIRU|SOLO|MODEL|JENIS|NOMOR|SURAT|KEPOLISIAN|PERUM|JALAN|KELURAHAN|KECAMATAN|KOTA|KABUPATEN|KEPALA|REGISTRASI|PEMILIK|NAME|OWNER|ADDRESS|VEHICLE|NUMBER|CERTIFICATE|POLICE|INDONESIA|NEGARA|REPUBLIK|TANDA|KENDARAAN|FASILITAS|BARU|DIREKTUR|BERLAKU|LOKASI|DATE|EXPIRE|VALIDATION|PENGESAHAN/;
+  /CARD|NUMB|COMPANY|REGIST|TDP|KITAS|KITAP|BRAND|CATEGORY|NPWP|NOPD|SAMSAT|PROVINSI|POKOK|SANKSI|JUMLAH|ALAMAT|SEPEDA|MOTOR|MOBIL|BENSIN|HITAM|PUTIH|MERAH|BIRU|SOLO|MODEL|JENIS|NOMOR|SURAT|KEPOLISIAN|PERUM|JALAN|KELURAHAN|KECAMATAN|KOTA|KABUPATEN|KEPALA|REGISTRASI|PEMILIK|NAME|OWNER|ADDRESS|VEHICLE|NUMBER|CERTIFICATE|POLICE|INDONESIA|NEGARA|REPUBLIK|TANDA|KENDARAAN|FASILITAS|BARU|DIREKTUR|BERLAKU|LOKASI|DATE|EXPIRE|VALIDATION|PENGESAHAN/;
 const BPKB = /^[A-Z]\d{8}$/; // nomor BPKB: satu huruf lalu 8 angka; bukan nomor mesin
 const looksLikeBrand = (v: string) => BRANDS.includes(v.toUpperCase().split(/[ \/]/)[0]);
 const alnumOnly = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -300,7 +300,10 @@ const engineNo = (v: string) =>
     .replace(/\s*-\s*/g, "-")
     .replace(/\s+/g, "")
     .replace(/^-+|-+$/g, "");
-const fixVin = (c: string) => (c.length === 17 ? c.replace(/[OQ]/g, "0").replace(/I/g, "1") : c); // nomor rangka (VIN) tidak memakai huruf I, O, Q
+// "MH3…" sering terbaca "M13…" (H → 1): awalan M + 1/I + angka dikembalikan ke MH
+const fixVin = (c: string) => (c.length >= 17 ? c.replace(/^M[1I](?=[0-9])/, "MH") : c).replace(/^(.{17})$/, (v) => v.replace(/[OQ]/g, "0").replace(/I/g, "1"));
+/** Bentuk wajar nomor rangka: 17 karakter, memuat huruf dan angka, 5 karakter terakhir angka (nomor urut produksi). */
+const vinShape = (c: string) => c.length === 17 && /[A-Z]/.test(c) && /^M/.test(c) && /\d{5}$/.test(c); // nomor rangka (VIN) tidak memakai huruf I, O, Q
 
 /** Hasil dari label saja. Nilai yang jelas sampah (terlalu panjang, bukan merk dikenal, mirip nomor BPKB) dibuang. */
 function labelStnk(text: string): StnkResult {
@@ -323,7 +326,7 @@ function labelStnk(text: string): StnkResult {
     merk: merk || null,
     tahun: tahun || null,
     rangka: rangka.length >= 10 && rangka.length <= 18 ? rangka : null,
-    mesin: alnumOnly(mesin).length >= 6 && alnumOnly(mesin).length <= 15 && /\d/.test(mesin) && !BPKB.test(alnumOnly(mesin)) ? mesin : null,
+    mesin: alnumOnly(mesin).length >= 8 && alnumOnly(mesin).length <= 15 && (mesin.match(/\d/g) ?? []).length >= 4 && !BPKB.test(alnumOnly(mesin)) ? mesin : null,
   };
 }
 
@@ -361,21 +364,26 @@ function stackedStnk(text: string): Partial<StnkResult> {
   lines.forEach((l, i) => {
     if (vinAt >= 0) return;
     // seluruh baris, atau token terakhir/mana pun di baris yang memuat label tergarbled ("NOM2B RANGKANIK/VIN : MH1KC0116NK048308")
-    const c = [alnumOnly(l), ...l.split(/[ :]+/).map(alnumOnly)].find((x) => x.length === 17 && /[A-Z]/.test(x) && /\d/.test(x) && /^M/.test(x)) ?? "";
+    const toks = [alnumOnly(l), ...l.split(/[ :]+/).map(alnumOnly)].map(fixVin);
+    const c = toks.find(vinShape) ?? "";
     if (c) {
       out.rangka = fixVin(c);
       vinAt = i;
+    } else if (toks.some((x) => x.length === 17 && /^M/.test(x) && (x.match(/\d/g) ?? []).length >= 3)) {
+      vinAt = i; // nomor rangka terbaca rusak: tidak dipakai, tapi tetap jadi patokan letak nomor mesin
     }
   });
   if (vinAt >= 0) {
     // nomor mesin ada di dekat nomor rangka; bisa terpecah spasi ("JMF2E 1273053"), dan nomor BPKB (huruf + 8 angka) harus dilewati
-    const hit = lines
+    const cands = lines
       .slice(vinAt + 1, vinAt + 10)
       .map(engineNo)
-      .find((c) => {
+      .filter((c) => {
         const a = alnumOnly(c);
-        return a.length >= 9 && a.length <= 14 && /[A-Z]/.test(a) && /\d/.test(a) && !BPKB.test(a) && a !== out.rangka && !/[A-Z]{5,}/.test(a);
+        return a.length >= 9 && a.length <= 14 && /[A-Z]/.test(a) && /\d/.test(a) && !BPKB.test(a) && a !== out.rangka && !/[A-Z]{5,}/.test(a) && (a.match(/\d/g) ?? []).length >= 4;
       });
+    // bentuk khas nomor mesin (4-6 karakter, tanda hubung opsional, 5-7 angka) didahulukan daripada teks lain yang kebetulan mirip
+    const hit = cands.find((c) => /^[A-Z0-9]{4,6}-?\d{5,7}$/.test(c));
     if (hit) out.mesin = hit;
   }
   const years = lines
