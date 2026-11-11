@@ -15,7 +15,11 @@ const COLS = [
   { stage: 2, title: "Follow Up 2", hint: "H+7 – H+14", due: 7 },
   { stage: 3, title: "Follow Up 3", hint: "H+14 – H+30", due: 14 },
   { stage: 4, title: "Menunggu Keputusan", hint: "Sudah 3x follow up", due: 30 },
+  { stage: 5, title: "Follow Up Manual", hint: "Lead Pending yang Anda pilih sendiri", due: 0 },
 ];
+const MANUAL = 5;
+const isManual = (r: Row) => String(r.manual_followup ?? "") === "Ya";
+const isPending = (r: Row) => String(r.final_status ?? "").trim().toLowerCase() === "pending";
 
 const stageGhost = (r: Row) => !!r.followup_2 && !!r.followup_3;
 
@@ -47,13 +51,29 @@ export default function FollowUpBoard() {
         .filter((r) => !isFinishedLead(r))
         .map((r) => {
           const age = diffDays(String(r.chat_date).slice(0, 10), today);
-          const stage = !r.followup_1 ? 1 : !r.followup_2 ? 2 : !r.followup_3 ? 3 : 4;
-          return { r, age, stage, due: age >= COLS[stage - 1].due };
+          const natural = !r.followup_1 ? 1 : !r.followup_2 ? 2 : !r.followup_3 ? 3 : 4;
+          // lead yang dipilih ke Follow Up Manual keluar dari kolom tahapnya
+          return { r, age, stage: isManual(r) ? MANUAL : natural, due: age >= COLS[natural - 1].due };
         })
         .filter((x) => !onlyDue || x.due)
         .sort((a, b) => Number(b.due) - Number(a.due) || (String(b.r.segment).toUpperCase() === "HOT" ? 1 : 0) - (String(a.r.segment).toUpperCase() === "HOT" ? 1 : 0) || b.age - a.age),
     [data, today, onlyDue],
   );
+
+  // pilihan dropdown Follow Up Manual: hanya lead berstatus Pending yang belum ada di kolom manual
+  const pendingChoices = useMemo(
+    () => (data?.rows ?? []).filter((r) => isPending(r) && !isManual(r)).sort((a, b) => String(b.chat_date).localeCompare(String(a.chat_date))),
+    [data],
+  );
+  const setManual = async (r: Row, on: boolean) => {
+    try {
+      await api(`/api/r/leads/${r.id}`, "PUT", { manual_followup: on ? "Ya" : null });
+      toast(on ? `${r.name ?? "Lead"} masuk Follow Up Manual` : `${r.name ?? "Lead"} dikeluarkan dari Follow Up Manual`);
+      reload();
+    } catch (e) {
+      toast((e as Error).message, "err");
+    }
+  };
 
   const close = async (r: Row, status: string) => {
     try {
@@ -72,7 +92,7 @@ export default function FollowUpBoard() {
           <input type="checkbox" checked={onlyDue} onChange={(e) => setOnlyDue(e.target.checked)} /> Hanya yang jatuh tempo
         </label>
       </PageHeader>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {COLS.map((c) => {
           const items = open.filter((x) => x.stage === c.stage);
           return (
@@ -86,6 +106,24 @@ export default function FollowUpBoard() {
                   {items.length} · {items.filter((x) => x.due).length} jatuh tempo
                 </span>
               </div>
+              {c.stage === MANUAL && (
+                <select
+                  className="input mb-3 !h-9 w-full !text-[12.5px]"
+                  value=""
+                  aria-label="Tambah lead Pending ke Follow Up Manual"
+                  onChange={(e) => {
+                    const r = pendingChoices.find((x) => String(x.id) === e.target.value);
+                    if (r) setManual(r, true);
+                  }}
+                >
+                  <option value="">{pendingChoices.length ? "+ Pilih lead Pending…" : "Tidak ada lead Pending"}</option>
+                  {pendingChoices.map((r) => (
+                    <option key={r.id} value={String(r.id)}>
+                      {String(r.name ?? r.phone ?? "(tanpa nama)")} · {fmtDate(r.chat_date)}
+                    </option>
+                  ))}
+                </select>
+              )}
               <div className="space-y-2.5">
                 {items.slice(0, 60).map(({ r, age, due }) => {
                   const stopped = stopSet.has(normPhone(r.phone));
@@ -131,7 +169,11 @@ export default function FollowUpBoard() {
                           </select>
                         )}
                         <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => close(r, "Deal")}>Deal</button>
-                        <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => close(r, "Pending")}>Pending</button>
+                        {c.stage === MANUAL ? (
+                          <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => setManual(r, false)}>Keluarkan</button>
+                        ) : (
+                          <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => close(r, "Pending")}>Pending</button>
+                        )}
                         <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => close(r, "Ghosting")}>Ghosting</button>
                         <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => close(r, "Cancel")}>Cancel</button>
                       </div>
