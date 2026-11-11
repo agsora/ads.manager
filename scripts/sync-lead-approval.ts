@@ -25,22 +25,28 @@ async function candidates(leads: Row[]) {
   const [konven, syariah] = await Promise.all([
     sourceQuery("konvensional", `SELECT a.id::text AS reference,
       to_char((a."createdAt" AT TIME ZONE 'Asia/Jakarta')::date, 'YYYY-MM-DD') AS date, a.status,
-      to_char(a."createdAt" AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD"T"HH24:MI:SS.US') AS submitted_at,
+      to_char(a."createdAt" AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD"T"HH24:MI:SS.US') AS submitted_at,a.application_type AS financing_type,
+      ((a."createdAt" AT TIME ZONE 'Asia/Jakarta')::date BETWEEN $3::date AND $4::date) AS in_batch_period,
       regexp_replace(COALESCE(u.ktp_number,''), '\\D', '', 'g') AS nik,
       regexp_replace(COALESCE(a.kk_number,''), '\\D', '', 'g') AS kk, u.phone_number AS phone,
-      a.partner_ktp_number AS partner_nik, a.partner_phone AS partner_phone
+      a.partner_ktp_number AS partner_nik, a.partner_phone AS partner_phone,
+      s.partner_ktp_number AS sales_partner_nik,s.partner_phone AS sales_partner_phone,v.kk_number AS survey_kk
       FROM "Applications" a LEFT JOIN "Users" u ON u.id=a.user_id
-      WHERE a.application_type='Dana Tunai'
-      AND (a."createdAt" AT TIME ZONE 'Asia/Jakarta')::date >= $3::date
-      AND (a."createdAt" AT TIME ZONE 'Asia/Jakarta')::date <= $4::date
-      AND (regexp_replace(COALESCE(u.ktp_number,''), '\\D', '', 'g')=ANY($1::text[])
+      LEFT JOIN (SELECT DISTINCT ON(application_id) application_id,partner_ktp_number,partner_phone FROM "SalesAdditionalData" ORDER BY application_id,id DESC) s ON s.application_id=a.id
+      LEFT JOIN (SELECT DISTINCT ON(application_id) application_id,kk_number FROM "SurveyorAdditionalData" ORDER BY application_id,id DESC) v ON v.application_id=a.id
+      WHERE (regexp_replace(COALESCE(u.ktp_number,''), '\\D', '', 'g')=ANY($1::text[])
         OR regexp_replace(COALESCE(a.kk_number,''), '\\D', '', 'g')=ANY($2::text[])
         OR regexp_replace(COALESCE(a.partner_ktp_number,''), '\\D', '', 'g')=ANY($1::text[])
         OR ${normalizedPhone("u.phone_number")}=ANY($5::text[])
-        OR ${normalizedPhone("a.partner_phone")}=ANY($5::text[]))`, params),
+        OR ${normalizedPhone("a.partner_phone")}=ANY($5::text[])
+        OR regexp_replace(COALESCE(s.partner_ktp_number,''), '\\D', '', 'g')=ANY($1::text[])
+        OR regexp_replace(COALESCE(v.kk_number,''), '\\D', '', 'g')=ANY($2::text[])
+        OR ${normalizedPhone("s.partner_phone")}=ANY($5::text[]))`, params),
     // Compatible with PostgreSQL 8.2: no CTE, unnest, LATERAL, or window functions.
     sourceQuery("syariah", `SELECT p.no_sbg AS reference, to_char(p.tgl_pengajuan,'YYYY-MM-DD') AS date,
       to_char(p.tgl_pengajuan, 'YYYY-MM-DD"T"HH24:MI:SS.US') AS submitted_at,
+      t.status_barang AS financing_type,p.fk_produk AS product,
+      (p.tgl_pengajuan::date BETWEEN $3::date AND $4::date) AS in_batch_period,
       p.status_approval AS status, p.tgl_batal IS NOT NULL AS cancelled,
       regexp_replace(COALESCE(c.no_id,''), '\\D', '', 'g') AS nik,
       regexp_replace(COALESCE(c.no_kk,''), '\\D', '', 'g') AS kk, c.no_hp AS phone,
@@ -52,9 +58,7 @@ async function candidates(leads: Row[]) {
       LEFT JOIN public.tblcustomer g ON regexp_replace(COALESCE(g.no_id,''), '\\D', '', 'g')=regexp_replace(COALESCE(c.no_id_penjamin,''), '\\D', '', 'g')
         AND length(regexp_replace(COALESCE(c.no_id_penjamin,''), '\\D', '', 'g'))=16
         AND regexp_replace(COALESCE(c.no_id_penjamin,''), '\\D', '', 'g')<>'0000000000000000'
-      WHERE (upper(trim(t.status_barang))='DATUN' OR p.fk_produk IN ('22','42','44'))
-      AND p.tgl_pengajuan::date >= $3::date AND p.tgl_pengajuan::date <= $4::date
-      AND (regexp_replace(COALESCE(c.no_id,''), '\\D', '', 'g')=ANY($1::text[])
+      WHERE (regexp_replace(COALESCE(c.no_id,''), '\\D', '', 'g')=ANY($1::text[])
         OR regexp_replace(COALESCE(c.no_kk,''), '\\D', '', 'g')=ANY($2::text[])
         OR regexp_replace(COALESCE(c.no_ktp_pasangan,''), '\\D', '', 'g')=ANY($1::text[])
         OR regexp_replace(COALESCE(c.no_id_penjamin,''), '\\D', '', 'g')=ANY($1::text[])
@@ -65,8 +69,10 @@ async function candidates(leads: Row[]) {
   ]);
   const convert = (rows: Record<string, unknown>[], source: ApprovalCandidate["source"]): ApprovalCandidate[] => rows.map((r) => ({ source, reference: String(r.reference), date: String(r.date), submittedAt: String(r.submitted_at || ""), status: String(r.status || ""), nik: String(r.nik || ""), kk: String(r.kk || ""), phone: String(r.phone || ""), contacts: [
     { role: "Pasangan", nik: String(r.partner_nik || ""), phone: String(r.partner_phone || "") },
+    { role: "Pasangan", nik: String(r.sales_partner_nik || ""), phone: String(r.sales_partner_phone || "") },
+    { role: "Pemohon", kk: String(r.survey_kk || "") },
     { role: "Penjamin", nik: String(r.guarantor_nik || ""), phone: String(r.guarantor_phone || ""), kk: String(r.guarantor_kk || "") },
-  ], cancelled: r.cancelled === true || r.cancelled === "t", datun: true }));
+  ], cancelled: r.cancelled === true || r.cancelled === "t", financingType: String(r.financing_type || ""), datun: source === "Konvensional" ? r.financing_type === "Dana Tunai" : String(r.financing_type || "").trim().toUpperCase() === "DATUN" || ["22", "42", "44"].includes(String(r.product)) }));
   return { rows: [...convert(konven, "Konvensional"), ...convert(syariah, "Syariah")], links };
 }
 

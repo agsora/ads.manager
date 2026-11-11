@@ -17,7 +17,15 @@ export async function findLeadIdentityLinks(phones: string[]): Promise<Map<strin
       UNION ALL
       SELECT u.phone_number AS phone,u.ktp_number AS nik,a.kk_number AS kk FROM "Applications" a JOIN "Users" u ON u.id=a.user_id WHERE ${p("u.phone_number")}=ANY($1::text[])
       UNION ALL
-      SELECT a.partner_phone AS phone,a.partner_ktp_number AS nik,a.kk_number AS kk FROM "Applications" a WHERE ${p("a.partner_phone")}=ANY($1::text[])`, [phones]),
+      SELECT a.partner_phone AS phone,a.partner_ktp_number AS nik,a.kk_number AS kk FROM "Applications" a WHERE ${p("a.partner_phone")}=ANY($1::text[])
+      UNION ALL
+      SELECT uc.phone_number AS phone,u.ktp_number AS nik,a.kk_number AS kk FROM "UserContacts" uc JOIN "Users" u ON u.id=uc.user_id LEFT JOIN "Applications" a ON a.user_id=u.id WHERE ${p("uc.phone_number")}=ANY($1::text[])
+      UNION ALL
+      SELECT s.partner_phone AS phone,s.partner_ktp_number AS nik,a.kk_number AS kk FROM "SalesAdditionalData" s JOIN "Applications" a ON a.id=s.application_id WHERE ${p("s.partner_phone")}=ANY($1::text[])
+      UNION ALL
+      SELECT u.phone_number AS phone,u.ktp_number AS nik,v.kk_number AS kk FROM "SurveyorAdditionalData" v JOIN "Applications" a ON a.id=v.application_id JOIN "Users" u ON u.id=a.user_id WHERE ${p("u.phone_number")}=ANY($1::text[])
+      UNION ALL
+      SELECT uc.phone_number AS phone,u.ktp_number AS nik,v.kk_number AS kk FROM "UserContacts" uc JOIN "Users" u ON u.id=uc.user_id JOIN "Applications" a ON a.user_id=u.id JOIN "SurveyorAdditionalData" v ON v.application_id=a.id WHERE ${p("uc.phone_number")}=ANY($1::text[])`, [phones]),
     sourceQuery("syariah", `
       SELECT c.no_hp AS phone,c.no_id AS nik,c.no_kk AS kk FROM public.tblcustomer c WHERE ${p("c.no_hp")}=ANY($1::text[])
       UNION ALL
