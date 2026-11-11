@@ -215,17 +215,22 @@ export interface StnkResult {
 }
 
 /** STNK: No. Registrasi (plat), Nama Pemilik, Merk, Type, Tahun Pembuatan, No. Rangka, No. Mesin. Semua hasil perlu dicek petugas. */
-export function parseStnk(text: string): StnkResult {
+export function parseStnk(raw: string): StnkResult {
+  const text = raw.replace(/[‐-―−]/g, "-"); // garis panjang hasil OCR → tanda hubung biasa
   // 1) dari bentuk nilainya (tahan terhadap tata letak bertumpuk dan label yang rusak); 2) dari label, hanya untuk yang masih kosong
   const pat = stackedStnk(text);
   const lab = labelStnk(text);
+  const merk = pat.merk ?? lab.merk;
+  let mesin = pat.mesin ?? lab.mesin;
+  // nomor mesin Yamaha tercetak dengan tanda hubung setelah 5 karakter pertama ("G3L8E-0456065"); OCR sering menghilangkannya
+  if (mesin && merk?.startsWith("YAMAHA") && /^[A-Z0-9]{5}\d{6,7}$/.test(mesin)) mesin = `${mesin.slice(0, 5)}-${mesin.slice(5)}`;
   return {
     plat: pat.plat ?? lab.plat,
     nama: pat.nama ?? lab.nama,
-    merk: pat.merk ?? lab.merk,
+    merk,
     tahun: pat.tahun ?? lab.tahun,
     rangka: pat.rangka ?? lab.rangka,
-    mesin: pat.mesin ?? lab.mesin,
+    mesin,
   };
 }
 
@@ -238,6 +243,15 @@ const NOT_NAME =
 const BPKB = /^[A-Z]\d{8}$/; // nomor BPKB: satu huruf lalu 8 angka; bukan nomor mesin
 const looksLikeBrand = (v: string) => BRANDS.includes(v.toUpperCase().split(/[ \/]/)[0]);
 const alnumOnly = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
+/** Nomor mesin sebagaimana tercetak: huruf, angka, dan tanda hubung ("G3L8E-0456065"). Spasi dibuang; garis panjang dianggap tanda hubung. */
+const engineNo = (v: string) =>
+  v
+    .toUpperCase()
+    .replace(/[‐-―−]/g, "-")
+    .replace(/[^A-Z0-9 \-]/g, "")
+    .replace(/\s*-\s*/g, "-")
+    .replace(/\s+/g, "")
+    .replace(/^-+|-+$/g, "");
 const fixVin = (c: string) => (c.length === 17 ? c.replace(/[OQ]/g, "0").replace(/I/g, "1") : c); // nomor rangka (VIN) tidak memakai huruf I, O, Q
 
 /** Hasil dari label saja. Nilai yang jelas sampah (terlalu panjang, bukan merk dikenal, mirip nomor BPKB) dibuang. */
@@ -246,7 +260,7 @@ function labelStnk(text: string): StnkResult {
   const short = (v?: string) => (v && v.length <= 60 ? v : "");
   let rangka = alnumOnly(short(f.rangka).replace(/^(?:\/?\s*NIK\s*\/?\s*)?(?:VIN)?\s*/i, ""));
   rangka = fixVin(rangka);
-  const mesin = alnumOnly(short(f.mesin));
+  const mesin = engineNo(short(f.mesin));
   const tahun = toDigits(short(f.tahun)).match(/(19|20)\d{2}/)?.[0] ?? "";
   const nama = NAME.test(short(f.nama)) && !NOT_NAME.test(f.nama ?? "") ? (f.nama as string).toUpperCase() : "";
   // "HONDA/H1B02N42L1 A/T" (kolom Merek/Type di TBPKP): hanya garis miring tepat setelah merek yang jadi spasi
@@ -258,7 +272,7 @@ function labelStnk(text: string): StnkResult {
     merk: merk || null,
     tahun: tahun || null,
     rangka: rangka.length >= 10 && rangka.length <= 18 ? rangka : null,
-    mesin: mesin.length >= 6 && mesin.length <= 15 && !BPKB.test(mesin) ? mesin : null,
+    mesin: alnumOnly(mesin).length >= 6 && alnumOnly(mesin).length <= 15 && !BPKB.test(alnumOnly(mesin)) ? mesin : null,
   };
 }
 
@@ -302,8 +316,11 @@ function stackedStnk(text: string): Partial<StnkResult> {
     // nomor mesin ada di dekat nomor rangka; bisa terpecah spasi ("JMF2E 1273053"), dan nomor BPKB (huruf + 8 angka) harus dilewati
     const hit = lines
       .slice(vinAt + 1, vinAt + 6)
-      .map(alnumOnly)
-      .find((c) => c.length >= 9 && c.length <= 14 && /[A-Z]/.test(c) && /\d/.test(c) && !BPKB.test(c) && c !== out.rangka);
+      .map(engineNo)
+      .find((c) => {
+        const a = alnumOnly(c);
+        return a.length >= 9 && a.length <= 14 && /[A-Z]/.test(a) && /\d/.test(a) && !BPKB.test(a) && a !== out.rangka;
+      });
     if (hit) out.mesin = hit;
   }
   const years = lines
