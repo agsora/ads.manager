@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { MessageCircle, Pencil } from "lucide-react";
+import { ChevronDown, MessageCircle, Pencil } from "lucide-react";
 import { PageHeader } from "@/components/shell";
-import { api, useFetch, useFilter, useToast } from "@/components/providers";
+import { api, useFetch, useFilter, useMeta, useToast } from "@/components/providers";
 import { ResourceForm } from "@/components/resource-form";
 import { Chip } from "@/components/cells";
 import { RESOURCE_MAP, isFinishedLead, type Row } from "@/lib/resources";
@@ -24,7 +24,9 @@ const isPending = (r: Row) => String(r.final_status ?? "").trim().toLowerCase() 
 export default function FollowUpBoard() {
   const f = useFilter();
   const toast = useToast();
+  const { options } = useMeta();
   const today = todayISO();
+  const [reasonOpen, setReasonOpen] = useState<number | null>(null);
   const { data: stopData } = useFetch<{ rows: Row[] }>("/api/r/optouts");
   const stopSet = useMemo(() => new Set((stopData?.rows ?? []).map((o) => normPhone(o.phone))), [stopData]);
   const bq = f.brand ? `&brand=${encodeURIComponent(f.brand)}` : "";
@@ -43,7 +45,7 @@ export default function FollowUpBoard() {
           const manual = isManual(r);
           const fuDate = manual && r.manual_followup_date ? String(r.manual_followup_date).slice(0, 10) : "";
           // di kolom manual, jatuh tempo mengikuti tanggal yang diisi sendiri (bukan umur lead)
-          return { r, age, stage: manual ? MANUAL : natural, due: manual ? !!fuDate && fuDate <= today : age >= COLS[natural - 1].due, fuDate };
+          return { r, age, natural, stage: manual ? MANUAL : natural, due: manual ? !!fuDate && fuDate <= today : age >= COLS[natural - 1].due, fuDate };
         })
         .filter((x) => !onlyDue || x.due)
         .sort((a, b) => Number(b.due) - Number(a.due) || (a.stage === MANUAL && b.stage === MANUAL ? (a.fuDate || "9999").localeCompare(b.fuDate || "9999") : 0) || (String(b.r.segment).toUpperCase() === "HOT" ? 1 : 0) - (String(a.r.segment).toUpperCase() === "HOT" ? 1 : 0) || b.age - a.age),
@@ -65,6 +67,17 @@ export default function FollowUpBoard() {
     }
   };
 
+  /** catat follow up tahap ini dengan alasan siap pakai; lead pindah ke tahap berikutnya */
+  const logFu = async (r: Row, step: number, reason: string) => {
+    try {
+      await api(`/api/r/leads/${r.id}`, "PUT", { [`followup_${step}`]: `${fmtDate(today)}: ${reason}` });
+      toast(`${r.name ?? "Lead"}: Follow Up ${step} dicatat`);
+      setReasonOpen(null);
+      reload();
+    } catch (e) {
+      toast((e as Error).message, "err");
+    }
+  };
   const setFuDate = async (r: Row, date: string) => {
     try {
       await api(`/api/r/leads/${r.id}`, "PUT", { manual_followup_date: date || null });
@@ -125,7 +138,7 @@ export default function FollowUpBoard() {
                 </select>
               )}
               <div className="space-y-2.5">
-                {items.slice(0, 60).map(({ r, age, due, fuDate }) => {
+                {items.slice(0, 60).map(({ r, age, due, fuDate, natural }) => {
                   const stopped = stopSet.has(normPhone(r.phone));
                   const wa = stopped ? "" : String(r.phone ?? "").replace(/\D/g, "").replace(/^0/, "62");
                   return (
@@ -164,6 +177,26 @@ export default function FollowUpBoard() {
                           <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="btn btn-sm !h-8 w-full !justify-center !text-[12.5px] text-[var(--good-ink)]">
                             <MessageCircle size={14} /> Chat WhatsApp
                           </a>
+                        )}
+                        {natural <= 3 && (
+                          <div>
+                            <button className="btn btn-sm !h-8 w-full !justify-between !text-[12.5px]" onClick={() => setReasonOpen(reasonOpen === Number(r.id) ? null : Number(r.id))} aria-expanded={reasonOpen === Number(r.id)}>
+                              <span>Alasan Follow Up {natural}</span>
+                              <ChevronDown size={14} className={reasonOpen === Number(r.id) ? "rotate-180" : ""} />
+                            </button>
+                            {reasonOpen === Number(r.id) && (
+                              <div className="mt-1.5 space-y-1 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] p-1.5">
+                                {(options[`fu_reason_${natural}`] ?? []).map((t) => (
+                                  <button key={t} className="w-full rounded-md bg-white px-2 py-1.5 text-left text-[12.5px] leading-snug hover:bg-[var(--sidebar)]" onClick={() => logFu(r, natural, t)}>
+                                    {t}
+                                  </button>
+                                ))}
+                                <button className="w-full rounded-md px-2 py-1 text-left text-[12px] text-[var(--muted)] hover:bg-white" onClick={() => setEditing(r)}>
+                                  Tulis sendiri…
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
