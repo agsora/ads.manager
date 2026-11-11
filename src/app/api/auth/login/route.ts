@@ -5,7 +5,7 @@ import { otpAvailable, otpOnly } from "@/lib/otp";
 import { createToken, handle, HttpError, setSessionCookie, type Session } from "@/lib/auth";
 
 export const POST = handle(async (req: Request) => {
-  if (otpAvailable() && otpOnly()) throw new HttpError(403, "Login password dimatikan. Masuk dengan kode yang dikirim ke email.");
+  if (otpAvailable() && otpOnly()) throw new HttpError(403, "Login password dimatikan. Masuk dengan tautan yang dikirim ke email.");
   const { email, password } = (await req.json()) as { email?: string; password?: string };
   if (!email || !password) throw new HttpError(400, "Email dan password wajib diisi");
   const key = email.trim().toLowerCase();
