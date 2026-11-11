@@ -46,7 +46,7 @@ export async function sendMailOne(m: { to: string; subject: string; html: string
   const kind = mailKind();
   if (kind === "smtp") {
     try {
-      await transporter().sendMail({
+      const info = await transporter().sendMail({
         // nama pengirim yang tampil di kotak masuk: "No Reply" (ubah lewat MAIL_FROM_NAME); alamat Gmail pengirim tetap yang dipakai SMTP
         from: process.env.MAIL_FROM ?? `"${process.env.MAIL_FROM_NAME || "No Reply"}" <${smtpUser()}>`,
         to: m.to,
@@ -55,6 +55,9 @@ export async function sendMailOne(m: { to: string; subject: string; html: string
         text: m.text,
         headers: { "Auto-Submitted": "auto-generated", "X-Auto-Response-Suppress": "All" },
       });
+      // Gmail bisa "menerima" pesan tetapi menolak penerimanya; catat hasilnya di log server dan anggap gagal bila ditolak
+      console.info("[mail] SMTP:", { accepted: info.accepted, rejected: info.rejected, response: info.response });
+      if (info.rejected?.length) throw Object.assign(new Error("penerima ditolak"), { code: "EENVELOPE" });
     } catch (e) {
       console.error("[mail] SMTP gagal:", (e as Error).message);
       throw new MailError(explain(e));
