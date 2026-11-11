@@ -30,8 +30,7 @@ import {
   motorQuote,
   motorTypes,
   motorYearsFor,
-  snapCarLoan,
-  snapMotorLoan,
+  limitDatunLoan,
   type CarKind,
   type Quote,
 } from "@/lib/datun";
@@ -93,6 +92,7 @@ export default function SimulasiPage() {
   const [mType, setMType] = useState("N MAX TURBO");
   const [mYear, setMYear] = useState(2026);
   const [mLoan, setMLoan] = useState("15000000");
+  const [autoLoan, setAutoLoan] = useState(true);
   // both
   const [otrManual, setOtrManual] = useState("");
   const [ltv, setLtv] = useState("80");
@@ -143,18 +143,23 @@ export default function SimulasiPage() {
   const tenors = isCar ? CAR_TENORS : MOTOR_TENORS;
   const range = isCar ? CAR_LOAN_RANGE : MOTOR_LOAN_RANGE;
   const step = isCar ? CAR_STEP : MOTOR_STEP;
-  const typedLoan = digits(isCar ? loan : mLoan);
-  const usedLoan = isCar ? snapCarLoan(typedLoan) : snapMotorLoan(typedLoan);
   const maxLoan = otr ? (isCar ? carMaxLoan(otr, ltvMax) : motorMaxLoan(otr, ltvMax)) : null;
+  const typedLoan = autoLoan ? maxLoan ?? 0 : Math.min(digits(isCar ? loan : mLoan), maxLoan ?? 0);
+  const usedLoan = limitDatunLoan(typedLoan, maxLoan, mode);
+  const changeLoan = (value: string) => {
+    const capped = Math.min(digits(value), maxLoan ?? 0);
+    (isCar ? setLoan : setMLoan)(capped ? String(capped) : "");
+  };
 
   const quoteFor = (l: number, t: number): Quote | null => {
+    if (!maxLoan || l <= 0 || l > maxLoan) return null;
     if (!isCar) return motorQuote({ ro: mRo }, l, t);
     return otr && eYear ? carQuote({ kind, ro, mahal, otr, unitYear: eYear }, l, t) : null;
   };
   const rows = useMemo(
     () => tenors.map((t) => quoteFor(usedLoan, t)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [mode, kind, ro, mahal, mRo, otr, eYear, usedLoan],
+    [mode, kind, ro, mahal, mRo, otr, eYear, usedLoan, maxLoan],
   );
   const maxRows = useMemo(
     () => (maxLoan ? tenors.map((t) => quoteFor(maxLoan, t)) : []),
@@ -169,12 +174,12 @@ export default function SimulasiPage() {
   const wa = (isCar ? tenors : tenors).filter((t) => share.includes(t));
   const waRows = wa.map((t) => quoteFor(usedLoan, t)).filter((q): q is Quote => !!q);
   const text =
-    `Simulasi dana tunai (perkiraan, bukan penawaran mengikat)\nUnit: ${unitLabel}\nPinjaman: ${fmtMoney(usedLoan)}\n` +
+    (usedLoan ? `Simulasi dana tunai (perkiraan, bukan penawaran mengikat)\nUnit: ${unitLabel}\nPinjaman: ${fmtMoney(usedLoan)}\n` +
     waRows.map((q) => `• ${q.tenor} bulan: ${fmtMoney(q.installment)}/bulan`).join("\n") +
     `\nAngsuran sudah termasuk biaya administrasi dan asuransi. Besaran akhir mengikuti hasil analisis kredit. Syarat dan ketentuan berlaku. Perusahaan terdaftar dan diawasi OJK.` +
-    (ref.trim() ? ` [ref: ${ref.trim()}]` : "");
+    (ref.trim() ? ` [ref: ${ref.trim()}]` : "") : "Simulasi belum tersedia. Periksa harga OTR dan batas LTV kendaraan.");
   const ph = phone.replace(/\D/g, "").replace(/^0/, "62");
-  const link = ph ? `https://wa.me/${ph}?text=${encodeURIComponent(text)}` : "";
+  const link = ph && usedLoan && waRows.length ? `https://wa.me/${ph}?text=${encodeURIComponent(text)}` : "";
   const toggle = (m: number) => setShare((t) => (t.includes(m) ? t.filter((x) => x !== m) : [...t, m]));
   const tenorLabel = (t: number) => `${t} bulan`;
 
@@ -224,12 +229,19 @@ export default function SimulasiPage() {
               <p className="mt-1 text-[12px] text-[var(--muted)]">{manual ? "Memakai OTR yang Anda isi." : listOtr ? `Otomatis dari daftar harga: ${fmtMoney(listOtr)}. Isi kolom ini hanya bila ingin memakai OTR lain.` : "Harga unit ini tidak tersedia di daftar, isi OTR manual."}</p>
             </div>
 
+            <label className="flex items-center gap-2 text-[13px]">
+              <input type="checkbox" checked={autoLoan} onChange={(e) => {
+                if (!e.target.checked) (isCar ? setLoan : setMLoan)(maxLoan ? String(maxLoan) : "");
+                setAutoLoan(e.target.checked);
+              }} />
+              Otomatis gunakan pinjaman maksimal
+            </label>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label" htmlFor="sim-loan">
                   Pinjaman (Rp)
                 </label>
-                <input id="sim-loan" className="input" inputMode="numeric" value={typedLoan ? typedLoan.toLocaleString("id-ID") : ""} onChange={(e) => (isCar ? setLoan(e.target.value) : setMLoan(e.target.value))} />
+                <input id="sim-loan" className="input" inputMode="numeric" readOnly={autoLoan} disabled={!maxLoan} aria-describedby="sim-loan-limit" value={typedLoan ? typedLoan.toLocaleString("id-ID") : ""} onChange={(e) => changeLoan(e.target.value)} />
               </div>
               <div>
                 <label className="label" htmlFor="sim-ltv">
@@ -238,8 +250,8 @@ export default function SimulasiPage() {
                 <input id="sim-ltv" className="input" inputMode="decimal" value={ltv} onChange={(e) => setLtv(e.target.value)} />
               </div>
             </div>
-            <p className="-mt-2 text-[12px] text-[var(--muted)]">
-              Pinjaman dihitung per kelipatan {fmtMoney(step)} ({fmtMoney(range[0])} sampai {fmtMoney(range[1])}). {typedLoan && usedLoan !== typedLoan ? `Dipakai: ${fmtMoney(usedLoan)}. ` : ""}Batas LTV bukan dari file Excel, jadi bisa Anda ubah sesuai kebijakan.
+            <p id="sim-loan-limit" className="-mt-2 text-[12px] text-[var(--muted)]">
+              {maxLoan ? `Pinjaman dibatasi maksimal ${fmtMoney(maxLoan)} dan menyesuaikan otomatis jika batas turun. ` : "Belum ada pinjaman yang memenuhi batas OTR dan LTV. "}Nonaktifkan pilihan otomatis untuk mengisi nominal yang lebih kecil. Pinjaman dihitung per kelipatan {fmtMoney(step)} ({fmtMoney(range[0])} sampai {fmtMoney(range[1])}). {typedLoan && usedLoan !== typedLoan ? `Dipakai: ${fmtMoney(usedLoan)}. ` : ""}Batas LTV bukan dari file Excel, jadi bisa Anda ubah sesuai kebijakan.
             </p>
           </div>
         </Card>
@@ -260,10 +272,10 @@ export default function SimulasiPage() {
             <QuoteTable rows={rows} tenors={tenors} label={tenorLabel} />
           </Card>
 
-          {maxLoan && (
+          {maxLoan && !autoLoan && (
             <Card title="Pada pinjaman maksimal" subtitle={`${fmtMoney(maxLoan)} · ${Math.round(ltvMax * 100)}% dari OTR`}>
               <QuoteTable rows={maxRows} tenors={tenors} label={tenorLabel} />
-              <button className="btn mt-3" onClick={() => (isCar ? setLoan(String(maxLoan)) : setMLoan(String(maxLoan)))}>
+              <button className="btn mt-3" onClick={() => setAutoLoan(true)}>
                 Pakai pinjaman maksimal
               </button>
             </Card>
@@ -300,6 +312,7 @@ export default function SimulasiPage() {
             <div className="flex flex-wrap gap-2">
               <button
                 className="btn"
+                disabled={!usedLoan || !waRows.length}
                 onClick={async () => {
                   try {
                     await navigator.clipboard.writeText(text);

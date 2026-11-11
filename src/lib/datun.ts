@@ -169,3 +169,12 @@ export function motorMaxLoan(otr: number, ltvMax: number): number | null {
   return m < MOTOR_LOAN_RANGE[0] ? null : Math.min(m, MOTOR_LOAN_RANGE[1]);
 }
 export const snapMotorLoan = (loan: number) => Math.min(Math.max(floorTo(loan, MOTOR_STEP), MOTOR_LOAN_RANGE[0]), MOTOR_LOAN_RANGE[1]);
+
+/** Apply both the quotation tier and the unit's cap before calculating or sharing a loan. */
+export function limitDatunLoan(loan: number, maximum: number | null, mode: "mobil" | "motor"): number {
+  if (maximum === null || !Number.isFinite(maximum) || maximum <= 0 || !Number.isFinite(loan)) return 0;
+  const snap = mode === "mobil" ? snapCarLoan : snapMotorLoan;
+  const minimum = mode === "mobil" ? CAR_LOAN_RANGE[0] : MOTOR_LOAN_RANGE[0];
+  if (maximum < minimum) return 0;
+  return Math.min(snap(Math.min(Math.max(0, loan), maximum)), maximum);
+}
