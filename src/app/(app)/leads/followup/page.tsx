@@ -192,19 +192,32 @@ export default function FollowUpBoard() {
                             {reasonOpen === Number(r.id) && (
                               <div className="mt-1.5 space-y-1 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] p-1.5">
                                 {(options[`fu_reason_${natural}`] ?? []).map((t) => (
-                                  <button key={t} className="w-full rounded-md bg-white px-2 py-1.5 text-left text-[12.5px] leading-snug hover:bg-[var(--sidebar)]" onClick={() => logFu(r, natural, t)}>
+                                  <button key={t} type="button" className={`w-full rounded-md px-2 py-1.5 text-left text-[12.5px] leading-snug hover:bg-[var(--sidebar)] ${draft === t ? "bg-[var(--sidebar)] font-semibold" : "bg-white"}`} onClick={() => setDraft(t)}>
                                     {t}
                                   </button>
                                 ))}
                                 <form
-                                  className="flex items-center gap-1.5 pt-0.5"
+                                  className="space-y-1.5 pt-0.5"
                                   onSubmit={(e) => {
                                     e.preventDefault();
                                     if (draft.trim()) logFu(r, natural, draft.trim());
                                   }}
                                 >
-                                  <input className="input !h-8 min-w-0 flex-1 !px-2 !text-[12.5px]" placeholder="Ketik alasan sendiri…" value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="Alasan follow up" />
-                                  <button type="submit" className="btn btn-sm btn-accent !h-8 !px-3 !text-[12.5px]" disabled={!draft.trim()}>
+                                  <textarea
+                                    className="input !min-h-[56px] w-full !px-2 !py-1.5 !text-[12.5px]"
+                                    rows={2}
+                                    placeholder="Pilih alasan di atas, atau ketik sendiri…"
+                                    value={draft}
+                                    onChange={(e) => setDraft(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" && !e.shiftKey) {
+                                        e.preventDefault();
+                                        if (draft.trim()) logFu(r, natural, draft.trim());
+                                      }
+                                    }}
+                                    aria-label="Alasan follow up"
+                                  />
+                                  <button type="submit" className="btn btn-sm btn-accent !h-8 w-full !justify-center !text-[12.5px]" disabled={!draft.trim()}>
                                     Kirim
                                   </button>
                                 </form>
