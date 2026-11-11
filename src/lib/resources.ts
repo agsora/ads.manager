@@ -247,6 +247,7 @@ export const RESOURCES: Resource[] = [
     sheetHints: ["kpi"],
     defaultSort: "period",
     fields: [
+      { key: "title", label: "Judul KPI", type: "text", aliases: ["judul", "judul kpi", "nama kpi", "kpi"] },
       { key: "period", label: "Bulan (tgl 1)", type: "date", required: true },
       { key: "brand", label: "Brand", type: "brand", required: true },
       { key: "target_posts", label: "Target Jumlah Posting", type: "number" },
