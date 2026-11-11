@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { MessageCircle, Pencil } from "lucide-react";
 import { PageHeader } from "@/components/shell";
-import { api, useFetch, useFilter, useMeta, useToast } from "@/components/providers";
+import { api, useFetch, useFilter, useToast } from "@/components/providers";
 import { ResourceForm } from "@/components/resource-form";
 import { Chip } from "@/components/cells";
 import { RESOURCE_MAP, isFinishedLead, type Row } from "@/lib/resources";
@@ -21,25 +21,12 @@ const MANUAL = 5;
 const isManual = (r: Row) => String(r.manual_followup ?? "") === "Ya";
 const isPending = (r: Row) => String(r.final_status ?? "").trim().toLowerCase() === "pending";
 
-const stageGhost = (r: Row) => !!r.followup_2 && !!r.followup_3;
-
 export default function FollowUpBoard() {
   const f = useFilter();
   const toast = useToast();
-  const { options } = useMeta();
   const today = todayISO();
-  const fillTemplate = (t: string, r: Row) =>
-    t.replaceAll("{nama}", String(r.name ?? "Bapak/Ibu")).replaceAll("{brand}", String(r.brand ?? "kami")).replaceAll("{kebutuhan}", String(r.need ?? "kebutuhan Anda"));
-  // "Balasan WhatsApp" entries from the Bank Caption join the built-in templates (same placeholders)
   const { data: stopData } = useFetch<{ rows: Row[] }>("/api/r/optouts");
   const stopSet = useMemo(() => new Set((stopData?.rows ?? []).map((o) => normPhone(o.phone))), [stopData]);
-  const { data: snippets } = useFetch<{ rows: Row[] }>("/api/r/snippets");
-  const templatesFor = (r: Row, ghost: boolean) => {
-    const seg = String(r.segment ?? "").toLowerCase();
-    const key = ghost ? "wa_template_ghost" : seg === "hot" ? "wa_template_hot" : seg === "warm" ? "wa_template_warm" : "wa_template_cold";
-    const own = (snippets?.rows ?? []).filter((x) => x.kind === "Balasan WhatsApp" && (!x.brand || x.brand === r.brand)).map((x) => String(x.body ?? ""));
-    return [...(options[key] ?? []), ...own];
-  };
   const bq = f.brand ? `&brand=${encodeURIComponent(f.brand)}` : "";
   const { data, reload } = useFetch<{ rows: Row[] }>(`/api/r/leads?from=${addDays(today, -90)}&to=${today}${bq}`);
   const [editing, setEditing] = useState<Row | null>(null);
@@ -187,24 +174,6 @@ export default function FollowUpBoard() {
                           <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="btn btn-sm !h-7 !px-2 !text-[12px] text-[var(--good-ink)]">
                             <MessageCircle size={13} /> WA
                           </a>
-                        )}
-                        {wa && (
-                          <select
-                            className="input !h-7 !w-[116px] !px-1.5 !text-[12px]"
-                            value=""
-                            aria-label="Kirim template WA"
-                            onChange={(e) => {
-                              const t = templatesFor(r, age >= 14 || stageGhost(r))[Number(e.target.value)];
-                              if (t) window.open(`https://wa.me/${wa}?text=${encodeURIComponent(fillTemplate(t, r))}`, "_blank");
-                            }}
-                          >
-                            <option value="">Template…</option>
-                            {templatesFor(r, age >= 14 || stageGhost(r)).map((t, i) => (
-                              <option key={i} value={i}>
-                                {t.slice(0, 40)}
-                              </option>
-                            ))}
-                          </select>
                         )}
                         {c.stage === MANUAL && (
                           <>
