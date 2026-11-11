@@ -141,7 +141,7 @@ const STNK_LABELS: [string, RegExp][] = [
   ["plat", /N[O0](?:MOR|\.)?\s*(?:REGISTRASI|REG\.?|POLISI)/gi],
   ["nama", /NAMA\s*PEMILIK/gi],
   ["alamat", /ALAMAT/gi],
-  ["merk", /MERK|MEREK(?:\s*\/\s*TYPE)?/gi],
+  ["merk", /MER?EK(?:\s*\/\s*(?:TYPE|TIPE))?|MERK(?:\s*\/\s*(?:TYPE|TIPE))?/gi],
   ["tipe", /TYPE|TIPE/gi],
   ["jenis", /JENIS/gi],
   ["model", /MODEL/gi],
@@ -156,6 +156,8 @@ const STNK_LABELS: [string, RegExp][] = [
   ["lokasi", /KODE\s*LOKASI/gi],
   ["urut", /N[O0](?:MOR|\.)?\s*URUT\s*PENDAFTARAN/gi],
   ["berlaku", /BERLAKU\s*(?:S\/D|SAMPAI|HINGGA)/gi],
+  // sublabel bahasa Inggris di bawah tiap label: bukan nilai, tapi harus jadi batas supaya tidak ikut terbaca sebagai nilai
+  ["en", /NAME\s*OF\s*OWNER|VEHICLE\s*REGISTRATION\s*NUMBER|VEHICLE\s*IDENTITY\s*NUMBER|ENGINE\s*NUMBER|MANUFACTURE\s*YEAR|REGISTRATION\s*YEAR|LICENSE\s*PLATE\s*COLOR|FUEL\s*\/?\s*ENERGY\s*SOURCES?|DATE\s*OF\s*EXPIRE|LOCATION\s*CODE|CYLINDER\s*CAPACITY|ID\s*CARD\s*NUMBER|COMPANY\s*REGISTRATION\s*NUMBER|REGISTRATION\s*QUEUE\s*NUMBER|OWNERSHIP\s*DOCUMENT\s*NUMBER/gi],
 ];
 
 /** Pecah teks OCR menjadi pasangan label → nilai, apa pun tata letaknya (satu label per baris, dua label sejajar, atau nilai di baris bawah). */
@@ -170,7 +172,7 @@ export function stnkFields(text: string): Record<string, string> {
   const out: Record<string, string> = {};
   kept.forEach((h, i) => {
     const raw = flat.slice(h.end, kept[i + 1]?.start ?? flat.length);
-    const v = raw.replace(/⏎/g, " ").replace(/^[\s:.;,\-]+/, "").replace(/\s+/g, " ").trim();
+    const v = raw.replace(/⏎/g, " ").replace(/^[\s:.;,\-\/]+/, "").replace(/\s+/g, " ").trim();
     if (v && !(h.key in out)) out[h.key] = v;
   });
   return out;
@@ -209,87 +211,101 @@ export interface StnkResult {
 
 /** STNK: No. Registrasi (plat), Nama Pemilik, Merk, Type, Tahun Pembuatan, No. Rangka, No. Mesin. Semua hasil perlu dicek petugas. */
 export function parseStnk(text: string): StnkResult {
+  // 1) dari bentuk nilainya (tahan terhadap tata letak bertumpuk dan label yang rusak); 2) dari label, hanya untuk yang masih kosong
+  const pat = stackedStnk(text);
+  const lab = labelStnk(text);
+  return {
+    plat: pat.plat ?? lab.plat,
+    nama: pat.nama ?? lab.nama,
+    merk: pat.merk ?? lab.merk,
+    tahun: pat.tahun ?? lab.tahun,
+    rangka: pat.rangka ?? lab.rangka,
+    mesin: pat.mesin ?? lab.mesin,
+  };
+}
+
+const BRANDS = [
+  "HONDA", "YAMAHA", "SUZUKI", "KAWASAKI", "VESPA", "PIAGGIO", "TVS", "BAJAJ", "KTM", "KYMCO", "SYM", "GESITS", "VIAR", "UNITED", "BENELLI", "DUCATI", "HARLEY", "ROYAL", "TRIUMPH", "APRILIA",
+  "TOYOTA", "DAIHATSU", "MITSUBISHI", "NISSAN", "ISUZU", "MAZDA", "HYUNDAI", "KIA", "WULING", "DFSK", "CHERY", "BMW", "MERCEDES", "FORD", "CHEVROLET", "DATSUN", "SUBARU", "LEXUS", "VOLKSWAGEN", "MG", "HINO", "FUSO", "SUZUKI",
+];
+const NOT_NAME =
+  /ALAMAT|SEPEDA|MOTOR|MOBIL|BENSIN|HITAM|PUTIH|MERAH|BIRU|SOLO|MODEL|JENIS|NOMOR|SURAT|KEPOLISIAN|PERUM|JALAN|KELURAHAN|KECAMATAN|KOTA|KABUPATEN|KEPALA|REGISTRASI|PEMILIK|NAME|OWNER|ADDRESS|VEHICLE|NUMBER|CERTIFICATE|POLICE|INDONESIA|NEGARA|REPUBLIK|TANDA|KENDARAAN|FASILITAS|BARU|DIREKTUR|BERLAKU|LOKASI|DATE|EXPIRE|VALIDATION|PENGESAHAN/;
+const BPKB = /^[A-Z]\d{8}$/; // nomor BPKB: satu huruf lalu 8 angka; bukan nomor mesin
+const looksLikeBrand = (v: string) => BRANDS.includes(v.toUpperCase().split(/[ \/]/)[0]);
+const alnumOnly = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
+const fixVin = (c: string) => (c.length === 17 ? c.replace(/[OQ]/g, "0").replace(/I/g, "1") : c); // nomor rangka (VIN) tidak memakai huruf I, O, Q
+
+/** Hasil dari label saja. Nilai yang jelas sampah (terlalu panjang, bukan merk dikenal, mirip nomor BPKB) dibuang. */
+function labelStnk(text: string): StnkResult {
   const f = stnkFields(text);
-  const alnum = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  // nilai nomor rangka bisa memuat sisa label ("NIK/VIN") bila OCR memotongnya
-  let rangka = alnum((f.rangka ?? "").replace(/^(?:\/?\s*NIK\s*\/?\s*VIN)/i, ""));
-  if (rangka.length === 17) rangka = rangka.replace(/[OQ]/g, "0").replace(/I/g, "1"); // nomor rangka (VIN) tidak memakai huruf I, O, Q
-  const mesin = alnum(f.mesin ?? "");
-  const tahun = toDigits(f.tahun ?? "").match(/(19|20)\d{2}/)?.[0] ?? "";
-  const nama = NAME.test(f.nama ?? "") ? (f.nama as string).toUpperCase() : "";
-  // "HONDA/H1B02N42L1 A/T" (kolom Merek/Type di TBPKP) → merk dan type dipisah spasi
-  const merk = [f.merk, f.tipe].filter(Boolean).join(" ").toUpperCase().replace(/\s*\/\s*/, " ");
-  const base: StnkResult = {
-    plat: f.plat ? normPlat(f.plat) : null,
+  const short = (v?: string) => (v && v.length <= 60 ? v : "");
+  let rangka = alnumOnly(short(f.rangka).replace(/^(?:\/?\s*NIK\s*\/?\s*)?(?:VIN)?\s*/i, ""));
+  rangka = fixVin(rangka);
+  const mesin = alnumOnly(short(f.mesin));
+  const tahun = toDigits(short(f.tahun)).match(/(19|20)\d{2}/)?.[0] ?? "";
+  const nama = NAME.test(short(f.nama)) && !NOT_NAME.test(f.nama ?? "") ? (f.nama as string).toUpperCase() : "";
+  // "HONDA/H1B02N42L1 A/T" (kolom Merek/Type di TBPKP): hanya garis miring tepat setelah merek yang jadi spasi
+  const merkRaw = [short(f.merk), short(f.tipe)].filter(Boolean).join(" ").toUpperCase().replace(/^([A-Z]+)\s*\/\s*/, "$1 ");
+  const merk = looksLikeBrand(merkRaw) ? merkRaw : "";
+  return {
+    plat: f.plat ? normPlat(short(f.plat)) : null,
     nama: nama || null,
     merk: merk || null,
     tahun: tahun || null,
-    rangka: rangka.length >= 10 && rangka.length <= 20 ? rangka : null,
-    mesin: mesin.length >= 6 && mesin.length <= 15 ? mesin : null,
+    rangka: rangka.length >= 10 && rangka.length <= 18 ? rangka : null,
+    mesin: mesin.length >= 6 && mesin.length <= 15 && !BPKB.test(mesin) ? mesin : null,
   };
-  // foto STNK asli biasanya "bertumpuk": semua label di kolom kiri dan semua nilai di kolom kanan, jadi nilai tidak ada di sebelah labelnya.
-  // Data yang masih kosong dicari dari bentuk nilainya (plat, nomor rangka 17 karakter, merk dikenal, tahun yang berdiri sendiri).
-  if (stnkScore(base) < 6) {
-    const extra = stackedStnk(text, base);
-    for (const k of Object.keys(extra) as (keyof StnkResult)[]) if (!base[k] && extra[k]) base[k] = extra[k] ?? null;
-  }
-  return base;
 }
 
-const BRANDS = ["HONDA", "YAMAHA", "SUZUKI", "KAWASAKI", "VESPA", "PIAGGIO", "TVS", "BAJAJ", "KTM", "TOYOTA", "DAIHATSU", "MITSUBISHI", "NISSAN", "ISUZU", "MAZDA", "HYUNDAI", "KIA", "WULING", "DFSK", "CHERY", "BMW", "MERCEDES", "FORD", "CHEVROLET", "DATSUN", "SUBARU"];
-const NOT_NAME = /ALAMAT|SEPEDA|MOTOR|MOBIL|BENSIN|HITAM|PUTIH|MERAH|BIRU|SOLO|MODEL|JENIS|NOMOR|SURAT|KEPOLISIAN|PERUM|JALAN|KELURAHAN|KECAMATAN|KOTA|KABUPATEN|KEPALA|REGISTRASI|PEMILIK/;
-
-/** Cari data STNK dari bentuk nilainya saja (tidak bergantung letak label). Hanya mengisi yang diminta; hasilnya tetap perlu dicek petugas. */
-function stackedStnk(text: string, have: StnkResult): Partial<StnkResult> {
+/** Cari data STNK dari bentuk nilainya saja (tidak bergantung letak label). Hasilnya tetap perlu dicek petugas. */
+function stackedStnk(text: string): Partial<StnkResult> {
   const lines = text.split(/\r?\n/).map((l) => l.replace(/[\t ]+/g, " ").trim().toUpperCase()).filter(Boolean);
   const out: Partial<StnkResult> = {};
   let platAt = -1;
-  if (!have.plat) {
-    lines.forEach((l, i) => {
-      if (platAt >= 0) return;
-      const m = l.match(/^([A-Z0-9]{1,2}) ?([0-9OIS]{1,4}) ?([A-Z]{1,3})$/);
-      if (m && /[A-Z]/.test(m[1]) && /\d/.test(m[2])) {
-        const p = normPlat(l);
-        if (p) {
-          out.plat = p;
-          platAt = i;
-        }
+  lines.forEach((l, i) => {
+    if (platAt >= 0) return;
+    const m = l.match(/^([A-Z0-9]{1,2}) ?([0-9OIS]{1,4}) ?([A-Z]{1,3})$/);
+    if (m && /[A-Z]/.test(m[1]) && /\d/.test(m[2])) {
+      const p = normPlat(l);
+      if (p) {
+        out.plat = p;
+        platAt = i;
       }
-    });
-  }
-  if (!have.nama) {
-    const from = platAt >= 0 ? platAt + 1 : 0;
-    const hit = lines.slice(from, from + 4).find((l) => /^[A-Z][A-Z .'\-]{2,59}$/.test(l) && !NOT_NAME.test(l) && !BRANDS.includes(l));
-    if (hit && platAt >= 0) out.nama = hit;
+    }
+  });
+  if (platAt >= 0) {
+    const hit = lines.slice(platAt + 1, platAt + 5).find((l) => /^[A-Z][A-Z .'\-]{2,59}$/.test(l) && !NOT_NAME.test(l) && !looksLikeBrand(l));
+    if (hit) out.nama = hit;
   }
   let vinAt = -1;
-  if (!have.rangka) {
-    lines.forEach((l, i) => {
-      if (vinAt >= 0) return;
-      const c = l.replace(/[^A-Z0-9]/g, "");
-      if (c.length === 17 && /[A-Z]/.test(c) && /\d/.test(c) && /^M/.test(c)) {
-        out.rangka = c.replace(/[OQ]/g, "0").replace(/I/g, "1");
-        vinAt = i;
-      }
-    });
-  }
-  if (!have.mesin) {
-    const from = vinAt >= 0 ? vinAt + 1 : 0;
-    const hit = lines.slice(from, from + 4).map((l) => l.replace(/[^A-Z0-9]/g, "")).find((c) => c.length >= 8 && c.length <= 14 && /[A-Z]/.test(c) && /\d/.test(c) && c !== out.rangka);
-    if (hit && vinAt >= 0) out.mesin = hit;
-  }
-  if (!have.tahun) {
-    const years = lines.map((l) => l.match(/^\W*((?:19|20)\d{2})\W*$/)?.[1]).filter(Boolean).map(Number).filter((y) => y >= 1990 && y <= new Date().getFullYear() + 1);
-    if (years.length) out.tahun = String(Math.min(...years)); // tahun pembuatan lebih tua dari tahun registrasi
-  }
-  if (!have.merk) {
-    const bi = lines.findIndex((l) => BRANDS.includes(l.split(/[ \/]/)[0]));
-    if (bi >= 0) {
-      const brand = lines[bi].split(/[ \/]/)[0];
-      const same = lines[bi].slice(brand.length).replace(/^[\s\/]+/, "");
-      const next = same || lines.slice(bi + 1, bi + 3).find((l) => /^[A-Z0-9][A-Z0-9 \/.\-]{3,24}$/.test(l) && /\d/.test(l) && l.replace(/[^A-Z0-9]/g, "") !== out.rangka);
-      out.merk = [brand, next].filter(Boolean).join(" ");
+  lines.forEach((l, i) => {
+    if (vinAt >= 0) return;
+    const c = alnumOnly(l);
+    if (c.length === 17 && /[A-Z]/.test(c) && /\d/.test(c) && /^M/.test(c)) {
+      out.rangka = fixVin(c);
+      vinAt = i;
     }
+  });
+  if (vinAt >= 0) {
+    // nomor mesin ada di dekat nomor rangka; bisa terpecah spasi ("JMF2E 1273053"), dan nomor BPKB (huruf + 8 angka) harus dilewati
+    const hit = lines
+      .slice(vinAt + 1, vinAt + 6)
+      .map(alnumOnly)
+      .find((c) => c.length >= 9 && c.length <= 14 && /[A-Z]/.test(c) && /\d/.test(c) && !BPKB.test(c) && c !== out.rangka);
+    if (hit) out.mesin = hit;
+  }
+  const years = lines
+    .map((l) => l.match(/^\W*((?:19|20)\d{2})\W*$/)?.[1])
+    .filter(Boolean)
+    .map(Number)
+    .filter((y) => y >= 1990 && y <= new Date().getFullYear() + 1);
+  if (years.length) out.tahun = String(Math.min(...years)); // tahun pembuatan lebih tua dari tahun registrasi
+  const bi = lines.findIndex((l) => looksLikeBrand(l));
+  if (bi >= 0) {
+    const brand = lines[bi].split(/[ \/]/)[0];
+    const same = lines[bi].slice(brand.length).replace(/^[\s\/]+/, "");
+    const next = same || lines.slice(bi + 1, bi + 3).find((l) => /^[A-Z0-9][A-Z0-9 \/.\-]{3,24}$/.test(l) && /\d/.test(l) && alnumOnly(l) !== out.rangka && !BPKB.test(alnumOnly(l)));
+    out.merk = [brand, next].filter(Boolean).join(" ");
   }
   return out;
 }
@@ -356,14 +372,29 @@ export async function readIdPhoto(file: Blob, name: string, kind: "ktp" | "kk" |
   const enough = (t: string) => score(t) >= (kind === "stnk" ? 5 : 10);
   if (gate && !(await gate(2))) throw new OcrQuotaError("Kuota gratis OCR habis");
   let text = await ocr(file, name, key, 2, table);
+  let text3: string | null = null;
   if (!enough(text) && (!gate || (await gate(3)))) {
     try {
-      const t3 = await ocr(file, name, key, 3, table);
-      if (score(t3) > score(text)) text = t3;
+      text3 = await ocr(file, name, key, 3, table);
+      if (kind !== "stnk" && score(text3) > score(text)) text = text3;
     } catch (e) {
       if (e instanceof OcrQuotaError) throw e;
       /* Engine 3 sedang sibuk: pakai hasil Engine 2 */
     }
   }
-  return kind === "ktp" ? { kind, ...parseKtp(text) } : kind === "kk" ? { kind, ...parseKk(text) } : { kind, ...parseStnk(text) };
+  if (kind === "stnk") return { kind, ...mergeStnk(parseStnk(text), text3 ? parseStnk(text3) : null) };
+  return kind === "ktp" ? { kind, ...parseKtp(text) } : { kind, ...parseKk(text) };
+}
+
+/** Nomor rangka (VIN) yang wajar: 17 karakter dan 6 karakter terakhir (nomor urut produksi) berupa angka. */
+const vinOk = (v: string | null) => !!v && v.length === 17 && /\d{6}$/.test(v);
+
+/**
+ * Gabung hasil dua mesin OCR data demi data: tiap mesin sering benar di bagian yang berbeda (satu membaca nomor rangka,
+ * yang lain merk dan tahun). Untuk nomor rangka dipilih yang bentuknya wajar; selain itu hasil Engine 2 didahulukan.
+ */
+export function mergeStnk(a: StnkResult, b: StnkResult | null): StnkResult {
+  if (!b) return a;
+  const pick = <K extends keyof StnkResult>(k: K): StnkResult[K] => (a[k] ?? b[k]) as StnkResult[K];
+  return { plat: pick("plat"), nama: pick("nama"), merk: pick("merk"), tahun: pick("tahun"), mesin: pick("mesin"), rangka: vinOk(a.rangka) || !vinOk(b.rangka) ? pick("rangka") : b.rangka };
 }

@@ -248,7 +248,7 @@ export function DocPanel({ values, onPatch }: { values: Record<string, string>; 
         <Slot title="KTP pemohon" hint="mengisi NIK (dan nama bila masih kosong)" kind="ktp" onRead={readNik("pemohon")} score={scoreNik} enough={10} onQuota={q} onPick={pick} />
         <Slot title="KTP penjamin (tidak wajib)" hint="mengisi NIK Penjamin" kind="ktp" onRead={readNik("penjamin")} score={scoreNik} enough={10} onQuota={q} onPick={pick} />
         <Slot title="Kartu Keluarga" hint="mengisi No. KK dan menampilkan NIK anggota" kind="kk" onRead={readKk} score={scoreKk} enough={10} onQuota={q} onPick={pick} />
-        <Slot title="STNK" hint="mengisi no. polisi, nama pemilik, merk/tipe, tahun, no. rangka, no. mesin" kind="stnk" onRead={readStnk} score={scoreStnk} enough={4} onQuota={q} onPick={pick} />
+        <Slot title="STNK" hint="mengisi no. polisi, nama pemilik, merk/tipe, tahun, no. rangka, no. mesin" kind="stnk" onRead={readStnk} score={scoreStnk} enough={5} onQuota={q} onPick={pick} />
       </div>
       {checks.length > 0 && <p className="mt-2 text-[12px] text-[var(--ink-2)]">{checks.join(" · ")}</p>}
       <p className="mt-2 text-[11.5px] text-[var(--muted)]">
