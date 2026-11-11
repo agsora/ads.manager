@@ -168,20 +168,20 @@ export default function FollowUpBoard() {
                           <input id={`fu-${r.id}`} type="date" className="input mt-1.5 !h-8 w-full !px-2 !text-[12.5px]" min={today} value={fuDate} onChange={(e) => setFuDate(r, e.target.value)} />
                         </div>
                       )}
-                      <div className="mt-2.5 flex flex-wrap gap-1.5">
-                        {stopped && <span className="chip !border-[#e4b7ab] !bg-[#fbefec] !text-[var(--critical-ink)]">Jangan dihubungi</span>}
+                      <div className="mt-2.5 space-y-1.5">
+                        {stopped && <div className="chip !border-[#e4b7ab] !bg-[#fbefec] !text-[var(--critical-ink)]">Jangan dihubungi</div>}
                         {wa && (
-                          <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="btn btn-sm !h-7 !px-2 !text-[12px] text-[var(--good-ink)]">
-                            <MessageCircle size={13} /> WA
+                          <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="btn btn-sm !h-8 w-full !justify-center !text-[12.5px] text-[var(--good-ink)]">
+                            <MessageCircle size={14} /> Chat WhatsApp
                           </a>
                         )}
                         {c.stage === MANUAL && (
-                          <>
+                          <div className="grid grid-cols-2 gap-1.5">
                             <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => close(r, "Deal")}>Deal</button>
                             <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => setManual(r, false)}>Keluarkan</button>
                             <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => close(r, "Ghosting")}>Ghosting</button>
                             <button className="btn btn-sm !h-7 !px-2 !text-[12px]" onClick={() => close(r, "Cancel")}>Cancel</button>
-                          </>
+                          </div>
                         )}
                       </div>
                     </div>
