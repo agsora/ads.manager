@@ -57,3 +57,8 @@ reflected-disk-*.json
 # local secrets
 api key.txt
 *.key.txt
+
+# kunci API dan data pribadi lokal (jangan di-commit)
+key *.txt
+28 deal*.csv
+*.xlsx
