@@ -197,6 +197,12 @@ export function normPlat(v: string): string | null {
     if (!m) return null;
     [area, num, seri] = [toLetters(m[1]), toDigits(m[2]), m[3]];
   }
+  // kode wilayah yang tidak ada biasanya salah baca satu huruf (EM → BM, BN → BM)
+  if (area && !PLATE_AREAS.has(area)) {
+    const alt: Record<string, string> = { E: "B", N: "M", M: "N", B: "E", O: "D", Q: "D" };
+    const fixed = [...area].flatMap((c, i) => (alt[c] ? [area.slice(0, i) + alt[c] + area.slice(i + 1)] : [])).find((a) => PLATE_AREAS.has(a));
+    if (fixed) area = fixed;
+  }
   return /^[A-Z]{1,2}$/.test(area) && PLATE_AREAS.has(area) && /^\d{1,4}$/.test(num) && /^[A-Z]{0,3}$/.test(seri) ? [area, num, seri].filter(Boolean).join(" ") : null;
 }
 
@@ -286,7 +292,9 @@ function stackedStnk(text: string): Partial<StnkResult> {
   // beberapa teks lain mirip plat (mis. kode type "B6H"): pilih yang paling meyakinkan, yaitu angka 3-4 digit dan baris yang memuat label registrasi/polisi
   let bestScore = 0;
   lines.forEach((l, i) => {
-    for (const m of l.matchAll(PLATE)) {
+    // tanda hubung/titik di antara bagian plat ("BM-5502-ABB") dan huruf seri yang terpisah ("A B B") disatukan dulu
+    const pl = l.replace(/([A-Z0-9]{1,2})[-.,_·]([0-9OIS]{1,4})[-.,_·]([A-Z0-9]{1,3})/g, "$1 $2 $3").replace(/(\d) ([A-Z]) ([A-Z])(?: ([A-Z]))?(?![A-Z0-9])/g, "$1 $2$3$4");
+    for (const m of pl.matchAll(PLATE)) {
       if (!/[A-Z]/.test(m[1]) || !/\d/.test(m[2]) || !/[A-Z]/.test(m[3])) continue;
       const p = normPlat(`${m[1]} ${m[2]} ${m[3]}`);
       if (!p) continue;
