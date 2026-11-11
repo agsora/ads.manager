@@ -423,15 +423,12 @@ export const RESOURCES: Resource[] = [
       { key: "os_bunga", label: "OS Bunga", type: "money", aliases: ["os bunga", "sisa bunga"] },
       { key: "os_total", label: "OS Total", type: "money", aliases: ["os", "total os", "outstanding"] },
       { key: "branch", label: "Cabang", type: "select", options: "branch", aliases: ["cabang", "kantor", "kota"] },
-      { key: "chat_time", label: "Jam Chat Masuk", type: "time", aliases: ["jam chat", "jam masuk"] },
-      { key: "first_reply_time", label: "Jam Dibalas Pertama", type: "time", aliases: ["jam dibalas", "jam balas"] },
       { key: "customer_type", label: "Jenis Pelanggan", type: "select", options: "customer_type", aliases: ["cust", "jenis customer"] },
       { key: "source", label: "Sumber Trafik", type: "select", options: "lead_source", aliases: ["asal", "sumber"] },
       { key: "campaign_ref", label: "Kode Campaign / Blast", type: "text", suggest: "campaigns", aliases: ["campaign", "kode campaign", "ref"] },
       { key: "plan_timing", label: "Rencana", type: "select", options: "plan_timing", aliases: ["rencana pinjaman", "rencana pembelian", "rencana"] },
       { key: "post_chat_status", label: "Status Pasca Chat", type: "select", options: "post_chat_status" },
       { key: "segment", label: "Segmen", type: "select", options: "lead_segment", aliases: ["segmentasi prospek", "segmentasi"] },
-      { key: "initial_status", label: "Status Awal", type: "select", options: "initial_status" },
       { key: "need", label: "Kebutuhan/Keterangan", type: "longtext", aliases: ["keterangan (isi jika perlu)", "keterangan", "alasan"] },
       { key: "followup_1", label: "Follow Up 1 (3-7 hr)", type: "longtext", aliases: ["follow up 1 (3-7 hari)", "follow up 1"] },
       { key: "followup_2", label: "Follow Up 2 (7-14 hr)", type: "longtext", aliases: ["follow up 2 (7-14 hari)", "follow up 2"] },
@@ -479,21 +476,6 @@ export const RESOURCES: Resource[] = [
       return r;
     },
     computed: [
-      {
-        key: "reply_minutes",
-        label: "Respons (menit)",
-        format: "number",
-        fn: (r) => {
-          const mins = (t: unknown) => {
-            const m = String(t ?? "").match(/^(\d{1,2}):(\d{2})/);
-            return m ? +m[1] * 60 + +m[2] : null;
-          };
-          const a = mins(r.chat_time);
-          const b = mins(r.first_reply_time);
-          if (a === null || b === null) return null;
-          return b >= a ? b - a : b + 1440 - a; // replied after midnight
-        },
-      },
       { key: "age_days", label: "Umur (hari)", format: "number", fn: (r) => daysBetween(r.chat_date, new Date().toISOString().slice(0, 10)) },
       {
         key: "next_action",

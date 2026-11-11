@@ -33,7 +33,7 @@ export default function PerformancePage() {
       <PageHeader
         eyebrow="WhatsApp"
         title="Cabang & Kecepatan Respons"
-        desc="Bandingkan cabang dan CS: berapa lead masuk, berapa yang sampai akad, dan secepat apa chat pertama dibalas. Lead yang dibalas lebih dari 5 menit jauh lebih mudah hilang. Isi Cabang, PIC, Jam Chat Masuk, dan Jam Dibalas Pertama di WA Leads."
+        desc="Bandingkan cabang dan CS: berapa lead masuk, berapa yang sampai akad, dan secepat apa chat pertama dibalas. Lead yang dibalas lebih dari 5 menit jauh lebih mudah hilang. Isi Cabang dan PIC di WA Leads."
       />
 
       <div className="stat-grid">
@@ -58,7 +58,7 @@ export default function PerformancePage() {
         </div>
       </div>
 
-      {s.measured === 0 && <Empty text="Belum ada data respons — isi Jam Chat Masuk dan Jam Dibalas Pertama di WA Leads" />}
+      {s.measured === 0 && <Empty text="Belum ada data respons" />}
 
       <Card title="Per cabang" subtitle="Urut dari lead terbanyak">
         <MiniTable cols={cols("Cabang")} rows={prep(f.byBranch)} empty="Belum ada data leads" />
