@@ -105,16 +105,16 @@ const STNK_LABELS: [string, RegExp][] = [
   ["plat", /N[O0](?:MOR|\.)?\s*(?:REGISTRASI|REG\.?|POLISI)/gi],
   ["nama", /NAMA\s*PEMILIK/gi],
   ["alamat", /ALAMAT/gi],
-  ["merk", /MERK|MEREK/gi],
+  ["merk", /MERK|MEREK(?:\s*\/\s*TYPE)?/gi],
   ["tipe", /TYPE|TIPE/gi],
   ["jenis", /JENIS/gi],
   ["model", /MODEL/gi],
-  ["tahun", /TAHUN\s*PEMB(?:UATAN|\.)?/gi],
+  ["tahun", /(?:TAHUN|TH\.?)\s*PEMB(?:UATAN|\.)?(?:\s*\/\s*PERAKITAN)?/gi],
   ["tahunreg", /TAHUN\s*REGISTRASI/gi],
   ["silinder", /ISI\s*SILINDER/gi],
   ["warna", /WARNA(?:\s*TNKB)?/gi],
   ["bbm", /BAHAN\s*BAKAR/gi],
-  ["rangka", /N[O0](?:MOR|\.)?\s*RANGKA(?:\s*\/\s*NIK\s*\/\s*VIN)?|N[O0]\.?\s*RANGKA/gi],
+  ["rangka", /N[O0](?:MOR|\.)?\s*RANGKA(?:\s*\/\s*NIK)?(?:\s*\/\s*VIN)?/gi],
   ["mesin", /N[O0](?:MOR|\.)?\s*MESIN/gi],
   ["bpkb", /N[O0](?:MOR|\.)?\s*BPKB/gi],
   ["lokasi", /KODE\s*LOKASI/gi],
@@ -181,8 +181,9 @@ export function parseStnk(text: string): StnkResult {
   const mesin = alnum(f.mesin ?? "");
   const tahun = toDigits(f.tahun ?? "").match(/(19|20)\d{2}/)?.[0] ?? "";
   const nama = NAME.test(f.nama ?? "") ? (f.nama as string).toUpperCase() : "";
-  const merk = [f.merk, f.tipe].filter(Boolean).join(" ").toUpperCase();
-  return {
+  // "HONDA/H1B02N42L1 A/T" (kolom Merek/Type di TBPKP) → merk dan type dipisah spasi
+  const merk = [f.merk, f.tipe].filter(Boolean).join(" ").toUpperCase().replace(/\s*\/\s*/, " ");
+  const base: StnkResult = {
     plat: f.plat ? normPlat(f.plat) : null,
     nama: nama || null,
     merk: merk || null,
@@ -190,6 +191,71 @@ export function parseStnk(text: string): StnkResult {
     rangka: rangka.length >= 10 && rangka.length <= 20 ? rangka : null,
     mesin: mesin.length >= 6 && mesin.length <= 15 ? mesin : null,
   };
+  // foto STNK asli biasanya "bertumpuk": semua label di kolom kiri dan semua nilai di kolom kanan, jadi nilai tidak ada di sebelah labelnya.
+  // Data yang masih kosong dicari dari bentuk nilainya (plat, nomor rangka 17 karakter, merk dikenal, tahun yang berdiri sendiri).
+  if (stnkScore(base) < 6) {
+    const extra = stackedStnk(text, base);
+    for (const k of Object.keys(extra) as (keyof StnkResult)[]) if (!base[k] && extra[k]) base[k] = extra[k] ?? null;
+  }
+  return base;
+}
+
+const BRANDS = ["HONDA", "YAMAHA", "SUZUKI", "KAWASAKI", "VESPA", "PIAGGIO", "TVS", "BAJAJ", "KTM", "TOYOTA", "DAIHATSU", "MITSUBISHI", "NISSAN", "ISUZU", "MAZDA", "HYUNDAI", "KIA", "WULING", "DFSK", "CHERY", "BMW", "MERCEDES", "FORD", "CHEVROLET", "DATSUN", "SUBARU"];
+const NOT_NAME = /ALAMAT|SEPEDA|MOTOR|MOBIL|BENSIN|HITAM|PUTIH|MERAH|BIRU|SOLO|MODEL|JENIS|NOMOR|SURAT|KEPOLISIAN|PERUM|JALAN|KELURAHAN|KECAMATAN|KOTA|KABUPATEN|KEPALA|REGISTRASI|PEMILIK/;
+
+/** Cari data STNK dari bentuk nilainya saja (tidak bergantung letak label). Hanya mengisi yang diminta; hasilnya tetap perlu dicek petugas. */
+function stackedStnk(text: string, have: StnkResult): Partial<StnkResult> {
+  const lines = text.split(/\r?\n/).map((l) => l.replace(/[\t ]+/g, " ").trim().toUpperCase()).filter(Boolean);
+  const out: Partial<StnkResult> = {};
+  let platAt = -1;
+  if (!have.plat) {
+    lines.forEach((l, i) => {
+      if (platAt >= 0) return;
+      const m = l.match(/^([A-Z0-9]{1,2}) ?([0-9OIS]{1,4}) ?([A-Z]{1,3})$/);
+      if (m && /[A-Z]/.test(m[1]) && /\d/.test(m[2])) {
+        const p = normPlat(l);
+        if (p) {
+          out.plat = p;
+          platAt = i;
+        }
+      }
+    });
+  }
+  if (!have.nama) {
+    const from = platAt >= 0 ? platAt + 1 : 0;
+    const hit = lines.slice(from, from + 4).find((l) => /^[A-Z][A-Z .'\-]{2,59}$/.test(l) && !NOT_NAME.test(l) && !BRANDS.includes(l));
+    if (hit && platAt >= 0) out.nama = hit;
+  }
+  let vinAt = -1;
+  if (!have.rangka) {
+    lines.forEach((l, i) => {
+      if (vinAt >= 0) return;
+      const c = l.replace(/[^A-Z0-9]/g, "");
+      if (c.length === 17 && /[A-Z]/.test(c) && /\d/.test(c) && /^M/.test(c)) {
+        out.rangka = c.replace(/[OQ]/g, "0").replace(/I/g, "1");
+        vinAt = i;
+      }
+    });
+  }
+  if (!have.mesin) {
+    const from = vinAt >= 0 ? vinAt + 1 : 0;
+    const hit = lines.slice(from, from + 4).map((l) => l.replace(/[^A-Z0-9]/g, "")).find((c) => c.length >= 8 && c.length <= 14 && /[A-Z]/.test(c) && /\d/.test(c) && c !== out.rangka);
+    if (hit && vinAt >= 0) out.mesin = hit;
+  }
+  if (!have.tahun) {
+    const years = lines.map((l) => l.match(/^\W*((?:19|20)\d{2})\W*$/)?.[1]).filter(Boolean).map(Number).filter((y) => y >= 1990 && y <= new Date().getFullYear() + 1);
+    if (years.length) out.tahun = String(Math.min(...years)); // tahun pembuatan lebih tua dari tahun registrasi
+  }
+  if (!have.merk) {
+    const bi = lines.findIndex((l) => BRANDS.includes(l.split(/[ \/]/)[0]));
+    if (bi >= 0) {
+      const brand = lines[bi].split(/[ \/]/)[0];
+      const same = lines[bi].slice(brand.length).replace(/^[\s\/]+/, "");
+      const next = same || lines.slice(bi + 1, bi + 3).find((l) => /^[A-Z0-9][A-Z0-9 \/.\-]{3,24}$/.test(l) && /\d/.test(l) && l.replace(/[^A-Z0-9]/g, "") !== out.rangka);
+      out.merk = [brand, next].filter(Boolean).join(" ");
+    }
+  }
+  return out;
 }
 
 const stnkScore = (r: StnkResult) => Object.values(r).filter(Boolean).length;

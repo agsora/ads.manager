@@ -16,7 +16,7 @@ type Kind = "ktp" | "kk" | "stnk";
  * Kecilkan foto (JPEG) sampai di bawah ~900 KB supaya lolos batas 1 MB OCR. Dokumen berhuruf kecil (STNK, KK) dipertahankan
  * lebih besar; STNK juga dijadikan hitam-putih dengan kontras sedikit dinaikkan supaya huruf kecil dan latar bermotif lebih terbaca.
  */
-async function shrink(file: File, maxSide = 1600, enhance = false): Promise<Blob> {
+async function shrink(file: File, maxSide = 1600, enhance = false, rotate: 0 | 90 | 270 = 0): Promise<Blob> {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((ok, no) => {
@@ -29,11 +29,20 @@ async function shrink(file: File, maxSide = 1600, enhance = false): Promise<Blob
     for (let q = 0.85; ; q -= 0.1) {
       const scale = Math.min(1, side / Math.max(img.width, img.height));
       const c = document.createElement("canvas");
-      c.width = Math.round(img.width * scale);
-      c.height = Math.round(img.height * scale);
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      c.width = rotate ? h : w; // foto yang tergeletak miring (90° atau 270°) diputar tegak sebelum dibaca
+      c.height = rotate ? w : h;
       const ctx = c.getContext("2d")!;
       if (enhance && "filter" in ctx) ctx.filter = "grayscale(1) contrast(1.25)"; // browser lama tanpa filter kanvas: foto dikirim apa adanya
-      ctx.drawImage(img, 0, 0, c.width, c.height);
+      if (rotate === 90) {
+        ctx.translate(c.width, 0);
+        ctx.rotate(Math.PI / 2);
+      } else if (rotate === 270) {
+        ctx.translate(0, c.height);
+        ctx.rotate(-Math.PI / 2);
+      }
+      ctx.drawImage(img, 0, 0, w, h);
       const blob = await new Promise<Blob | null>((ok) => c.toBlob(ok, "image/jpeg", Math.max(q, 0.4)));
       if (!blob) throw new Error("Foto tidak bisa dikecilkan");
       if (blob.size <= 900_000 || (q <= 0.45 && side <= 900)) return blob;
@@ -44,9 +53,17 @@ async function shrink(file: File, maxSide = 1600, enhance = false): Promise<Blob
   }
 }
 
-async function read(kind: Kind, file: File) {
+/** Foto berdiri (lebih tinggi daripada lebar): dokumen ini biasanya difoto mendatar, jadi kemungkinan besar tergeletak miring. */
+async function isPortrait(file: File) {
+  const bmp = await createImageBitmap(file).catch(() => null);
+  const r = bmp ? bmp.height > bmp.width * 1.15 : false;
+  bmp?.close();
+  return r;
+}
+
+async function read(kind: Kind, file: File, rotate: 0 | 90 | 270 = 0) {
   const fd = new FormData();
-  fd.set("file", await shrink(file, kind === "stnk" ? 2200 : kind === "kk" ? 2000 : 1600, kind === "stnk"), "foto.jpg");
+  fd.set("file", await shrink(file, kind === "stnk" ? 2200 : kind === "kk" ? 2000 : 1600, kind === "stnk", rotate), "foto.jpg");
   fd.set("kind", kind);
   const res = await fetch("/api/ocr/id", { method: "POST", body: fd });
   const j = await res.json().catch(() => ({}));
@@ -55,7 +72,7 @@ async function read(kind: Kind, file: File) {
 }
 
 /** Satu slot unggah: pilih/foto dokumen, dibaca otomatis, hasilnya dikirim ke `onRead` (mengembalikan teks ringkasan). */
-function Slot({ title, hint, kind, onRead, onQuota, onPick }: { title: string; hint?: string; kind: Kind; onRead: (j: Record<string, unknown>) => { ok: boolean; text: string; chips?: IdNumber[] }; onQuota: (q: Quota) => void; onPick: (v: string, who: "pemohon" | "penjamin") => void }) {
+function Slot({ title, hint, kind, onRead, score, enough, onQuota, onPick }: { title: string; hint?: string; kind: Kind; onRead: (j: Record<string, unknown>) => { ok: boolean; text: string; chips?: IdNumber[] }; score: (j: Record<string, unknown>) => number; enough: number; onQuota: (q: Quota) => void; onPick: (v: string, who: "pemohon" | "penjamin") => void }) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -66,8 +83,28 @@ function Slot({ title, hint, kind, onRead, onQuota, onPick }: { title: string; h
     setMsg(null);
     setChips([]);
     try {
-      const j = await read(kind, file);
+      let j = await read(kind, file);
       if (j.quota) onQuota(j.quota as Quota);
+      let best = score(j);
+      // belum terbaca dan fotonya berdiri: kemungkinan tergeletak miring, coba putar 90° lalu 270° dan ambil hasil terbaik.
+      // Tiap percobaan dihitung ke kuota gratis, makanya hanya dicoba bila hasil pertama kurang.
+      if (best < enough && (kind !== "kk" ? await isPortrait(file) : best === 0)) {
+        for (const rot of [90, 270] as const) {
+          setMsg({ ok: true, text: "Foto tampak miring, mencoba memutarnya…" });
+          const alt = await read(kind, file, rot).catch((e) => {
+            if (/kuota/i.test((e as Error).message)) throw e;
+            return null;
+          });
+          if (!alt) continue;
+          if (alt.quota) onQuota(alt.quota as Quota);
+          const s = score(alt);
+          if (s > best) {
+            j = alt;
+            best = s;
+          }
+          if (best >= enough) break;
+        }
+      }
       const r = onRead(j);
       setMsg({ ok: r.ok, text: r.text });
       setChips(r.chips ?? []);
@@ -193,6 +230,11 @@ export function DocPanel({ values, onPatch }: { values: Record<string, string>; 
     return { ok: got >= 3, text: got ? `${got} dari 6 data STNK terbaca (no. polisi, nama pemilik, merk/tipe, tahun, no. rangka, no. mesin). Periksa dengan STNK sebelum disimpan.` : "Data STNK tidak terbaca. Coba foto yang lebih jelas dan lurus, atau ketik manual." };
   };
 
+  // mutu bacaan, dipakai untuk memilih hasil terbaik bila foto perlu diputar
+  const scoreNik = (j: Record<string, unknown>) => ((j.nik as IdNumber | null)?.valid ? 10 : j.nik ? 5 : 0);
+  const scoreKk = (j: Record<string, unknown>) => ((j.kk as IdNumber | null)?.valid ? 10 : j.kk ? 5 : 0);
+  const scoreStnk = (j: Record<string, unknown>) => ["plat", "nama", "merk", "tahun", "rangka", "mesin"].filter((k) => j[k]).length;
+
   // pemeriksaan silang antar dokumen yang sudah terbaca
   const checks: string[] = [];
   const nik = values.nik || seen.nik;
@@ -203,10 +245,10 @@ export function DocPanel({ values, onPatch }: { values: Record<string, string>; 
     <fieldset className="mb-4 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-3">
       <legend className="px-1 text-[12px] font-bold uppercase tracking-wider text-[var(--muted)]">Baca dokumen dari foto</legend>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Slot title="KTP pemohon" hint="mengisi NIK (dan nama bila masih kosong)" kind="ktp" onRead={readNik("pemohon")} onQuota={q} onPick={pick} />
-        <Slot title="KTP penjamin (tidak wajib)" hint="mengisi NIK Penjamin" kind="ktp" onRead={readNik("penjamin")} onQuota={q} onPick={pick} />
-        <Slot title="Kartu Keluarga" hint="mengisi No. KK dan menampilkan NIK anggota" kind="kk" onRead={readKk} onQuota={q} onPick={pick} />
-        <Slot title="STNK" hint="mengisi no. polisi, nama pemilik, merk/tipe, tahun, no. rangka, no. mesin" kind="stnk" onRead={readStnk} onQuota={q} onPick={pick} />
+        <Slot title="KTP pemohon" hint="mengisi NIK (dan nama bila masih kosong)" kind="ktp" onRead={readNik("pemohon")} score={scoreNik} enough={10} onQuota={q} onPick={pick} />
+        <Slot title="KTP penjamin (tidak wajib)" hint="mengisi NIK Penjamin" kind="ktp" onRead={readNik("penjamin")} score={scoreNik} enough={10} onQuota={q} onPick={pick} />
+        <Slot title="Kartu Keluarga" hint="mengisi No. KK dan menampilkan NIK anggota" kind="kk" onRead={readKk} score={scoreKk} enough={10} onQuota={q} onPick={pick} />
+        <Slot title="STNK" hint="mengisi no. polisi, nama pemilik, merk/tipe, tahun, no. rangka, no. mesin" kind="stnk" onRead={readStnk} score={scoreStnk} enough={4} onQuota={q} onPick={pick} />
       </div>
       {checks.length > 0 && <p className="mt-2 text-[12px] text-[var(--ink-2)]">{checks.join(" · ")}</p>}
       <p className="mt-2 text-[11.5px] text-[var(--muted)]">
