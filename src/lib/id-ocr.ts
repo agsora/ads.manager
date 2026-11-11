@@ -180,11 +180,11 @@ const STNK_LABELS: [string, RegExp][] = [
   ["plat", /N[O0](?:MOR|\.)?\s*(?:REGISTRASI|REG\.?|POLISI)/gi],
   ["nama", /NAMA\s*PEMILIK/gi],
   ["alamat", /ALAMAT/gi],
-  ["merk", /MER?EK(?:\s*\/\s*(?:TYPE|TIPE))?|MERK(?:\s*\/\s*(?:TYPE|TIPE))?/gi],
+  ["merk", /MER[EC]?K(?:\s*\/\s*(?:TYPE|TIPE))?/gi],
   ["tipe", /TYPE|TIPE/gi],
   ["jenis", /JENIS/gi],
   ["model", /MODEL/gi],
-  ["tahun", /(?:TAHUN|TH\.?)\s*PEMB(?:UATAN|\.)?(?:\s*\/\s*PERAKITAN)?/gi],
+  ["tahun", /(?:TAHU[NI]|TH\.?)\s*PEMB(?:UATAN|\.)?(?:\s*\/\s*PERAKITAN)?/gi],
   ["tahunreg", /TAHUN\s*REGISTRASI/gi],
   ["silinder", /ISI\s*SILINDER/gi],
   ["warna", /WARNA(?:\s*TNKB)?/gi],
@@ -213,6 +213,9 @@ export function stnkFields(text: string): Record<string, string> {
     const raw = flat.slice(h.end, kept[i + 1]?.start ?? flat.length);
     const v = raw.replace(/⏎/g, " ").replace(/^[\s:.;,\-\/]+/, "").replace(/\s+/g, " ").trim();
     if (v && !(h.key in out)) out[h.key] = v;
+    // baris pertama saja: untuk nilai yang diikuti teks lain tanpa label (mis. nomor mesin lalu tanda tangan/alamat kantor)
+    const first = raw.split("⏎").map((x) => x.replace(/^[\s:.;,\-\/]+/, "").replace(/\s+/g, " ").trim()).find(Boolean);
+    if (first && !((h.key + "_1") in out)) out[h.key + "_1"] = first;
   });
   return out;
 }
@@ -271,7 +274,7 @@ export function parseStnk(raw: string): StnkResult {
   if (mesin && merk?.startsWith("YAMAHA") && /^[A-Z0-9]{5}\d{6,7}$/.test(mesin)) mesin = `${mesin.slice(0, 5)}-${mesin.slice(5)}`;
   return {
     plat: pat.plat ?? lab.plat,
-    nama: pat.nama ?? lab.nama,
+    nama: lab.nama ?? pat.nama ?? null, // nilai di bawah label "Nama Pemilik" lebih tepat daripada baris setelah plat
     merk,
     tahun: pat.tahun ?? lab.tahun,
     rangka: pat.rangka ?? lab.rangka,
@@ -284,7 +287,7 @@ const BRANDS = [
   "TOYOTA", "DAIHATSU", "MITSUBISHI", "NISSAN", "ISUZU", "MAZDA", "HYUNDAI", "KIA", "WULING", "DFSK", "CHERY", "BMW", "MERCEDES", "FORD", "CHEVROLET", "DATSUN", "SUBARU", "LEXUS", "VOLKSWAGEN", "MG", "HINO", "FUSO", "SUZUKI",
 ];
 const NOT_NAME =
-  /ALAMAT|SEPEDA|MOTOR|MOBIL|BENSIN|HITAM|PUTIH|MERAH|BIRU|SOLO|MODEL|JENIS|NOMOR|SURAT|KEPOLISIAN|PERUM|JALAN|KELURAHAN|KECAMATAN|KOTA|KABUPATEN|KEPALA|REGISTRASI|PEMILIK|NAME|OWNER|ADDRESS|VEHICLE|NUMBER|CERTIFICATE|POLICE|INDONESIA|NEGARA|REPUBLIK|TANDA|KENDARAAN|FASILITAS|BARU|DIREKTUR|BERLAKU|LOKASI|DATE|EXPIRE|VALIDATION|PENGESAHAN/;
+  /NPWP|NOPD|SAMSAT|PROVINSI|POKOK|SANKSI|JUMLAH|ALAMAT|SEPEDA|MOTOR|MOBIL|BENSIN|HITAM|PUTIH|MERAH|BIRU|SOLO|MODEL|JENIS|NOMOR|SURAT|KEPOLISIAN|PERUM|JALAN|KELURAHAN|KECAMATAN|KOTA|KABUPATEN|KEPALA|REGISTRASI|PEMILIK|NAME|OWNER|ADDRESS|VEHICLE|NUMBER|CERTIFICATE|POLICE|INDONESIA|NEGARA|REPUBLIK|TANDA|KENDARAAN|FASILITAS|BARU|DIREKTUR|BERLAKU|LOKASI|DATE|EXPIRE|VALIDATION|PENGESAHAN/;
 const BPKB = /^[A-Z]\d{8}$/; // nomor BPKB: satu huruf lalu 8 angka; bukan nomor mesin
 const looksLikeBrand = (v: string) => BRANDS.includes(v.toUpperCase().split(/[ \/]/)[0]);
 const alnumOnly = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -303,10 +306,13 @@ const fixVin = (c: string) => (c.length === 17 ? c.replace(/[OQ]/g, "0").replace
 function labelStnk(text: string): StnkResult {
   const f = stnkFields(text);
   const short = (v?: string) => (v && v.length <= 60 ? v : "");
-  let rangka = alnumOnly(short(f.rangka).replace(/^(?:\/?\s*NIK\s*\/?\s*)?(?:VIN)?\s*/i, ""));
+  const noLabel = (v: string) => v.replace(/^(?:\/?\s*NIK\s*\/?\s*)?(?:VIN)?\s*/i, "");
+  let rangka = alnumOnly(noLabel(short(f.rangka)));
+  if (rangka.length < 10 || rangka.length > 18) rangka = alnumOnly(noLabel(short(f.rangka_1)));
   rangka = fixVin(rangka);
-  const mesin = engineNo(short(f.mesin));
-  const tahun = toDigits(short(f.tahun)).match(/(19|20)\d{2}/)?.[0] ?? "";
+  let mesin = engineNo(short(f.mesin));
+  if (!mesin || alnumOnly(mesin).length > 15) mesin = engineNo(short(f.mesin_1));
+  const tahun = toDigits(short(f.tahun_1 ?? f.tahun).replace(/\s+/g, "")).match(/(19|20)\d{2}/)?.[0] ?? "";
   const nama = NAME.test(short(f.nama)) && !NOT_NAME.test(f.nama ?? "") ? (f.nama as string).toUpperCase() : "";
   // "HONDA/H1B02N42L1 A/T" (kolom Merek/Type di TBPKP): hanya garis miring tepat setelah merek yang jadi spasi
   const merkRaw = [short(f.merk), short(f.tipe)].filter(Boolean).join(" ").toUpperCase().replace(/^([A-Z]+)\s*\/\s*/, "$1 ");
@@ -347,7 +353,7 @@ function stackedStnk(text: string): Partial<StnkResult> {
     }
   });
   if (platAt >= 0) {
-    const hit = lines.slice(platAt + 1, platAt + 5).find((l) => /^[A-Z][A-Z .'\-]{2,59}$/.test(l) && !NOT_NAME.test(l) && !looksLikeBrand(l));
+    const hit = lines.slice(platAt + 1, platAt + 5).map((l) => l.replace(/^[^A-Z0-9]+/, "")).find((l) => /^[A-Z][A-Z .'\-]{2,59}$/.test(l) && !NOT_NAME.test(l) && !looksLikeBrand(l) && alnumOnly(l).length >= 5);
     if (hit) out.nama = hit;
   }
   let vinAt = -1;
@@ -480,5 +486,11 @@ const vinOk = (v: string | null) => !!v && v.length === 17 && /\d{6}$/.test(v);
 export function mergeStnk(a: StnkResult, b: StnkResult | null): StnkResult {
   if (!b) return a;
   const pick = <K extends keyof StnkResult>(k: K): StnkResult[K] => (a[k] ?? b[k]) as StnkResult[K];
-  return { plat: pick("plat"), nama: pick("nama"), merk: pick("merk"), tahun: pick("tahun"), mesin: pick("mesin"), rangka: vinOk(a.rangka) || !vinOk(b.rangka) ? pick("rangka") : b.rangka };
+  // nama yang sama hanya beda spasi ("ARGH A SINAGA" vs "ARGHA SINAGA"): pilih yang kata-katanya lebih sedikit
+  const sameLetters = a.nama && b.nama && a.nama.replace(/\s/g, "") === b.nama.replace(/\s/g, "");
+  const nama = sameLetters && b.nama!.split(" ").length < a.nama!.split(" ").length ? b.nama : pick("nama");
+  // nomor mesin yang terbaca lengkap (11+ karakter) lebih dipercaya daripada yang terpotong
+  const long = (v: string | null) => !!v && v.replace(/[^A-Z0-9]/g, "").length >= 11;
+  const mesin = a.mesin && b.mesin && !long(a.mesin) && long(b.mesin) ? b.mesin : pick("mesin");
+  return { plat: pick("plat"), nama, merk: pick("merk"), tahun: pick("tahun"), mesin, rangka: vinOk(a.rangka) || !vinOk(b.rangka) ? pick("rangka") : b.rangka };
 }
