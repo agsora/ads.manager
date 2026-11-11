@@ -93,6 +93,11 @@ export default function FollowUpBoard() {
     return d > 0 ? { text: `${d} hari lagi`, late: false } : d === 0 ? { text: "Hari ini", late: true } : { text: `Terlambat ${-d} hari`, late: true };
   };
 
+  const countdownTone = (date: string) => {
+    const d = diffDays(today, date);
+    return d <= 0 ? "!border-[#e4b7ab] !bg-[#fbefec] !text-[var(--critical-ink)]" : d <= 2 ? "!border-[#e8d3a0] !bg-[#fbf1dc] !text-[#8a5a12]" : "!border-[#c9dbc0] !bg-[#eef5e9] !text-[var(--good-ink)]";
+  };
+
   const close = async (r: Row, status: string) => {
     try {
       await api(`/api/r/leads/${r.id}`, "PUT", { final_status: status });
@@ -116,11 +121,11 @@ export default function FollowUpBoard() {
           return (
             <div key={c.stage} className="rounded-xl bg-[var(--sidebar)] p-3">
               <div className="mb-3 flex items-baseline justify-between px-1">
-                <div>
-                  <div className="serif text-[17px]">{c.title}</div>
+                <div className="min-w-0">
+                  <div className="serif text-[17px] leading-tight">{c.title}</div>
                   <div className="text-[11.5px] text-[var(--muted)]">{c.hint}</div>
                 </div>
-                <span className="chip !bg-white">
+                <span className="chip shrink-0 whitespace-nowrap !bg-white">
                   {items.length} · {items.filter((x) => x.due).length} jatuh tempo
                 </span>
               </div>
@@ -162,21 +167,18 @@ export default function FollowUpBoard() {
                       {r.need ? <div className="mt-1.5 line-clamp-2 text-[12.5px]">{String(r.need)}</div> : null}
                       {r.followup_1 ? <div className="mt-1.5 line-clamp-2 text-[12px] text-[var(--muted)]">Terakhir: {String(r.followup_3 ?? r.followup_2 ?? r.followup_1)}</div> : null}
                       {c.stage === MANUAL && (
-                        <div className="mt-2 flex items-center gap-2">
-                          <label className="text-[12px] text-[var(--muted)]" htmlFor={`fu-${r.id}`}>FU kembali</label>
-                          <input
-                            id={`fu-${r.id}`}
-                            type="date"
-                            className="input !h-7 !w-[140px] !px-1.5 !text-[12px]"
-                            min={today}
-                            value={fuDate}
-                            onChange={(e) => setFuDate(r, e.target.value)}
-                          />
-                          {fuDate ? (
-                            <span className={`chip ${countdown(fuDate).late ? "!border-[#e4b7ab] !bg-[#fbefec] !text-[var(--critical-ink)]" : ""}`}>{countdown(fuDate).text}</span>
-                          ) : (
-                            <span className="text-[11.5px] text-[var(--muted)]">belum dijadwalkan</span>
-                          )}
+                        <div className="mt-2.5 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] p-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <label className="text-[11.5px] font-semibold uppercase tracking-wide text-[var(--muted)]" htmlFor={`fu-${r.id}`}>
+                              Follow up kembali
+                            </label>
+                            {fuDate ? (
+                              <span className={`chip shrink-0 whitespace-nowrap ${countdownTone(fuDate)}`}>{countdown(fuDate).text}</span>
+                            ) : (
+                              <span className="shrink-0 whitespace-nowrap text-[11.5px] text-[var(--muted)]">belum dijadwalkan</span>
+                            )}
+                          </div>
+                          <input id={`fu-${r.id}`} type="date" className="input mt-1.5 !h-8 w-full !px-2 !text-[12.5px]" min={today} value={fuDate} onChange={(e) => setFuDate(r, e.target.value)} />
                         </div>
                       )}
                       <div className="mt-2.5 flex flex-wrap gap-1.5">
