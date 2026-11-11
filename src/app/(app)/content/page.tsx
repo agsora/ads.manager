@@ -84,8 +84,8 @@ export default function ContentPage() {
   );
 }
 
-const PLAN_COLUMNS = ["post_date", "post_time", "title", "brand", "channel", "content_type", "pillar", "pic", "status", "approval_status"];
-const RESULT_COLUMNS = ["post_date", "title", "channel", "status", "brand", "post_link", "actual_date", "reach", "views", "likes", "comments", "saves", "followers"];
+const PLAN_COLUMNS = ["post_date", "post_time", "title", "brand", "content_category", "branch", "channel", "content_type", "pillar", "pic", "status", "approval_status"];
+const RESULT_COLUMNS = ["post_date", "title", "channel", "status", "brand", "content_category", "branch", "content_type", "post_link", "actual_date", "reach", "views", "likes", "comments", "saves", "followers"];
 
 function usePlanStats(tick: number) {
   const f = useFilter();
@@ -124,7 +124,7 @@ function Planning({ onDetail, bump = 0 }: { onDetail?: (row: Row) => void; bump?
         columns={PLAN_COLUMNS}
         formGroups={["Rencana", "Approval"]}
         formTitle="Rencana konten"
-        quickFilters={["status", "approval_status", "channel"]}
+        quickFilters={["status", "approval_status", "channel", "content_category", "content_type", "branch"]}
         computedCols={[]}
         searchPlaceholder="Cari judul, PIC, caption…"
         defaults={{ status: "Ide", approval_status: "Menunggu review" }}
@@ -205,7 +205,7 @@ function Results({ openId, onOpened, onDetail, bump = 0 }: { openId?: number | n
         openRowId={openId}
         onOpened={onOpened}
         allowCreate={false}
-        quickFilters={["channel", "status"]}
+        quickFilters={["channel", "status", "content_category", "content_type", "branch"]}
         computedCols={["result_state", "er", "on_time"]}
         selectionActions={(ids, done) => (
           <button

@@ -93,7 +93,7 @@ export function ContentDrawer({ row, onClose, onEdit, onChanged }: { row: Row; o
   const duplicate = async () => {
     try {
       const copy: Record<string, unknown> = {};
-      for (const k of ["brand", "channel", "content_type", "pillar", "campaign", "pic", "caption", "brief_link", "post_time"]) copy[k] = cur[k] ?? null;
+      for (const k of ["brand", "channel", "content_type", "content_category", "branch", "pillar", "campaign", "pic", "caption", "brief_link", "post_time"]) copy[k] = cur[k] ?? null;
       copy.title = `${cur.title} (salinan)`;
       copy.post_date = addDays(String(cur.post_date).slice(0, 10), 7);
       copy.status = "Ide";

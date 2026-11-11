@@ -175,6 +175,8 @@ export const RESOURCES: Resource[] = [
       { key: "brand", label: "Brand", type: "brand", required: true, group: "Rencana" },
       { key: "channel", label: "Channel", type: "select", options: "content_channel", required: true, group: "Rencana" },
       { key: "content_type", label: "Jenis Konten", type: "select", options: "content_type", group: "Rencana" },
+      { key: "content_category", label: "Kategori Konten", type: "select", options: "content_category", group: "Rencana" },
+      { key: "branch", label: "Cabang", type: "select", options: "branch", group: "Rencana" },
       { key: "pillar", label: "Konten Pilar", type: "select", options: "content_pillar", group: "Rencana", aliases: ["pilar"] },
       { key: "campaign", label: "Campaign / Kampanye", type: "text", suggest: "campaigns", group: "Rencana", hideInTable: true, aliases: ["campaign", "kampanye"] },
       { key: "title", label: "Judul Konten", type: "text", required: true, group: "Rencana", aliases: ["judul"] },
@@ -248,9 +250,13 @@ export const RESOURCES: Resource[] = [
     defaultSort: "period",
     fields: [
       { key: "title", label: "Judul KPI", type: "text", aliases: ["judul", "judul kpi", "nama kpi", "kpi"] },
+      { key: "content_category", label: "Kategori Konten", type: "select", options: "content_category" },
+      { key: "content_type", label: "Jenis Konten", type: "select", options: "content_type" },
+      { key: "branch", label: "Cabang", type: "select", options: "branch" },
       { key: "period", label: "Bulan (tgl 1)", type: "date", required: true },
       { key: "brand", label: "Brand", type: "brand", required: true },
       { key: "target_posts", label: "Target Jumlah Posting", type: "number" },
+      { key: "target_uploads", label: "Target Konten Diunggah", type: "number" },
       { key: "target_er", label: "Target ER (%)", type: "percent" },
       { key: "target_leads", label: "Target Leads", type: "number" },
       { key: "target_deals", label: "Target Deal", type: "number" },
@@ -739,6 +745,7 @@ export function getResource(key: string): Resource | undefined {
 
 /** Default editable option lists (seeded from the original Excel template). */
 export const DEFAULT_OPTIONS: Record<string, { label: string; values: string[] }> = {
+  content_category: { label: "Kategori Konten (KPI & Konten)", values: ["Produk", "Promo", "Edukasi", "Testimoni", "Aktivitas Cabang"] },
   platform: { label: "Platform Iklan", values: ["Meta", "TikTok", "Google Ads", "YouTube", "Lainnya"] },
   ad_objective: { label: "Jenis Campaign", values: ["Awareness", "Traffic", "Prospek", "Engagement", "Penjualan", "Video Views", "Pesan WhatsApp"] },
   ad_status: { label: "Status Campaign", values: ["Planning", "Running", "Hold", "Done", "Nonaktif", "Cancel"] },
