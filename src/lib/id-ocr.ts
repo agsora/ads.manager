@@ -115,6 +115,34 @@ export function ktpName(text: string, nikLineHint?: string): string | null {
   return null;
 }
 
+/**
+ * Cocokkan NIK dengan tanggal lahir dan jenis kelamin yang tercetak di KTP (NIK memuat DDMMYY lahir, perempuan: DD+40).
+ * Selisih 1-2 digit hampir pasti salah baca OCR, jadi digit tanggal pada NIK disesuaikan dengan yang tercetak.
+ * Hasil: "ok" cocok / "fixed" dikoreksi / "mismatch" janggal tapi tak bisa dikoreksi / "unknown" tanggal tak terbaca.
+ */
+export function reconcileNik(nik: string, text: string): { value: string; state: "ok" | "fixed" | "mismatch" | "unknown" } {
+  if (!/^[0-9]{16}$/.test(nik)) return { value: nik, state: "unknown" };
+  let dob: RegExpMatchArray | null = null;
+  for (const m of text.matchAll(/(?<![0-9])([0-3]?[0-9])[ ]?[-/.][ ]?([01]?[0-9])[ ]?[-/.][ ]?((?:19|20)[0-9]{2})(?![0-9])/g)) {
+    const before = text.slice(Math.max(0, (m.index ?? 0) - 40), m.index ?? 0).toUpperCase();
+    if (/BERLAKU|HINGGA/.test(before.slice(-25))) continue;
+    dob = m;
+    break;
+  }
+  if (!dob) return { value: nik, state: "unknown" };
+  const [dd, mm, yy] = [Number(dob[1]), Number(dob[2]), Number(dob[3]) % 100];
+  if (dd < 1 || dd > 31 || mm < 1 || mm > 12) return { value: nik, state: "unknown" };
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const woman = /PEREMPUAN/i.test(text) ? true : /LAKI/i.test(text) ? false : null;
+  const exp = (w: boolean) => `${pad(dd + (w ? 40 : 0))}${pad(mm)}${pad(yy)}`;
+  const options = woman === null ? [exp(false), exp(true)] : [exp(woman)];
+  const cur = nik.slice(6, 12);
+  if (options.includes(cur)) return { value: nik, state: "ok" };
+  const dist = (a: string) => [...a].filter((c, i) => c !== cur[i]).length;
+  const best = options.reduce((a, b) => (dist(b) < dist(a) ? b : a));
+  return dist(best) <= 2 ? { value: nik.slice(0, 6) + best + nik.slice(12), state: "fixed" } : { value: nik, state: "mismatch" };
+}
+
 export function parseKtp(text: string): KtpResult {
   const lines = text.split(/\r?\n/);
   let labelled: string | null = null;
@@ -130,9 +158,18 @@ export function parseKtp(text: string): KtpResult {
   const all = [...new Set(lines.flatMap(sixteenDigit))];
   // di KTP, angka 16 digit yang tertulis setelah label NIK dipakai lebih dulu; bila tak ada, hanya bila persis satu kandidat valid
   const nama = ktpName(text, labelled ?? undefined);
-  if (labelled) return { nik: checkNik(labelled), nama, others: all.filter((x) => x !== labelled).map(checkNik) };
+  const finish = (v: string): IdNumber => {
+    const r = reconcileNik(v, text);
+    const c = checkNik(r.value);
+    const note = r.state === "fixed" ? "tanggal lahir pada NIK disesuaikan dengan tanggal lahir di KTP, periksa kembali" : r.state === "mismatch" ? "tanggal lahir pada NIK tidak sama dengan yang tercetak di KTP, periksa kembali" : "";
+    return { ...c, valid: c.valid && r.state !== "mismatch", info: [c.info, note].filter(Boolean).join(" · ") || undefined };
+  };
+  if (labelled) return { nik: finish(labelled), nama, others: all.filter((x) => x !== labelled).map(checkNik) };
   const valid = all.filter((x) => checkNik(x).valid);
-  if (valid.length === 1) return { nik: checkNik(valid[0]), nama, others: all.filter((x) => x !== valid[0]).map(checkNik) };
+  if (valid.length === 1) return { nik: finish(valid[0]), nama, others: all.filter((x) => x !== valid[0]).map(checkNik) };
+  // beberapa kandidat valid: pilih yang tanggal lahirnya cocok dengan yang tercetak
+  const matched = valid.filter((x) => reconcileNik(x, text).state === "ok");
+  if (matched.length === 1) return { nik: finish(matched[0]), nama, others: all.filter((x) => x !== matched[0]).map(checkNik) };
   return { nik: null, nama, others: all.map(checkNik) };
 }
 
@@ -404,10 +441,18 @@ async function ocr(file: Blob, name: string, key: string, engine: 2 | 3, table: 
 /**
  * Engine 2 dulu (cepat); bila angka yang dicari tidak valid, coba Engine 3 (lebih teliti, kuota terpisah) dan ambil yang lebih baik.
  */
+/** Mutu bacaan KTP: 10 = NIK valid dan cocok dengan tanggal lahir tercetak (atau tanggalnya tak terbaca); lebih rendah bila dikoreksi/janggal. */
+function ktpScore(t: string) {
+  const n = parseKtp(t).nik;
+  if (!n) return 0;
+  if (!n.valid) return 5;
+  return n.info?.includes("disesuaikan") ? 7 : 10;
+}
+
 export async function readIdPhoto(file: Blob, name: string, kind: "ktp" | "kk" | "stnk", key: string, gate?: (engine: 2 | 3) => Promise<boolean>) {
   const table = kind === "kk";
   // nilai mutu bacaan: KTP/KK 10 bila nomornya valid, 5 bila terbaca tapi janggal; STNK = jumlah dari 6 data yang berhasil dibaca
-  const score = (t: string) => (kind === "ktp" ? (parseKtp(t).nik?.valid ? 10 : parseKtp(t).nik ? 5 : 0) : kind === "kk" ? (parseKk(t).kk?.valid ? 10 : parseKk(t).kk ? 5 : 0) : stnkScore(parseStnk(t)));
+  const score = (t: string) => (kind === "ktp" ? ktpScore(t) : kind === "kk" ? (parseKk(t).kk?.valid ? 10 : parseKk(t).kk ? 5 : 0) : stnkScore(parseStnk(t)));
   const enough = (t: string) => score(t) >= (kind === "stnk" ? 5 : 10);
   if (gate && !(await gate(2))) throw new OcrQuotaError("Kuota gratis OCR habis");
   let text = await ocr(file, name, key, 2, table);
