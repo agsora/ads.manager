@@ -104,6 +104,9 @@ export function parseKk(text: string): KkResult {
   return { kk: kk ? checkKk(kk) : null, members: all.filter((x) => x !== kk).map(checkNik) };
 }
 
+/** OCR.space menolak karena kuota/batas paket gratis, atau kuota lokal kita sendiri sudah penuh. */
+export class OcrQuotaError extends Error {}
+
 interface OcrResponse {
   ParsedResults?: { ParsedText?: string }[];
   IsErroredOnProcessing?: boolean;
@@ -118,10 +121,12 @@ async function ocr(file: Blob, name: string, key: string, engine: 2 | 3, table: 
   fd.set("detectOrientation", "true");
   if (table) fd.set("isTable", "true");
   const res = await fetch(API, { method: "POST", headers: { apikey: key }, body: fd, signal: AbortSignal.timeout(45_000) });
+  if (res.status === 429) throw new OcrQuotaError("OCR.space membalas 429 (terlalu banyak permintaan)");
   if (!res.ok) throw new Error(`OCR.space membalas ${res.status}`);
   const j = (await res.json()) as OcrResponse;
   if (j.IsErroredOnProcessing || !j.ParsedResults?.length) {
     const m = Array.isArray(j.ErrorMessage) ? j.ErrorMessage.join(" ") : j.ErrorMessage;
+    if (m && /limit|quota|exceed|too many|rate/i.test(m)) throw new OcrQuotaError(m);
     throw new Error(m ? `OCR gagal: ${m}` : "OCR tidak menemukan teks");
   }
   return j.ParsedResults.map((p) => p.ParsedText ?? "").join("\n");
@@ -130,16 +135,18 @@ async function ocr(file: Blob, name: string, key: string, engine: 2 | 3, table: 
 /**
  * Engine 2 dulu (cepat); bila angka yang dicari tidak valid, coba Engine 3 (lebih teliti, kuota terpisah) dan ambil yang lebih baik.
  */
-export async function readIdPhoto(file: Blob, name: string, kind: "ktp" | "kk", key: string) {
+export async function readIdPhoto(file: Blob, name: string, kind: "ktp" | "kk", key: string, gate?: (engine: 2 | 3) => Promise<boolean>) {
   const table = kind === "kk";
   const good = (t: string) => (kind === "ktp" ? parseKtp(t).nik?.valid : parseKk(t).kk?.valid);
+  if (gate && !(await gate(2))) throw new OcrQuotaError("Kuota gratis OCR habis");
   let text = await ocr(file, name, key, 2, table);
-  if (!good(text)) {
+  if (!good(text) && (!gate || (await gate(3)))) {
     try {
       const t3 = await ocr(file, name, key, 3, table);
       if (good(t3) || !good(text)) text = good(t3) ? t3 : text.length >= t3.length ? text : t3;
-    } catch {
-      /* Engine 3 kuotanya terpisah atau sedang sibuk: pakai hasil Engine 2 */
+    } catch (e) {
+      if (e instanceof OcrQuotaError) throw e;
+      /* Engine 3 sedang sibuk: pakai hasil Engine 2 */
     }
   }
   return kind === "ktp" ? { kind, ...parseKtp(text) } : { kind, ...parseKk(text) };

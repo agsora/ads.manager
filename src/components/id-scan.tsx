@@ -45,6 +45,7 @@ export function IdScan({ kind, onNik, onKk, members }: { kind: "ktp" | "kk"; onN
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [list, setList] = useState<IdNumber[]>([]);
+  const [quota, setQuota] = useState<string | null>(null);
 
   const run = async (file: File) => {
     setBusy(true);
@@ -58,6 +59,8 @@ export function IdScan({ kind, onNik, onKk, members }: { kind: "ktp" | "kk"; onN
       const res = await fetch("/api/ocr/id", { method: "POST", body: fd });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error ?? "Foto tidak bisa dibaca");
+      const qt = j.quota as { month: { used: number; limit: number }; day: { used: number; limit: number } } | undefined;
+      if (qt) setQuota(`Kuota gratis OCR: ${qt.month.used.toLocaleString("id-ID")} dari ${qt.month.limit.toLocaleString("id-ID")} terpakai bulan ini (hari ini ${qt.day.used} dari ${qt.day.limit}).`);
       if (kind === "ktp") {
         const nik = j.nik as IdNumber | null;
         if (!nik) {
@@ -91,6 +94,7 @@ export function IdScan({ kind, onNik, onKk, members }: { kind: "ktp" | "kk"; onN
       <button type="button" className="btn btn-sm" disabled={busy} onClick={() => input.current?.click()}>
         {busy ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />} {busy ? "Membaca foto…" : kind === "ktp" ? "Ambil NIK dari foto KTP" : "Ambil No. KK dari foto KK"}
       </button>
+      {quota && <p className="text-[11.5px] text-[var(--muted)]">{quota}</p>}
       {msg && <p className={`text-[12px] ${msg.ok ? "text-[var(--ink-2)]" : "text-[var(--warning-ink)]"}`}>{msg.text}</p>}
       {list.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
