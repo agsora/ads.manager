@@ -15,7 +15,7 @@ export const GET = handle(async () => {
 });
 
 /**
- * POST multipart { file, kind: "ktp" | "kk" } → NIK dari foto KTP, atau No. KK dan NIK anggota dari foto KK.
+ * POST multipart { file, kind: "ktp" | "kk" | "stnk" } → NIK dari foto KTP, No. KK dan NIK anggota dari foto KK, atau data kendaraan dari foto STNK.
  * Foto dan teks mentah tidak disimpan maupun dicatat; log aktivitas hanya mencatat bahwa pembacaan dilakukan.
  * Setiap permintaan ke OCR.space dijaga penghitung kuota gratis (lib/ocr-quota.ts) supaya tidak pernah melewati paket gratis.
  */
@@ -24,7 +24,8 @@ export const POST = handle(async (req: Request) => {
   const key = process.env.OCR_SPACE_KEY;
   if (!key) throw new HttpError(500, "Kunci OCR belum diatur (OCR_SPACE_KEY)");
   const form = await req.formData();
-  const kind = form.get("kind") === "kk" ? "kk" : "ktp";
+  const k = form.get("kind");
+  const kind = k === "kk" ? "kk" : k === "stnk" ? "stnk" : "ktp";
   const file = form.get("file");
   if (!(file instanceof File) || !file.size) throw new HttpError(400, "Foto belum dipilih");
   if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw new HttpError(400, "Format foto harus JPG, PNG, atau WebP");
@@ -32,7 +33,7 @@ export const POST = handle(async (req: Request) => {
   try {
     // setiap permintaan ke OCR.space dipesan dulu ke penghitung kuota gratis; bila penuh, tidak dikirim sama sekali
     const result = await readIdPhoto(file, file.name || `${kind}.jpg`, kind, key, (engine) => ocrReserve(engine, s.org));
-    await logActivity(s.org, s.name, kind === "ktp" ? "Baca foto KTP (OCR)" : "Baca foto KK (OCR)");
+    await logActivity(s.org, s.name, kind === "ktp" ? "Baca foto KTP (OCR)" : kind === "kk" ? "Baca foto KK (OCR)" : "Baca foto STNK (OCR)");
     return NextResponse.json({ ...result, quota: await ocrQuota() });
   } catch (e) {
     if (e instanceof OcrQuotaError) {

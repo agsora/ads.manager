@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { COMPLIANCE_FIELDS, ComplianceHint, PhoneHint } from "./field-hints";
-import { IdScan } from "./id-scan";
+import { DocPanel } from "./id-scan";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import type { Field, Resource, Row } from "@/lib/resources";
@@ -202,6 +202,7 @@ export function ResourceForm({ resource, row, onClose, onSaved, defaults, groups
             </button>
           </div>
         )}
+        {resource.key === "leads" && <DocPanel values={vals} onPatch={(p) => setVals((x) => ({ ...x, ...p }))} />}
         {groups.map((g) => (
           <fieldset key={g} className="mb-4">
             {g && <legend className="mb-3 text-[12px] font-bold uppercase tracking-wider text-[var(--muted)]">{g}</legend>}
@@ -215,13 +216,6 @@ export function ResourceForm({ resource, row, onClose, onSaved, defaults, groups
                     </label>
                     <FieldInput f={f} value={vals[f.key]} onChange={(v) => setVals((s) => ({ ...s, [f.key]: v }))} />
                     {COMPLIANCE_FIELDS.has(f.key) && f.type === "longtext" && resource.key !== "competitors" && <ComplianceHint text={vals[f.key]} />}
-                    {resource.key === "leads" && f.key === "nik" && (
-                      <>
-                        <IdScan kind="ktp" onNik={(v) => setVals((x) => ({ ...x, nik: v }))} />
-                        <p className="mt-1 text-[11.5px] text-[var(--muted)]">Foto dikirim ke layanan OCR (ocr.space) hanya untuk dibaca dan tidak disimpan di aplikasi. Minta persetujuan nasabah dulu.</p>
-                      </>
-                    )}
-                    {resource.key === "leads" && f.key === "kk" && <IdScan kind="kk" members onKk={(v) => setVals((x) => ({ ...x, kk: v }))} onNik={(v) => setVals((x) => ({ ...x, nik: v }))} />}
                     {f.key === "phone" && (resource.key === "leads" || resource.key === "contacts") && <PhoneHint value={vals[f.key]} resource={resource.key} selfId={row?.id ? Number(row.id) : undefined} />}
                   </div>
                 ))}

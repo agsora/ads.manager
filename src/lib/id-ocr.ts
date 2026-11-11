@@ -58,6 +58,8 @@ function sixteenDigit(line: string): string[] {
 
 export interface KtpResult {
   nik: IdNumber | null;
+  /** nama di KTP (huruf besar), bila terbaca */
+  nama: string | null;
   /** angka 16 digit lain yang terbaca di foto (jarang berguna, untuk pilihan manual) */
   others: IdNumber[];
 }
@@ -76,10 +78,61 @@ export function parseKtp(text: string): KtpResult {
   }
   const all = [...new Set(lines.flatMap(sixteenDigit))];
   // di KTP, angka 16 digit yang tertulis setelah label NIK dipakai lebih dulu; bila tak ada, hanya bila persis satu kandidat valid
-  if (labelled) return { nik: checkNik(labelled), others: all.filter((x) => x !== labelled).map(checkNik) };
+  const nama = labelValue(lines, /^\s*NAMA\b/i, (v) => NAME.test(v)).toUpperCase() || null;
+  if (labelled) return { nik: checkNik(labelled), nama, others: all.filter((x) => x !== labelled).map(checkNik) };
   const valid = all.filter((x) => checkNik(x).valid);
-  if (valid.length === 1) return { nik: checkNik(valid[0]), others: all.filter((x) => x !== valid[0]).map(checkNik) };
-  return { nik: null, others: all.map(checkNik) };
+  if (valid.length === 1) return { nik: checkNik(valid[0]), nama, others: all.filter((x) => x !== valid[0]).map(checkNik) };
+  return { nik: null, nama, others: all.map(checkNik) };
+}
+
+/** Nilai di sebelah label ("Nama : BUDI") atau di baris berikutnya bila labelnya sendirian; kosong bila tidak ada yang lolos cek. */
+function labelValue(lines: string[], label: RegExp, ok: (v: string) => boolean = () => true): string {
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(label);
+    if (!m) continue;
+    const same = lines[i].slice((m.index ?? 0) + m[0].length).replace(/^[\s:.;,\-]+/, "").trim();
+    if (same && ok(same)) return same;
+    const next = (lines[i + 1] ?? "").replace(/^[\s:.;,\-]+/, "").trim();
+    if (next && ok(next)) return next;
+  }
+  return "";
+}
+
+export interface StnkResult {
+  plat: string | null;
+  nama: string | null;
+  merk: string | null;
+  tahun: string | null;
+  rangka: string | null;
+  mesin: string | null;
+}
+
+const PLAT = /^[A-Za-z]{1,2}\s?\d{1,4}\s?[A-Za-z]{0,3}$/;
+const NAME = /^[A-Za-z .'\-]{3,60}$/;
+
+/** STNK: No. Registrasi (plat), Nama Pemilik, Merk, Type, Tahun Pembuatan, No. Rangka, No. Mesin. Semua hasil perlu dicek petugas. */
+export function parseStnk(text: string): StnkResult {
+  const lines = text.split(/\r?\n/);
+  const alnum = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const plat = labelValue(lines, /\b(NO\.?\s*(REGISTRASI|POLISI)|NOMOR\s*(REGISTRASI|POLISI))\b/i, (v) => PLAT.test(v.trim()))
+    .toUpperCase()
+    .replace(/\s+/g, " ")
+    .trim();
+  let rangka = alnum(labelValue(lines, /\bNO\.?\s*RANGKA\b[^:]*/i, (v) => alnum(v).length >= 10));
+  if (rangka.length === 17) rangka = rangka.replace(/[OQ]/g, "0").replace(/I/g, "1"); // nomor rangka (VIN) tidak memakai huruf I, O, Q
+  const mesin = alnum(labelValue(lines, /\bNO\.?\s*MESIN\b/i, (v) => alnum(v).length >= 6));
+  const tahun = labelValue(lines, /\bTAHUN\s*(PEMBUATAN)?\b/i, (v) => /(19|20)\d{2}/.test(v)).match(/(19|20)\d{2}/)?.[0] ?? "";
+  const merk = labelValue(lines, /^\s*MERK\b/i);
+  const tipe = labelValue(lines, /^\s*(TYPE|TIPE)\b/i);
+  const nama = labelValue(lines, /\bNAMA\s*PEMILIK\b/i, (v) => NAME.test(v)).toUpperCase();
+  return {
+    plat: plat || null,
+    nama: nama || null,
+    merk: [merk, tipe].filter(Boolean).join(" ").toUpperCase() || null,
+    tahun: tahun || null,
+    rangka: rangka.length >= 10 ? rangka : null,
+    mesin: mesin.length >= 6 ? mesin : null,
+  };
 }
 
 export interface KkResult {
@@ -135,9 +188,9 @@ async function ocr(file: Blob, name: string, key: string, engine: 2 | 3, table: 
 /**
  * Engine 2 dulu (cepat); bila angka yang dicari tidak valid, coba Engine 3 (lebih teliti, kuota terpisah) dan ambil yang lebih baik.
  */
-export async function readIdPhoto(file: Blob, name: string, kind: "ktp" | "kk", key: string, gate?: (engine: 2 | 3) => Promise<boolean>) {
+export async function readIdPhoto(file: Blob, name: string, kind: "ktp" | "kk" | "stnk", key: string, gate?: (engine: 2 | 3) => Promise<boolean>) {
   const table = kind === "kk";
-  const good = (t: string) => (kind === "ktp" ? parseKtp(t).nik?.valid : parseKk(t).kk?.valid);
+  const good = (t: string) => (kind === "ktp" ? parseKtp(t).nik?.valid : kind === "kk" ? parseKk(t).kk?.valid : !!(parseStnk(t).plat && (parseStnk(t).rangka || parseStnk(t).mesin)));
   if (gate && !(await gate(2))) throw new OcrQuotaError("Kuota gratis OCR habis");
   let text = await ocr(file, name, key, 2, table);
   if (!good(text) && (!gate || (await gate(3)))) {
@@ -149,5 +202,5 @@ export async function readIdPhoto(file: Blob, name: string, kind: "ktp" | "kk", 
       /* Engine 3 sedang sibuk: pakai hasil Engine 2 */
     }
   }
-  return kind === "ktp" ? { kind, ...parseKtp(text) } : { kind, ...parseKk(text) };
+  return kind === "ktp" ? { kind, ...parseKtp(text) } : kind === "kk" ? { kind, ...parseKk(text) } : { kind, ...parseStnk(text) };
 }

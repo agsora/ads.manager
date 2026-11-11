@@ -1,13 +1,16 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Camera, Loader2 } from "lucide-react";
+import { Camera, Check, Loader2 } from "lucide-react";
 
 interface IdNumber {
   value: string;
   valid: boolean;
   info?: string;
 }
+type Quota = { month: { used: number; limit: number }; day: { used: number; limit: number } };
+type Patch = Record<string, string>;
+type Kind = "ktp" | "kk" | "stnk";
 
 /** Kecilkan foto (sisi terpanjang 1600 px, JPEG) sampai di bawah ~900 KB supaya lolos batas 1 MB OCR. */
 async function shrink(file: File): Promise<Blob> {
@@ -27,86 +30,157 @@ async function shrink(file: File): Promise<Blob> {
       c.height = Math.round(img.height * scale);
       c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
       const blob = await new Promise<Blob | null>((ok) => c.toBlob(ok, "image/jpeg", Math.max(q, 0.4)));
-      if (blob && (blob.size <= 900_000 || (q <= 0.45 && side <= 900))) return blob;
-      if (q <= 0.45) side = Math.round(side * 0.8);
       if (!blob) throw new Error("Foto tidak bisa dikecilkan");
+      if (blob.size <= 900_000 || (q <= 0.45 && side <= 900)) return blob;
+      if (q <= 0.45) side = Math.round(side * 0.8);
     }
   } finally {
     URL.revokeObjectURL(url);
   }
 }
 
-/**
- * Tombol "Foto KTP" / "Foto KK" di bawah kolom NIK / No. KK: foto dikecilkan di browser, dikirim ke server untuk dibaca (OCR),
- * lalu angkanya diisikan ke form untuk dikonfirmasi. Foto tidak disimpan.
- */
-export function IdScan({ kind, onNik, onKk, members }: { kind: "ktp" | "kk"; onNik: (v: string) => void; onKk?: (v: string) => void; members?: boolean }) {
+async function read(kind: Kind, file: File) {
+  const fd = new FormData();
+  fd.set("file", await shrink(file), "foto.jpg");
+  fd.set("kind", kind);
+  const res = await fetch("/api/ocr/id", { method: "POST", body: fd });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j.error ?? "Foto tidak bisa dibaca");
+  return j;
+}
+
+/** Satu slot unggah: pilih/foto dokumen, dibaca otomatis, hasilnya dikirim ke `onRead` (mengembalikan teks ringkasan). */
+function Slot({ title, hint, kind, onRead, onQuota, onPick }: { title: string; hint?: string; kind: Kind; onRead: (j: Record<string, unknown>) => { ok: boolean; text: string; chips?: IdNumber[] }; onQuota: (q: Quota) => void; onPick: (v: string, who: "pemohon" | "penjamin") => void }) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [list, setList] = useState<IdNumber[]>([]);
-  const [quota, setQuota] = useState<string | null>(null);
-
+  const [chips, setChips] = useState<IdNumber[]>([]);
   const run = async (file: File) => {
     setBusy(true);
     setMsg(null);
-    setList([]);
+    setChips([]);
     try {
-      const blob = await shrink(file);
-      const fd = new FormData();
-      fd.set("file", blob, "foto.jpg");
-      fd.set("kind", kind);
-      const res = await fetch("/api/ocr/id", { method: "POST", body: fd });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j.error ?? "Foto tidak bisa dibaca");
-      const qt = j.quota as { month: { used: number; limit: number }; day: { used: number; limit: number } } | undefined;
-      if (qt) setQuota(`Kuota gratis OCR: ${qt.month.used.toLocaleString("id-ID")} dari ${qt.month.limit.toLocaleString("id-ID")} terpakai bulan ini (hari ini ${qt.day.used} dari ${qt.day.limit}).`);
-      if (kind === "ktp") {
-        const nik = j.nik as IdNumber | null;
-        if (!nik) {
-          setMsg({ ok: false, text: "NIK tidak terbaca. Coba foto yang lebih jelas dan lurus, atau ketik manual." });
-          setList(j.others ?? []);
-          return;
-        }
-        onNik(nik.value);
-        setMsg({ ok: nik.valid, text: nik.valid ? `NIK terbaca (${nik.info ?? "bentuk wajar"}). Periksa dengan KTP sebelum disimpan.` : "NIK terbaca tapi bentuknya janggal (kode wilayah atau tanggal lahir). Periksa dengan KTP." });
-      } else {
-        const kk = j.kk as IdNumber | null;
-        const m = (j.members ?? []) as IdNumber[];
-        if (!kk) setMsg({ ok: false, text: "No. KK tidak terbaca. Coba foto yang lebih jelas dan lurus, atau ketik manual." });
-        else {
-          onKk?.(kk.value);
-          setMsg({ ok: kk.valid, text: kk.valid ? "No. KK terbaca. Periksa dengan KK sebelum disimpan." : "No. KK terbaca tapi bentuknya janggal. Periksa dengan KK." });
-        }
-        setList(m);
-      }
+      const j = await read(kind, file);
+      if (j.quota) onQuota(j.quota as Quota);
+      const r = onRead(j);
+      setMsg({ ok: r.ok, text: r.text });
+      setChips(r.chips ?? []);
+      setDone(r.ok);
     } catch (e) {
       setMsg({ ok: false, text: (e as Error).message });
+      setDone(false);
     } finally {
       setBusy(false);
       if (input.current) input.current.value = "";
     }
   };
+  return (
+    <div className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-[13px] font-semibold">{title}</div>
+          {hint && <div className="text-[11.5px] text-[var(--muted)]">{hint}</div>}
+        </div>
+        <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={(e) => e.target.files?.[0] && run(e.target.files[0])} />
+        <button type="button" className="btn btn-sm shrink-0" disabled={busy} onClick={() => input.current?.click()}>
+          {busy ? <Loader2 size={14} className="animate-spin" /> : done ? <Check size={14} /> : <Camera size={14} />} {busy ? "Membaca…" : done ? "Ganti foto" : "Pilih foto"}
+        </button>
+      </div>
+      {msg && <p className={`mt-1.5 text-[12px] ${msg.ok ? "text-[var(--ink-2)]" : "text-[var(--warning-ink)]"}`}>{msg.text}</p>}
+      {chips.length > 0 && <ChipRow chips={chips} onPick={onPick} />}
+    </div>
+  );
+}
+
+/** NIK anggota KK: klik untuk dipakai sebagai NIK pemohon atau NIK penjamin. */
+function ChipRow({ chips, onPick }: { chips: IdNumber[]; onPick: (v: string, who: "pemohon" | "penjamin") => void }) {
+  return (
+    <div className="mt-2 space-y-1">
+      <div className="text-[12px] text-[var(--muted)]">NIK di KK, klik untuk mengisi:</div>
+      <div className="flex flex-wrap gap-1.5">
+        {chips.map((m) => (
+          <span key={m.value} className="inline-flex items-center gap-1 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-2 py-0.5 text-[12px]" title={m.info ?? (m.valid ? "bentuk wajar" : "bentuk janggal")}>
+            {m.value}
+            {!m.valid && " ⚠"}
+            <button type="button" className="font-semibold text-[var(--accent-ink)] hover:underline" onClick={() => onPick(m.value, "pemohon")}>
+              pemohon
+            </button>
+            <button type="button" className="font-semibold text-[var(--accent-ink)] hover:underline" onClick={() => onPick(m.value, "penjamin")}>
+              penjamin
+            </button>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Panel unggah dokumen di form WA Leads: KTP pemohon, KTP penjamin (tidak wajib), KK, dan STNK. Tiap foto dikecilkan di browser,
+ * dibaca di server (OCR), lalu angkanya diisikan ke form untuk dikonfirmasi. Foto tidak disimpan.
+ */
+export function DocPanel({ values, onPatch }: { values: Record<string, string>; onPatch: (p: Patch) => void }) {
+  const [quota, setQuota] = useState<string | null>(null);
+  const [seen, setSeen] = useState<{ nik?: string; members?: string[]; ktpNama?: string; stnkNama?: string }>({});
+  const pick = (v: string, who: "pemohon" | "penjamin") => onPatch(who === "pemohon" ? { nik: v } : { nik_penjamin: v });
+  const q = (x: Quota) => setQuota(`Kuota gratis OCR: ${x.month.used.toLocaleString("id-ID")} dari ${x.month.limit.toLocaleString("id-ID")} terpakai bulan ini (hari ini ${x.day.used} dari ${x.day.limit}).`);
+
+  const readNik = (who: "pemohon" | "penjamin") => (j: Record<string, unknown>) => {
+    const nik = j.nik as IdNumber | null;
+    const nama = (j.nama as string | null) ?? undefined;
+    if (!nik) return { ok: false, text: "NIK tidak terbaca. Coba foto yang lebih jelas dan lurus, atau ketik manual.", chips: (j.others as IdNumber[]) ?? [] };
+    if (who === "pemohon") {
+      onPatch({ nik: nik.value, ...(nama && !values.name ? { name: nama } : {}) });
+      setSeen((s) => ({ ...s, nik: nik.value, ktpNama: nama }));
+    } else onPatch({ nik_penjamin: nik.value });
+    return { ok: nik.valid, text: `${nik.valid ? "NIK terbaca" : "NIK terbaca tapi bentuknya janggal"}${nik.info ? ` (${nik.info})` : ""}${nama ? ` · nama ${nama}` : ""}. Periksa dengan KTP sebelum disimpan.` };
+  };
+  const readKk = (j: Record<string, unknown>) => {
+    const kk = j.kk as IdNumber | null;
+    const members = (j.members as IdNumber[]) ?? [];
+    if (kk) onPatch({ kk: kk.value });
+    setSeen((s) => ({ ...s, members: members.map((m) => m.value) }));
+    return {
+      ok: !!kk?.valid,
+      text: kk ? `${kk.valid ? "No. KK terbaca" : "No. KK terbaca tapi bentuknya janggal"} · ${members.length} NIK anggota terbaca. Periksa dengan KK sebelum disimpan.` : "No. KK tidak terbaca. Coba foto yang lebih jelas dan lurus, atau ketik manual.",
+      chips: members,
+    };
+  };
+  const readStnk = (j: Record<string, unknown>) => {
+    const s = j as { plat: string | null; nama: string | null; merk: string | null; tahun: string | null; rangka: string | null; mesin: string | null };
+    const patch: Patch = {};
+    if (s.plat) patch.plat = s.plat;
+    if (s.nama) patch.stnk_nama = s.nama;
+    if (s.merk) patch.stnk_merk = s.merk;
+    if (s.tahun) patch.stnk_tahun = s.tahun;
+    if (s.rangka) patch.no_rangka = s.rangka;
+    if (s.mesin) patch.no_mesin = s.mesin;
+    onPatch(patch);
+    setSeen((x) => ({ ...x, stnkNama: s.nama ?? undefined }));
+    const got = Object.keys(patch).length;
+    return { ok: got >= 3, text: got ? `${got} dari 6 data STNK terbaca (no. polisi, nama pemilik, merk/tipe, tahun, no. rangka, no. mesin). Periksa dengan STNK sebelum disimpan.` : "Data STNK tidak terbaca. Coba foto yang lebih jelas dan lurus, atau ketik manual." };
+  };
+
+  // pemeriksaan silang antar dokumen yang sudah terbaca
+  const checks: string[] = [];
+  const nik = values.nik || seen.nik;
+  if (nik && seen.members?.length) checks.push(seen.members.includes(nik) ? "✓ NIK pemohon ada di KK" : "⚠ NIK pemohon tidak ada di daftar NIK KK");
+  if (seen.ktpNama && seen.stnkNama) checks.push(seen.ktpNama === seen.stnkNama ? "✓ Nama KTP sama dengan nama STNK" : "⚠ Nama KTP berbeda dengan nama STNK");
 
   return (
-    <div className="mt-1.5 space-y-1.5">
-      <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={(e) => e.target.files?.[0] && run(e.target.files[0])} />
-      <button type="button" className="btn btn-sm" disabled={busy} onClick={() => input.current?.click()}>
-        {busy ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />} {busy ? "Membaca foto…" : kind === "ktp" ? "Ambil NIK dari foto KTP" : "Ambil No. KK dari foto KK"}
-      </button>
-      {quota && <p className="text-[11.5px] text-[var(--muted)]">{quota}</p>}
-      {msg && <p className={`text-[12px] ${msg.ok ? "text-[var(--ink-2)]" : "text-[var(--warning-ink)]"}`}>{msg.text}</p>}
-      {list.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[12px] text-[var(--muted)]">{members ? "NIK di KK, klik untuk dipakai sebagai NIK pemohon:" : "Angka lain yang terbaca:"}</span>
-          {list.map((m) => (
-            <button key={m.value} type="button" className="pill !h-7 !text-[12px]" title={m.info ?? (m.valid ? "bentuk wajar" : "bentuk janggal")} onClick={() => onNik(m.value)}>
-              {m.value}
-              {!m.valid && " ⚠"}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <fieldset className="mb-4 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-3">
+      <legend className="px-1 text-[12px] font-bold uppercase tracking-wider text-[var(--muted)]">Baca dokumen dari foto</legend>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Slot title="KTP pemohon" hint="mengisi NIK (dan nama bila masih kosong)" kind="ktp" onRead={readNik("pemohon")} onQuota={q} onPick={pick} />
+        <Slot title="KTP penjamin (tidak wajib)" hint="mengisi NIK Penjamin" kind="ktp" onRead={readNik("penjamin")} onQuota={q} onPick={pick} />
+        <Slot title="Kartu Keluarga" hint="mengisi No. KK dan menampilkan NIK anggota" kind="kk" onRead={readKk} onQuota={q} onPick={pick} />
+        <Slot title="STNK" hint="mengisi no. polisi, nama pemilik, merk/tipe, tahun, no. rangka, no. mesin" kind="stnk" onRead={readStnk} onQuota={q} onPick={pick} />
+      </div>
+      {checks.length > 0 && <p className="mt-2 text-[12px] text-[var(--ink-2)]">{checks.join(" · ")}</p>}
+      <p className="mt-2 text-[11.5px] text-[var(--muted)]">
+        Foto dikirim ke layanan OCR (ocr.space) hanya untuk dibaca dan tidak disimpan di aplikasi. Minta persetujuan nasabah dulu, dan selalu periksa hasil bacaan dengan dokumen aslinya. {quota}
+      </p>
+    </fieldset>
   );
 }
