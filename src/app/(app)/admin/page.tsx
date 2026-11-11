@@ -77,6 +77,8 @@ export default function AdminPage() {
         </label>
       </Card>
 
+      <MailTest />
+
       <Card title="Workspace">
         <div className="-mx-4 overflow-x-auto">
           <table className="data">
@@ -237,5 +239,31 @@ function Stat({ label, value }: { label: string; value: number }) {
       <div className="text-[12.5px] text-[var(--ink-2)]">{label}</div>
       <div className="serif mt-1 text-[28px] leading-tight">{fmtNum(value)}</div>
     </div>
+  );
+}
+
+function MailTest() {
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState<Record<string, unknown> | null>(null);
+  const run = async () => {
+    setBusy(true);
+    setRes(null);
+    try {
+      setRes(await api<Record<string, unknown>>("/api/admin/mail-test", "POST", {}));
+    } catch (e) {
+      setRes({ ok: false, error: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card title="Tes pengiriman email" subtitle="Kirim email uji ke alamat Anda sendiri dan lihat jawaban server Gmail. Dipakai untuk melacak kenapa tautan masuk tidak sampai.">
+      <button className="btn" onClick={run} disabled={busy}>
+        {busy ? "Mengirim…" : "Kirim email uji ke saya"}
+      </button>
+      {res && (
+        <pre className={`mt-3 overflow-x-auto rounded-lg border p-3 text-[12px] leading-relaxed ${res.ok ? "border-[#c9dbc0] bg-[#eef5e9]" : "border-[#eac9bf] bg-[#fbefec]"}`}>{JSON.stringify(res, null, 2)}</pre>
+      )}
+    </Card>
   );
 }

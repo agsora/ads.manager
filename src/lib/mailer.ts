@@ -68,3 +68,22 @@ export async function sendMailOne(m: { to: string; subject: string; html: string
     throw new Error("Pengiriman email belum diatur (SMTP_PASS)");
   }
 }
+
+/** Kirim email uji dan kembalikan jawaban lengkap dari server SMTP (untuk diagnosa; tidak memuat kata sandi). */
+export async function testMail(to: string) {
+  const cfg = { jalur: mailKind(), pengirim: smtpUser(), nama: process.env.MAIL_FROM_NAME || "No Reply", host: process.env.SMTP_HOST ?? "smtp.gmail.com", port: Number(process.env.SMTP_PORT ?? 465), panjangSandi: (process.env.SMTP_PASS ?? "").replace(/\s+/g, "").length };
+  if (cfg.jalur !== "smtp") return { ok: false as const, cfg, error: "SMTP_PASS belum terbaca di server ini (isi di Vercel lalu redeploy)." };
+  try {
+    const info = await transporter().sendMail({
+      from: process.env.MAIL_FROM ?? `"${cfg.nama}" <${cfg.pengirim}>`,
+      to,
+      subject: "Tes email Ads Manager",
+      text: "Jika Anda membaca ini, pengiriman email dari Ads Manager berfungsi.",
+      html: "<p>Jika Anda membaca ini, pengiriman email dari <b>Ads Manager</b> berfungsi.</p>",
+    });
+    return { ok: true as const, cfg, accepted: info.accepted, rejected: info.rejected, response: info.response, messageId: info.messageId };
+  } catch (e) {
+    const err = e as { code?: string; response?: string; message?: string };
+    return { ok: false as const, cfg, error: `${explain(e)} [${err.code ?? "?"}] ${err.response ?? err.message ?? ""}`.trim() };
+  }
+}
