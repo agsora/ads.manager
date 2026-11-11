@@ -197,8 +197,13 @@ export function normPlat(v: string): string | null {
     if (!m) return null;
     [area, num, seri] = [toLetters(m[1]), toDigits(m[2]), m[3]];
   }
-  return /^[A-Z]{1,2}$/.test(area) && /^\d{1,4}$/.test(num) && /^[A-Z]{0,3}$/.test(seri) ? [area, num, seri].filter(Boolean).join(" ") : null;
+  return /^[A-Z]{1,2}$/.test(area) && PLATE_AREAS.has(area) && /^\d{1,4}$/.test(num) && /^[A-Z]{0,3}$/.test(seri) ? [area, num, seri].filter(Boolean).join(" ") : null;
 }
+
+/** Kode wilayah plat nomor Indonesia (huruf di depan). Dipakai untuk membedakan plat dari teks lain seperti "RT 001 RW". */
+const PLATE_AREAS = new Set(
+  "A B D E F G H K L M N P R S T W Z AA AB AD AE AG BA BB BD BE BG BH BK BL BM BN BP CC DA DB DC DD DE DG DH DK DL DM DN DP DR DS DT DW EA EB ED KB KH KT KU PA PB PG".split(" "),
+);
 
 export interface StnkResult {
   plat: string | null;
@@ -262,12 +267,19 @@ function stackedStnk(text: string): Partial<StnkResult> {
   const lines = text.split(/\r?\n/).map((l) => l.replace(/[\t ]+/g, " ").trim().toUpperCase()).filter(Boolean);
   const out: Partial<StnkResult> = {};
   let platAt = -1;
+  // plat bisa berdiri sendiri di satu baris, atau diawali/diakhiri tanda baca (": BM 3115 SAM") atau teks lain; wilayahnya dicek ke daftar kode plat
+  const PLATE = /(?<![A-Z0-9])([A-Z0-9]{1,2}) ?([0-9OIS]{1,4}) ?([A-Z0-9]{1,3})(?![A-Z0-9])/g;
+  // beberapa teks lain mirip plat (mis. kode type "B6H"): pilih yang paling meyakinkan, yaitu angka 3-4 digit dan baris yang memuat label registrasi/polisi
+  let bestScore = 0;
   lines.forEach((l, i) => {
-    if (platAt >= 0) return;
-    const m = l.match(/^([A-Z0-9]{1,2}) ?([0-9OIS]{1,4}) ?([A-Z]{1,3})$/);
-    if (m && /[A-Z]/.test(m[1]) && /\d/.test(m[2])) {
-      const p = normPlat(l);
-      if (p) {
+    for (const m of l.matchAll(PLATE)) {
+      if (!/[A-Z]/.test(m[1]) || !/\d/.test(m[2]) || !/[A-Z]/.test(m[3])) continue;
+      const p = normPlat(`${m[1]} ${m[2]} ${m[3]}`);
+      if (!p) continue;
+      const num = toDigits(m[2]).length;
+      const score = num * 2 + (/REGISTRASI|POLISI|NOMOR|NO\./.test(l) || /REGISTRASI|POLISI/.test(lines[i - 1] ?? "") ? 5 : 0) + (m[1].length === 2 ? 1 : 0);
+      if (num >= 2 && score > bestScore) {
+        bestScore = score;
         out.plat = p;
         platAt = i;
       }
