@@ -15,7 +15,7 @@ export const leadApprovalNiks = (lead: Row) => [...new Set([identity16(lead.nik)
 export const fallbackApprovalPhone = (lead: Row) => !leadApprovalNiks(lead).length && !identity16(lead.kk) ? approvalPhone(lead.phone) : "";
 export type ApprovalContact = { role: "Pemohon" | "Pasangan" | "Penjamin"; nik?: string; kk?: string; phone?: string };
 export type ApprovalCandidate = {
-  source: "Konvensional" | "Syariah"; reference: string; date: string; status: string;
+  source: "Konvensional" | "Syariah"; reference: string; date: string; submittedAt?: string; status: string;
   nik: string; kk: string; phone?: string; contacts?: ApprovalContact[]; datun: boolean; cancelled?: boolean;
 };
 export function approvalMatchReason(lead: Row, candidate: ApprovalCandidate): string | null {
@@ -38,7 +38,9 @@ export function leadApproval(lead: Row, candidates: ApprovalCandidate[]) {
   const matches = candidates.filter((c) => {
     const days = diffDays(input, c.date);
     return c.datun && days > 0 && days <= 30 && !!approvalMatchReason(lead, c);
-  }).sort((a, b) => b.date.localeCompare(a.date) || a.reference.localeCompare(b.reference));
+  }).sort((a, b) => (b.submittedAt || `${b.date}T00:00:00`).localeCompare(a.submittedAt || `${a.date}T00:00:00`) || b.reference.localeCompare(a.reference, "en", { numeric: true }) || a.source.localeCompare(b.source));
+  // Inspect every eligible application across both sources. The newest non-cancelled
+  // approval wins even if a newer application is pending; otherwise use the newest status.
   const approved = matches.filter((c) => !c.cancelled && ["approve", "approved"].includes(c.status.trim().toLowerCase()));
   const result = approved[0] || matches[0];
   if (!result) return { status: "Tidak ditemukan", source: null, reference: null, date: null, detail: `Tidak ditemukan pengajuan Datun dengan ${phone ? "nomor telepon" : "NIK/KK"} yang sama pada hari ke-1 sampai ke-30 setelah Tanggal Chat.` };

@@ -51,4 +51,25 @@ assert.equal(leadApproval({ ...phoneLead, nik_penjamin: lead.nik }, [{ ...base, 
 assert.equal(cleanInput(RESOURCE_MAP.leads, { nik_penjamin: lead.nik }).db_approval_status, null);
 for (const status of ["ASSIGNED", "SURVEYED", "REJECTED", "CANCELLED", "Need Approval", "Batal"]) assert.equal(leadApproval(lead, [{ ...base, status }]).status, status, "Unapproved applications show their actual source status");
 assert.equal(leadApproval(lead, [{ ...base, status: "PENDING", date: "2026-11-02" }, { ...base, status: "SURVEYED", date: "2026-11-03", reference: "A2" }]).status, "SURVEYED", "Show the latest application status when none is approved");
-console.log("Applicant, partner, guarantor, phone and source-status checks passed");
+const history: ApprovalCandidate[] = [
+  { ...base, reference: "assigned", status: "ASSIGNED", date: "2026-11-03" },
+  { ...base, reference: "approved", status: "APPROVED", date: "2026-11-04" },
+  { ...base, reference: "pending", status: "PENDING", date: "2026-11-05" },
+];
+for (const list of [history, [...history].reverse(), [history[2], history[0], history[1]]]) {
+  const picked = leadApproval(lead, list);
+  assert.equal(picked.status, "Approve", "Approve always outranks more recent pending applications");
+  assert.equal(picked.reference, "approved");
+}
+const newerApproved: ApprovalCandidate = { ...base, source: "Syariah", reference: "new-approved", status: "Approve", date: "2026-11-06" };
+assert.equal(leadApproval(lead, [...history, newerApproved]).reference, "new-approved", "Pick the newest approval across both databases");
+assert.equal(leadApproval(lead, [history[0], history[2]]).reference, "pending", "Without any approval pick the newest application");
+assert.equal(leadApproval(lead, [history[2], { ...newerApproved, date: "2026-12-02" }]).status, "PENDING", "An approval outside the 30-day window cannot win");
+assert.equal(leadApproval(lead, [history[2], { ...newerApproved, cancelled: true }]).status, "Batal", "Cancelled approval must not be presented as Approve");
+const sameDay = [
+  { ...base, reference: "20", status: "ASSIGNED", submittedAt: "2026-11-02T09:00:00.000000" },
+  { ...base, reference: "10", status: "PENDING", submittedAt: "2026-11-02T15:00:00.000000" },
+];
+assert.equal(leadApproval(lead, sameDay).reference, "10", "Submission time decides the latest application on the same day");
+assert.equal(leadApproval(lead, sameDay.map((c) => ({ ...c, status: "APPROVED" }))).reference, "10", "Submission time also decides the newest approval");
+console.log("Contact matching, source statuses and approval priority checks passed");

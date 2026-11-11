@@ -26,6 +26,7 @@ async function candidates(leads: Row[]) {
   const [konven, syariah] = await Promise.all([
     sourceQuery("konvensional", `SELECT a.id::text AS reference,
       to_char((a."createdAt" AT TIME ZONE 'Asia/Jakarta')::date, 'YYYY-MM-DD') AS date, a.status,
+      to_char(a."createdAt" AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD"T"HH24:MI:SS.US') AS submitted_at,
       regexp_replace(COALESCE(u.ktp_number,''), '\\D', '', 'g') AS nik,
       regexp_replace(COALESCE(a.kk_number,''), '\\D', '', 'g') AS kk, u.phone_number AS phone,
       a.partner_ktp_number AS partner_nik, a.partner_phone AS partner_phone
@@ -40,6 +41,7 @@ async function candidates(leads: Row[]) {
         OR ${normalizedPhone("a.partner_phone")}=ANY($5::text[]))`, params),
     // Compatible with PostgreSQL 8.2: no CTE, unnest, LATERAL, or window functions.
     sourceQuery("syariah", `SELECT p.no_sbg AS reference, to_char(p.tgl_pengajuan,'YYYY-MM-DD') AS date,
+      to_char(p.tgl_pengajuan, 'YYYY-MM-DD"T"HH24:MI:SS.US') AS submitted_at,
       p.status_approval AS status, p.tgl_batal IS NOT NULL AS cancelled,
       regexp_replace(COALESCE(c.no_id,''), '\\D', '', 'g') AS nik,
       regexp_replace(COALESCE(c.no_kk,''), '\\D', '', 'g') AS kk, c.no_hp AS phone,
@@ -62,7 +64,7 @@ async function candidates(leads: Row[]) {
         OR ${normalizedPhone("c.no_hp_pasangan")}=ANY($5::text[])
         OR ${normalizedPhone("g.no_hp")}=ANY($5::text[]))`, params),
   ]);
-  const convert = (rows: Record<string, unknown>[], source: ApprovalCandidate["source"]): ApprovalCandidate[] => rows.map((r) => ({ source, reference: String(r.reference), date: String(r.date), status: String(r.status || ""), nik: String(r.nik || ""), kk: String(r.kk || ""), phone: String(r.phone || ""), contacts: [
+  const convert = (rows: Record<string, unknown>[], source: ApprovalCandidate["source"]): ApprovalCandidate[] => rows.map((r) => ({ source, reference: String(r.reference), date: String(r.date), submittedAt: String(r.submitted_at || ""), status: String(r.status || ""), nik: String(r.nik || ""), kk: String(r.kk || ""), phone: String(r.phone || ""), contacts: [
     { role: "Pasangan", nik: String(r.partner_nik || ""), phone: String(r.partner_phone || "") },
     { role: "Penjamin", nik: String(r.guarantor_nik || ""), phone: String(r.guarantor_phone || ""), kk: String(r.guarantor_kk || "") },
   ], cancelled: r.cancelled === true || r.cancelled === "t", datun: true }));
