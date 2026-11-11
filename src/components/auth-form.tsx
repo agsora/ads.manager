@@ -3,9 +3,13 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { OtpLogin } from "./otp-login";
+
 interface Status {
   needsSetup: boolean;
   allowSignup: boolean;
+  otp?: boolean;
+  passwordLogin?: boolean;
 }
 
 export function AuthForm({ mode }: { mode: "login" | "register" }) {
@@ -13,6 +17,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
+  const [usePassword, setUsePassword] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/status")
@@ -78,6 +83,9 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       </div>
 
       <div className="flex items-center justify-center p-6">
+        {mode === "login" && status?.otp && !setup && !usePassword ? (
+          <OtpLogin onPassword={status.passwordLogin === false ? undefined : () => setUsePassword(true)} />
+        ) : (
         <form onSubmit={submit} className="w-full max-w-[360px]">
           <h2 className="serif text-[30px] leading-tight">{title}</h2>
           <p className="mt-2 text-[14px] leading-relaxed text-[var(--ink-2)]">{sub}</p>
@@ -121,6 +129,13 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
             </>
           )}
 
+          {mode === "login" && status?.otp && usePassword && (
+            <p className="mt-4 text-center text-[13px]">
+              <button type="button" className="text-[var(--ink-2)] hover:underline" onClick={() => setUsePassword(false)}>
+                Masuk dengan kode email
+              </button>
+            </p>
+          )}
           <p className="mt-6 text-center text-[13.5px] text-[var(--ink-2)]">
             {mode === "login" ? (
               setup ? (
@@ -133,6 +148,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
             )}
           </p>
         </form>
+        )}
       </div>
     </div>
   );

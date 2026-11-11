@@ -1,7 +1,7 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { RESOURCES, type FieldType } from "./resources";
 
-const SCHEMA_VERSION = "33";
+const SCHEMA_VERSION = "34";
 
 // Keep DATE/TIMESTAMP as raw strings (no timezone shifting) and NUMERIC/INT8 as numbers.
 const RAW = (v: string) => v;
@@ -51,6 +51,8 @@ export function schemaStatements(): string[] {
     `CREATE TABLE IF NOT EXISTS app_meta (key text PRIMARY KEY, value text)`,
     `CREATE TABLE IF NOT EXISTS login_failures (id serial PRIMARY KEY, email text NOT NULL, ip text, at timestamptz DEFAULT now())`,
     `CREATE INDEX IF NOT EXISTS login_failures_email_at ON login_failures (email, at DESC)`,
+    `CREATE TABLE IF NOT EXISTS otp_sends (email text NOT NULL, ip text, at timestamptz DEFAULT now())`,
+    `CREATE INDEX IF NOT EXISTS otp_sends_email_at ON otp_sends (email, at DESC)`,
     `CREATE TABLE IF NOT EXISTS organizations (id serial PRIMARY KEY, name text NOT NULL, created_at timestamptz DEFAULT now())`,
     `CREATE TABLE IF NOT EXISTS users (
       id serial PRIMARY KEY,
@@ -60,6 +62,16 @@ export function schemaStatements(): string[] {
       password_hash text NOT NULL,
       role text NOT NULL DEFAULT 'staff',
       created_at timestamptz DEFAULT now()
+    )`,
+    // kode OTP login dikirim ke email; tabel ini butuh users, jadi dibuat sesudahnya
+    `CREATE TABLE IF NOT EXISTS login_otps (
+      id_hash text PRIMARY KEY,
+      user_id int NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      otp_hash text NOT NULL,
+      expires_at timestamptz NOT NULL,
+      attempts int NOT NULL DEFAULT 0,
+      sends int NOT NULL DEFAULT 1,
+      sent_at timestamptz NOT NULL DEFAULT now()
     )`,
     `CREATE TABLE IF NOT EXISTS brands (
       id serial PRIMARY KEY,
